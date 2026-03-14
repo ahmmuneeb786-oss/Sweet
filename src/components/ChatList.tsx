@@ -188,9 +188,9 @@ export function ChatList({ selectedChatId, onSelectChat, onShowProfile, onShowFr
                   className="w-12 h-12 rounded-full object-cover"
                 />
               ) : (
-                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-pink-400 to-purple-500 flex items-center justify-center text-white font-medium text-lg">
-                  {profile?.display_name?.[0] || 'U'}
-                </div>
+                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-pink-400 to-purple-500 flex items-center justify-center text-white font-medium text-lg uppercase">
+  {profile?.display_name?.[0] || profile?.username?.[0] || 'U'}
+</div>
               )}
               {profile?.is_online && (
                 <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white rounded-full" />

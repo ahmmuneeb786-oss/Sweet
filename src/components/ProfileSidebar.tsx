@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { X, Camera, Save, CreditCard as Edit3 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { supabase } from '../lib/supabase';
 
 interface ProfileSidebarProps {
   onClose: () => void;
@@ -16,12 +17,46 @@ export function ProfileSidebar({ onClose, theme }: ProfileSidebarProps) {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
+  // Reference to the hidden input
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Function to handle the gallery upload
+  async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file || !profile) return;
+
+    setLoading(true);
+    setError('');
+    try {
+      const fileExt = file.name.split('.').pop();
+      const filePath = `${profile.id}/${Math.random()}.${fileExt}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('avatars')
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('avatars')
+        .getPublicUrl(filePath);
+
+      await updateProfile({ avatar_url: publicUrl });
+      setSuccess('Profile picture updated!');
+    } catch (err) {
+      setError('Upload failed. Check if "avatars" bucket is public in Supabase.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function handleSave() {
     setLoading(true);
     setError('');
     setSuccess('');
 
     try {
+      // This calls the function in your AuthContext
       const { error: updateError } = await updateProfile({
         display_name: displayName,
         bio: bio
@@ -29,8 +64,10 @@ export function ProfileSidebar({ onClose, theme }: ProfileSidebarProps) {
 
       if (updateError) throw updateError;
 
-      setSuccess('Profile updated successfully');
-      setIsEditing(false);
+      setSuccess('Profile updated successfully!');
+      setIsEditing(false); // Exit edit mode on success
+      
+      // Clear success message after 3 seconds
       setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update profile');
@@ -52,6 +89,14 @@ export function ProfileSidebar({ onClose, theme }: ProfileSidebarProps) {
         className="fixed inset-0 bg-black/50 z-40"
         onClick={onClose}
       />
+      <input 
+        type="file" 
+        ref={fileInputRef} 
+        className="hidden" 
+        accept="image/*" 
+        onChange={handleImageUpload} 
+      />
+
       <div className={`fixed right-0 top-0 h-full w-96 shadow-2xl z-50 flex flex-col transition-all duration-300 ${
   theme === 'dark' 
     ? 'bg-gray-900 text-white' 
@@ -100,34 +145,38 @@ export function ProfileSidebar({ onClose, theme }: ProfileSidebarProps) {
                 <img
                   src={profile.avatar_url}
                   alt={profile.display_name}
-                  className="w-32 h-32 rounded-full object-cover"
+                  className="w-32 h-32 rounded-full object-cover border-4 border-pink-200"
                 />
               ) : (
-                <div className="w-32 h-32 rounded-full bg-gradient-to-br from-pink-400 to-purple-500 flex items-center justify-center text-white font-medium text-4xl">
-                  {profile?.display_name?.[0] || 'U'}
+                <div className="w-32 h-32 rounded-full bg-gradient-to-br from-pink-400 to-purple-500 flex items-center justify-center text-white font-bold text-4xl uppercase shadow-lg">
+                  {profile?.display_name?.[0] || profile?.username?.[0] || 'U'}
                 </div>
               )}
+              
+              {/* Camera overlay only shows when isEditing is true */}
               {isEditing && (
-                <button className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
+                <button 
+                  onClick={() => fileInputRef.current?.click()}
+                  className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                >
                   <Camera className="w-8 h-8 text-white" />
                 </button>
               )}
             </div>
 
+            {/* Edit Profile Button only shows when NOT editing */}
             {!isEditing && (
               <button
-  onClick={() => setIsEditing(true)}
-  className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-medium transition-all shadow-sm ${
-    theme === 'romantic'
-      ? 'bg-[#FF69B4] text-white hover:bg-[#FF1493]' 
-      : theme === 'dark'
-      ? 'bg-gray-800 text-gray-200 border border-gray-700 hover:bg-gray-700'
-      : 'bg-[#FF4D6D] text-white hover:bg-[#FF758F]' // Light theme: Sweet pink/red
-  }`}
->
-  <Edit3 className="w-4 h-4" />
-  Edit Profile
-</button>
+                onClick={() => setIsEditing(true)}
+                className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-medium transition-all shadow-sm ${
+                  theme === 'romantic' ? 'bg-[#FF69B4] text-white hover:bg-[#FF1493]' : 
+                  theme === 'dark' ? 'bg-gray-800 text-gray-200 border border-gray-700 hover:bg-gray-700' : 
+                  'bg-[#FF4D6D] text-white hover:bg-[#FF758F]'
+                }`}
+              >
+                <Edit3 className="w-4 h-4" />
+                Edit Profile
+              </button>
             )}
           </div>
 
