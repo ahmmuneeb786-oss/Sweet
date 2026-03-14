@@ -1,0 +1,6 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+.romantic-theme .bg-white { background-color: #FFF0F5 !important; }
+.romantic-theme .text-gray-900 { color: #4B004B !important; }
