@@ -143,38 +143,56 @@ export function FriendList({ theme, onClose, onSelectUser }: FriendListProps) {
   async function sendFriendRequest(userId: string) {
     if (!user) return;
     try {
-      await supabase
+      const { error } = await supabase
         .from('friend_requests')
         .insert({
           sender_id: user.id,
           receiver_id: userId,
           status: 'pending'
         });
-      loadFriendRequests();
-    } catch (error) {
+
+      if (error) throw error;
+
+      alert("Request sent successfully!"); // Added this for feedback
+      loadFriendRequests(); // This refreshes your 'sentRequests' state
+    } catch (error: any) {
       console.error('Error sending friend request:', error);
+      alert(error.message || "Failed to send request");
     }
   }
 
   async function acceptFriendRequest(requestId: string, senderId: string) {
-    if (!user) return;
-    try {
-      await supabase
-        .from('friend_requests')
-        .update({ status: 'accepted' })
-        .eq('id', requestId);
+  if (!user) return;
+  try {
+    // 1. Update the request status
+    const { error: requestError } = await supabase
+      .from('friend_requests')
+      .update({ status: 'accepted' })
+      .eq('id', requestId);
 
-      await supabase.from('friends').insert([
+    if (requestError) throw requestError;
+
+    // 2. Insert BOTH sides of the friendship
+    // We do this so both users see each other in their lists
+    const { error: friendError } = await supabase
+      .from('friends')
+      .insert([
         { user_id: user.id, friend_id: senderId },
         { user_id: senderId, friend_id: user.id }
       ]);
 
-      loadFriends();
-      loadFriendRequests();
-    } catch (error) {
-      console.error('Error accepting friend request:', error);
-    }
+    if (friendError) throw friendError;
+
+    // 3. Refresh the UI
+    await loadFriends();
+    await loadFriendRequests();
+    
+    alert("Friend added successfully!");
+  } catch (error: any) {
+    console.error('Error accepting friend request:', error);
+    alert("Error: " + error.message);
   }
+}
 
   async function rejectFriendRequest(requestId: string) {
     try {
