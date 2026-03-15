@@ -129,14 +129,16 @@ export function Dashboard({ theme, setTheme }: DashboardProps) {
 )}
       {showFriends && (
   <FriendList 
-    theme={theme} 
-    onClose={() => setShowFriends(false)} 
-    onSelectUser={(selectedUser) => {
-      // Use 'setSelectedChatId' and pass just the ID string
-      setSelectedChatId(selectedUser.id); 
-      setShowFriends(false);
-    }} 
-  />
+  theme={theme} 
+  onClose={() => setShowFriends(false)} 
+  onSelectUser={(selectedUser) => {
+    // This handles the legacy selection if needed
+    setSelectedChatId(selectedUser.id); 
+    setShowFriends(false);
+  }}
+  // ADD THIS LINE BELOW
+  setActiveChatId={setSelectedChatId} 
+/>
 )}
       {showSettings && <Settings
   onClose={() => setShowSettings(false)}

@@ -7,6 +7,7 @@ interface FriendListProps {
   theme: 'light' | 'dark' | 'romantic';
   onClose: () => void;
   onSelectUser: (user: any) => void;
+  setActiveChatId: (id: string) => void;
 }
 
 interface Friend {
@@ -30,7 +31,7 @@ interface FriendRequest {
   };
 }
 
-export function FriendList({ theme, onClose, onSelectUser }: FriendListProps) {
+export function FriendList({ theme, onClose, onSelectUser, setActiveChatId }: FriendListProps) {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<'friends' | 'requests' | 'search'>('friends');
   const [friends, setFriends] = useState<Friend[]>([]);
@@ -59,31 +60,37 @@ export function FriendList({ theme, onClose, onSelectUser }: FriendListProps) {
   }, [searchQuery, activeTab]);
 
   async function loadFriends() {
-    if (!user) return;
-    try {
-      const { data: friendships } = await supabase
-        .from('friends')
-        .select(`
-          friend_id,
-          profiles!friends_friend_id_fkey (
-            id,
-            username,
-            display_name,
-            avatar_url,
-            is_online,
-            last_seen
-          )
-        `)
-        .eq('user_id', user.id);
+  if (!user) return;
+  try {
+    const { data: friendships, error } = await supabase
+      .from('friends')
+      .select(`
+        friend_id,
+        profiles:friend_id (
+          id,
+          username,
+          display_name,
+          avatar_url,
+          is_online,
+          last_seen
+        )
+      `)
+      .eq('user_id', user.id);
 
-      if (friendships) {
-        const friendsList = friendships.map((f: any) => f.profiles).filter(Boolean);
-        setFriends(friendsList);
-      }
-    } catch (error) {
-      console.error('Error loading friends:', error);
+    if (error) {
+      console.error('Database Error:', error);
+      return;
     }
+
+    if (friendships) {
+      // We rename the mapping to 'profiles' because of the 'profiles:friend_id' alias above
+      const friendsList = friendships.map((f: any) => f.profiles).filter(Boolean);
+      setFriends(friendsList);
+    }
+  } catch (error) {
+    console.error('Error loading friends:', error);
   }
+}
 
   async function loadFriendRequests() {
     if (!user) return;
@@ -164,32 +171,29 @@ export function FriendList({ theme, onClose, onSelectUser }: FriendListProps) {
   async function acceptFriendRequest(requestId: string, senderId: string) {
   if (!user) return;
   try {
-    // 1. Update the request status
-    const { error: requestError } = await supabase
+    // 1. Mark request as accepted
+    await supabase
       .from('friend_requests')
       .update({ status: 'accepted' })
       .eq('id', requestId);
 
-    if (requestError) throw requestError;
-
-    // 2. Insert BOTH sides of the friendship
-    // We do this so both users see each other in their lists
+    // 2. Use .upsert instead of .insert
+    // This prevents the "duplicate key" error if you click twice
     const { error: friendError } = await supabase
       .from('friends')
-      .insert([
+      .upsert([
         { user_id: user.id, friend_id: senderId },
         { user_id: senderId, friend_id: user.id }
-      ]);
+      ], { onConflict: 'user_id, friend_id' });
 
     if (friendError) throw friendError;
 
-    // 3. Refresh the UI
+    // 3. Force the UI to update
     await loadFriends();
     await loadFriendRequests();
     
-    alert("Friend added successfully!");
+    alert("Friendship confirmed!");
   } catch (error: any) {
-    console.error('Error accepting friend request:', error);
     alert("Error: " + error.message);
   }
 }
@@ -229,6 +233,50 @@ export function FriendList({ theme, onClose, onSelectUser }: FriendListProps) {
   function isFriend(userId: string) {
     return friends.some(f => f.id === userId);
   }
+
+async function handleStartChat(friendId: string) {
+  if (!user) return;
+
+  try {
+    // 1. Check if a chat already exists between you two
+    const { data: existingChat } = await supabase
+      .from('chat_participants')
+      .select('chat_id')
+      .eq('user_id', user.id)
+      .filter('chat_id', 'in', (
+        supabase.from('chat_participants').select('chat_id').eq('user_id', friendId)
+      ))
+      .maybeSingle();
+
+    if (existingChat) {
+      // If found, just open it
+      setActiveChatId(existingChat.chat_id);
+      return;
+    }
+
+    // 2. If no chat exists, create a new row in 'chats'
+    const { data: newChat, error: chatError } = await supabase
+      .from('chats')
+      .insert({ type: 'direct', theme: 'romantic' })
+      .select()
+      .single();
+
+    if (chatError) throw chatError;
+
+    // 3. Link both users to this new chat_id
+    await supabase.from('chat_participants').insert([
+      { chat_id: newChat.id, user_id: user.id },
+      { chat_id: newChat.id, user_id: friendId }
+    ]);
+
+    // 4. Set this as the active chat so ChatWindow appears
+    setActiveChatId(newChat.id);
+
+  } catch (err: any) {
+    console.error("Error starting chat:", err);
+    alert("Chat room setup failed: " + err.message);
+  }
+}
 
   return (
     <>
@@ -395,7 +443,8 @@ export function FriendList({ theme, onClose, onSelectUser }: FriendListProps) {
             <div className="flex gap-2">
               <button 
   onClick={() => {
-    onSelectUser(friend);
+    // Instead of onSelectUser(friend), call a function that handles the database
+    handleStartChat(friend.id); 
     onClose();
   }}
   className={`p-2 rounded-full transition-colors ${
