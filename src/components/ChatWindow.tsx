@@ -117,7 +117,7 @@ useEffect(() => {
         // Only if it doesn't exist, create it once
         const { data: newChat, error } = await supabase
           .from('chats')
-          .insert({ id: consistentRoomId, type: 'direct' })
+          .insert({ id: consistentRoomId, type: 'direct', updated_at: new Date().toISOString() })
           .select()
           .single();
         
