@@ -60,121 +60,128 @@ export function ChatWindow({ chatId, theme }: ChatWindowProps) {
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    if (chatId && user) {
-      setLoading(true);
-      // We clear the old chat info immediately so the new one can load fresh
-      setChatInfo(null);
-      loadChat();
-      loadMessages();
-      subscribeToMessages();
-      subscribeToTyping();
-    }
-  }, [chatId, user]);
+  if (chatId && user) {
+    setLoading(true);
+    setChatInfo(null);
+    loadChat(); // This runs first to find the real room ID
+  }
+}, [chatId, user]);
+
+// Create a second useEffect that fires only when chatInfo is ready
+useEffect(() => {
+  if (chatInfo?.id) {
+    loadMessages();
+    subscribeToMessages();
+    subscribeToTyping();
+  }
+}, [chatInfo?.id]);
 
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
 
   async function loadChat() {
-    if (!user || !chatId) return;
+  if (!user || !chatId) return;
 
-    try {
-      // 1. Instant check for Saved Messages to prevent the "White Screen"
-      if (chatId === user.id) {
-
-        await supabase.from('chats').upsert({
-    id: user.id,
-    type: 'direct',
-    name: 'Saved Messages',
-    theme: 'love'
-  });
-
-        setChatInfo({
-          id: user.id,
-          type: 'direct',
-          name: 'Saved Messages',
-          theme: 'love',
-          otherUser: {
-            id: user.id,
-            display_name: 'Saved Messages',
-            avatar_url: user.user_metadata?.avatar_url || null,
-            is_online: true,
-            last_seen: new Date().toISOString()
-          }
-        });
-        setLoading(false);
-        return; 
-      }
-
-      // 2. Otherwise, look for the chat in the database
-      let { data: chat } = await supabase
-        .from('chats')
-        .select('*')
-        .eq('id', chatId)
-        .maybeSingle();
-
-      if (!chat) {
-        setLoading(false);
-        return;
-      }
-
-      let chatData: ChatInfo = {
-        id: chat.id,
-        type: chat.type,
-        name: chat.name || 'Chat',
-        theme: chat.theme
-      };
-
-      if (chat.type === 'direct') {
-        const { data: otherParticipant } = await supabase
-          .from('chat_participants')
-          .select(`
-            user_id,
-            profiles (id, display_name, avatar_url, is_online, last_seen)
-          `)
-          .eq('chat_id', chatId)
-          .neq('user_id', user.id)
-          .maybeSingle();
-
-        if (otherParticipant) {
-          chatData.otherUser = (otherParticipant as any).profiles;
-        }
-      }
-
-      setChatInfo(chatData);
-    } catch (error) {
-      console.error('Error in loadChat:', error);
-    } finally {
+  try {
+    // 1. Instant check for Saved Messages
+    if (chatId === user.id) {
+      await supabase.from('chats').upsert({ id: user.id, type: 'direct', name: 'Saved Messages', theme: 'love' });
+      setChatInfo({
+        id: user.id,
+        type: 'direct',
+        name: 'Saved Messages',
+        theme: 'love',
+        otherUser: { id: user.id, display_name: 'Saved Messages', avatar_url: user.user_metadata?.avatar_url || null, is_online: true, last_seen: new Date().toISOString() }
+      });
       setLoading(false);
+      return; 
     }
+
+    // 2. Try to find the chat by ID directly
+    let { data: chat } = await supabase.from('chats').select('*').eq('id', chatId).maybeSingle();
+
+    if (!chat) {
+  const { data: newChat, error } = await supabase
+    .from('chats')
+    .insert({
+      id: chatId,
+      type: 'direct'
+    })
+    .select()
+    .single();
+
+  if (error) {
+    console.error("Error creating chat:", error);
+    return;
   }
+
+  chat = newChat;
+
+  // add participants
+  const [userA, userB] = chatId.split('_');
+
+await supabase.from('chat_participants').insert([
+  { chat_id: chatId, user_id: userA },
+  { chat_id: chatId, user_id: userB }
+]);
+}
+
+    if (!chat) {
+      setLoading(false);
+      return;
+    }
+
+    let chatData: ChatInfo = { id: chat.id, type: chat.type, name: chat.name || 'Chat', theme: chat.theme };
+
+    const { data: otherParticipant } = await supabase
+      .from('chat_participants')
+      .select(`user_id, profiles (id, display_name, avatar_url, is_online, last_seen)`)
+      .eq('chat_id', chat.id) // Use the found chat.id
+      .neq('user_id', user.id)
+      .maybeSingle();
+
+    if (otherParticipant) {
+      chatData.otherUser = (otherParticipant as any).profiles;
+    }
+
+    setChatInfo(chatData);
+  } catch (error) {
+    console.error('Error in loadChat:', error);
+  } finally {
+    setLoading(false);
+  }
+}
 
   async function loadMessages() {
-    try {
-      const { data, error } = await supabase
-        .from('messages')
-        .select('*, profiles(display_name, avatar_url, username)')
-        .eq('chat_id', chatId)
-        
-        .order('created_at', { ascending: true });
+  if (!chatInfo?.id) return; // Always use the resolved chatInfo ID
 
-      if (error) throw error;
-      setMessages((data || []).map(m => ({ ...m, delivery_status: 'read' })));
-    } catch (error) {
-      console.error('Error loading messages:', error);
-    }
+  try {
+    const { data, error } = await supabase
+      .from('messages')
+      .select('*, profiles(display_name, avatar_url, username)')
+      .eq('chat_id', chatInfo.id) // Query using the permanent UUID
+      .order('created_at', { ascending: true });
+
+    if (error) throw error;
+    setMessages((data || []).map(m => ({ ...m, delivery_status: 'read' })));
+  } catch (error) {
+    console.error('Error loading messages:', error);
   }
+}
 
   function subscribeToMessages() {
+  if (!chatInfo?.id) return; // Guard clause
+
   const channel = supabase
-    .channel(`messages:${chatId}`)
+    .channel(`messages:${chatInfo.id}`) // Use the permanent ID
     .on(
       'postgres_changes',
       {
         event: '*',
         schema: 'public',
         table: 'messages',
-        filter: `chat_id=eq.${chatId}`,
+        filter: `chat_id=eq.${chatInfo.id}`, // Filter by permanent ID
       },
       async (payload) => {
         if (payload.eventType === 'INSERT') {
@@ -230,12 +237,11 @@ export function ChatWindow({ chatId, theme }: ChatWindowProps) {
 
   async function handleSendMessage(e: React.FormEvent | React.KeyboardEvent) {
   e.preventDefault();
-
-  if (!newMessage.trim() || !user) return;
+  if (!newMessage.trim() || !user || !chatInfo) return; // Add chatInfo check
 
   const tempMessage: MessageType = {
     id: crypto.randomUUID(),
-    chat_id: chatId,
+    chat_id: chatInfo.id, // Use chatInfo.id instead of chatId prop
     sender_id: user.id,
     content: newMessage.trim(),
     type: "text",
@@ -258,14 +264,13 @@ export function ChatWindow({ chatId, theme }: ChatWindowProps) {
   setNewMessage("");
 
   const { error } = await supabase.from("messages").insert({
-    chat_id: chatId,
+    chat_id: chatInfo.id, // Ensure this matches a UUID in the 'chats' table
     sender_id: user.id,
     content: tempMessage.content,
     type: "text"
   });
 
-  if (error) {
-    console.error("Send failed:", error);
+  if (error) { console.error("Send failed:", error);
   }
 }
 
@@ -320,10 +325,10 @@ export function ChatWindow({ chatId, theme }: ChatWindowProps) {
 }
 
   async function handleTyping() {
-    if (!user || !chatId) return;
+    if (!user || !chatInfo?.id) return;
     if (!isTyping) {
       setIsTyping(true);
-      await supabase.from('typing_indicators').upsert({ chat_id: chatId, user_id: user.id, updated_at: new Date().toISOString() });
+      await supabase.from('typing_indicators').upsert({ chat_id: chatInfo.id, user_id: user.id, updated_at: new Date().toISOString() });
     }
     if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
     typingTimeoutRef.current = setTimeout(async () => {
@@ -333,8 +338,8 @@ export function ChatWindow({ chatId, theme }: ChatWindowProps) {
   }
 
   async function removeTypingIndicator() {
-    if (!user || !chatId) return;
-    await supabase.from('typing_indicators').delete().eq('chat_id', chatId).eq('user_id', user.id);
+    if (!user || !chatInfo?.id) return;
+    await supabase.from('typing_indicators').delete().eq('chat_id', chatInfo.id).eq('user_id', user.id);
   }
 
   function scrollToBottom() { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }
@@ -431,7 +436,7 @@ export function ChatWindow({ chatId, theme }: ChatWindowProps) {
             <button className="p-2 hover:bg-white/20 backdrop-blur-sm rounded-full transition-colors">
               <Video className="w-5 h-5 text-white" />
             </button>
-            <ChatMenu chatId={chatId} onClose={() => {}} theme={theme}/>
+            <ChatMenu chatId={chatInfo.id} onClose={() => {}} theme={theme}/>
           </div>
         </div>
       </div>

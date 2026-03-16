@@ -34,7 +34,7 @@ export function CreateChat({ theme, onClose, onChatCreated }: CreateChatProps) {
 
     try {
       setLoading(true);
-      const { data: friendships } = await supabase
+      const { data: friends } = await supabase
         .from('friends')
         .select(`
           friend_id,
@@ -48,8 +48,8 @@ export function CreateChat({ theme, onClose, onChatCreated }: CreateChatProps) {
         `)
         .eq('user_id', user.id);
 
-      if (friendships) {
-        const friendsList = friendships
+      if (friends) {
+        const friendsList = friends
           .map((f: any) => f.profiles)
           .filter(Boolean);
         setFriends(friendsList);
