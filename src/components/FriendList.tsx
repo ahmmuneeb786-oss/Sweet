@@ -238,39 +238,40 @@ async function handleStartChat(friendId: string) {
   if (!user) return;
 
   try {
-    // 1. Check if a chat already exists between you two
+    // 1. Create the SAME consistent ID we used in other files
+    const sortedIds = [user.id, friendId].sort();
+    const consistentRoomId = `${sortedIds[0]}_${sortedIds[1]}`;
+
+    // 2. Check if this room exists
     const { data: existingChat } = await supabase
-      .from('chat_participants')
-      .select('chat_id')
-      .eq('user_id', user.id)
-      .filter('chat_id', 'in', (
-        supabase.from('chat_participants').select('chat_id').eq('user_id', friendId)
-      ))
+      .from('chats')
+      .select('id')
+      .eq('id', consistentRoomId)
       .maybeSingle();
 
     if (existingChat) {
-      // If found, just open it
-      setActiveChatId(existingChat.chat_id);
+      setActiveChatId(existingChat.id);
       return;
     }
 
-    // 2. If no chat exists, create a new row in 'chats'
-    const { data: newChat, error: chatError } = await supabase
+    // 3. If no chat exists, create it with our consistentRoomId
+    const { error: chatError } = await supabase
       .from('chats')
-      .insert({ type: 'direct', theme: 'romantic' })
-      .select()
-      .single();
+      .insert({ 
+        id: consistentRoomId, // Use our ID, not a random one!
+        type: 'direct', 
+        theme: 'romantic' 
+      });
 
     if (chatError) throw chatError;
 
-    // 3. Link both users to this new chat_id
+    // 4. Link both users
     await supabase.from('chat_participants').insert([
-      { chat_id: newChat.id, user_id: user.id },
-      { chat_id: newChat.id, user_id: friendId }
+      { chat_id: consistentRoomId, user_id: user.id },
+      { chat_id: consistentRoomId, user_id: friendId }
     ]);
 
-    // 4. Set this as the active chat so ChatWindow appears
-    setActiveChatId(newChat.id);
+    setActiveChatId(consistentRoomId);
 
   } catch (err: any) {
     console.error("Error starting chat:", err);

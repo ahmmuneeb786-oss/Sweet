@@ -62,42 +62,51 @@ export function CreateChat({ theme, onClose, onChatCreated }: CreateChatProps) {
   }
 
   async function handleStartChat(friendId: string) {
-  if (!user) return;
+    if (!user) return;
 
-  try {
-    const chatId = `chat-${[user.id, friendId].sort().join('-')}`;
+    try {
+      // 1. Create the IDs array first using the friendId passed to the function
+      const sortedIds = [user.id, friendId].sort();
+      
+      // 2. Create a specific variable name to avoid confusion
+      const combinedRoomId = `${sortedIds[0]}_${sortedIds[1]}`; 
 
-    const { data: existingChat } = await supabase
-      .from('chats')
-      .select('id')
-      .eq('id', chatId)
-      .maybeSingle();
+      // 3. Check if this room already exists
+      const { data: existingChat } = await supabase
+        .from('chats')
+        .select('id')
+        .eq('id', combinedRoomId)
+        .maybeSingle();
 
-    if (existingChat) {
-      onChatCreated(existingChat.id);
-      return;
+      if (existingChat) {
+        onChatCreated(existingChat.id);
+        onClose(); 
+        return;
+      }
+
+      // 4. Create the chat if it's new
+      const { error: chatError } = await supabase
+        .from('chats')
+        .insert({
+          id: combinedRoomId,
+          type: 'direct',
+          created_by: user.id
+        });
+
+      if (chatError) throw chatError;
+
+      // 5. Add both users to the participants table
+      await supabase.from('chat_participants').insert([
+        { chat_id: combinedRoomId, user_id: user.id },
+        { chat_id: combinedRoomId, user_id: friendId }
+      ]);
+
+      onChatCreated(combinedRoomId);
+      onClose(); 
+    } catch (error) {
+      console.error('Error creating chat:', error);
     }
-
-    const { error: chatError } = await supabase
-      .from('chats')
-      .insert({
-        id: chatId,
-        type: 'direct',
-        created_by: user.id
-      });
-
-    if (chatError) throw chatError;
-
-    await supabase.from('chat_participants').insert([
-      { chat_id: chatId, user_id: user.id, role: 'member' },
-      { chat_id: chatId, user_id: friendId, role: 'member' }
-    ]);
-
-    onChatCreated(chatId);
-  } catch (error) {
-    console.error('Error creating chat:', error);
   }
-}
 
   const filteredFriends = friends.filter(f =>
     f.display_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
