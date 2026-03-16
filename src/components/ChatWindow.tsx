@@ -102,34 +102,37 @@ useEffect(() => {
     let { data: chat } = await supabase.from('chats').select('*').eq('id', chatId).maybeSingle();
 
     if (!chat) {
-  const { data: newChat, error } = await supabase
-    .from('chats')
-    .insert({
-      id: chatId,
-      type: 'direct'
-    })
-    .select()
-    .single();
+      // Create a UNIQUE room ID by sorting both User IDs alphabetically
+      // This ensures that (Ahmad + Hamza) always produces the same string
+      const sortedIds = [user.id, chatId].sort(); 
+      const consistentRoomId = `${sortedIds[0]}_${sortedIds[1]}`;
 
-  if (error) {
-    console.error("Error creating chat:", error);
-    return;
-  }
+      // Now check if THIS consistent ID exists
+      let { data: existingChat } = await supabase
+        .from('chats')
+        .select('*')
+        .eq('id', consistentRoomId)
+        .maybeSingle();
 
-  chat = newChat;
+      if (!existingChat) {
+        // Only if it doesn't exist, create it once
+        const { data: newChat, error } = await supabase
+          .from('chats')
+          .insert({ id: consistentRoomId, type: 'direct' })
+          .select()
+          .single();
+        
+        if (error) return;
 
-  // add participants
-  const [userA, userB] = chatId.split('_');
-
-await supabase.from('chat_participants').insert([
-  { chat_id: chatId, user_id: userA },
-  { chat_id: chatId, user_id: userB }
-]);
-}
-
-    if (!chat) {
-      setLoading(false);
-      return;
+        // Add both as participants using the sorted IDs
+        await supabase.from('chat_participants').insert([
+          { chat_id: consistentRoomId, user_id: sortedIds[0] },
+          { chat_id: consistentRoomId, user_id: sortedIds[1] }
+        ]);
+        
+        existingChat = newChat;
+      }
+      chat = existingChat;
     }
 
     let chatData: ChatInfo = { id: chat.id, type: chat.type, name: chat.name || 'Chat', theme: chat.theme };
@@ -217,11 +220,17 @@ await supabase.from('chat_participants').insert([
             });
           }
         } else if (payload.eventType === 'UPDATE') {
-          // This ensures that when you click 'Delete', the UI updates live!
-          setMessages((prev) => 
-            prev.map((m) => m.id === payload.new.id ? { ...m, ...payload.new } : m)
-          );
-        }
+  setMessages((prev) => 
+    prev.map((m) => {
+      if (m.id === payload.new.id) {
+        // We merge the update but KEEP the old 'profiles' data 
+        // so the avatar and name don't disappear.
+        return { ...m, ...payload.new, profiles: m.profiles };
+      }
+      return m;
+    })
+  );
+}
       } // <--- Added this to close the async function
     ) // <--- Added this to close the .on()
     .subscribe();
@@ -273,6 +282,23 @@ await supabase.from('chat_participants').insert([
   if (error) { console.error("Send failed:", error);
   }
 }
+
+useEffect(() => {
+  if (chatInfo?.id) {
+    // 1. Load the history for the new room
+    loadMessages();
+    
+    // 2. Start listening for new messages in this room
+    const unsubscribe = subscribeToMessages();
+    
+    // 3. Cleanup: Stop listening to the old room when we switch friends
+    return () => {
+      if (unsubscribe && typeof unsubscribe === 'function') {
+        unsubscribe();
+      }
+    };
+  }
+}, [chatInfo?.id]); // This triggers correctly whenever the room ID changes
 
   async function handleRetryMessage(messageId: string) {
     try {
