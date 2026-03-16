@@ -43,7 +43,7 @@ interface ChatInfo {
   };
 }
 
-const reactions = ['💖', '🥰', '😍', '💋', '😊'];
+const reactions = ['💖', '🥰', '😍', '💋', '😂'];
 
 export function ChatWindow({ chatId, theme }: ChatWindowProps) {
   const { user } = useAuth();
@@ -65,15 +65,6 @@ export function ChatWindow({ chatId, theme }: ChatWindowProps) {
     loadChat(); // This runs first to find the real room ID
   }
 }, [chatId, user]);
-
-// Create a second useEffect that fires only when chatInfo is ready
-useEffect(() => {
-  if (chatInfo?.id) {
-    loadMessages();
-    subscribeToMessages();
-    subscribeToTyping();
-  }
-}, [chatInfo?.id]);
 
   useEffect(() => {
     scrollToBottom();
@@ -138,15 +129,16 @@ useEffect(() => {
 
     // Inside loadChat function
 // Inside loadChat function
-    const { data: otherParticipant, error: partError } = await supabase
-      .from('chat_participants')
-      .select(`
-        user_id,
-        profiles:user_id (id, display_name, avatar_url, is_online, last_seen)
-      `)
-      .eq('chat_id', chat.id)
-      .neq('user_id', user.id)
-      .maybeSingle();
+    // Look for this section in loadChat
+const { data: otherParticipant, error: partError } = await supabase
+  .from('chat_participants')
+  .select(`
+    user_id,
+    profiles:user_id (id, display_name, avatar_url, is_online, last_seen)
+  `) 
+  .eq('chat_id', chat.id)
+  .neq('user_id', user.id)
+  .maybeSingle();
 
     if (partError) console.error("Participant fetch error:", partError);
 
@@ -197,7 +189,7 @@ async function markMessagesAsRead() {
     if (!chatInfo?.id) return;
 
     const channel = supabase
-      .channel(`chat_messages_${chatInfo.id}`)
+      .channel(`chat_messages:${chatInfo.id}`)
       .on(
         'postgres_changes',
         {
@@ -207,22 +199,24 @@ async function markMessagesAsRead() {
           filter: `chat_id=eq.${chatInfo.id}`,
         },
         async (payload) => {
-          // Fetch full data so we don't crash on missing 'profiles'
-          const { data: fullMessage, error } = await supabase
+          // 1. Fetch the full message WITH profiles to prevent the white screen crash
+          const { data, error } = await supabase
             .from('messages')
-            .select('*, profiles:sender_id(display_name, avatar_url, username)')
+            .select('*, profiles(display_name, avatar_url, username)')
             .eq('id', payload.new.id)
             .single();
 
-          if (fullMessage && !error) {
-            const incomingMsg = fullMessage as unknown as MessageType;
-
+          if (data && !error) {
+            const incomingMsg = data as unknown as MessageType;
+            
             setMessages((prev) => {
-              // Match ID to avoid double-messages
-              const exists = prev.find((m) => m.id === incomingMsg.id);
+              // 2. Match ID to avoid double-messages (Optimistic UI sync)
+              const exists = prev.find(m => m.id === incomingMsg.id);
               if (exists) {
-                return prev.map((m) => (m.id === incomingMsg.id ? incomingMsg : m));
+                // Replace temp message with real DB message (adds the blue ticks)
+                return prev.map(m => m.id === incomingMsg.id ? incomingMsg : m);
               }
+              // Add new message from others
               return [...prev, incomingMsg];
             });
 
@@ -230,6 +224,22 @@ async function markMessagesAsRead() {
               markMessagesAsRead();
             }
           }
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'messages',
+          filter: `chat_id=eq.${chatInfo.id}`,
+        },
+        (payload) => {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === payload.new.id ? { ...m, ...payload.new, profiles: m.profiles } : m
+            )
+          );
         }
       )
       .subscribe((status) => {
@@ -293,14 +303,15 @@ async function markMessagesAsRead() {
 
   setNewMessage("");
 
-  const { error } = await supabase.from("messages").insert({
-    
-    chat_id: chatInfo.id, // Ensure this matches a UUID in the 'chats' table
-    sender_id: user.id,
-    content: tempMessage.content,
-    type: "text",
-    delivery_status: 'sent'
-  });
+  // Replace your existing insert block (around line 296) with this:
+const { error } = await supabase.from("messages").insert({
+  id: tempMessage.id, // <--- CRITICAL: Syncs the Optimistic UI with the Database
+  chat_id: chatInfo.id,
+  sender_id: user.id,
+  content: tempMessage.content,
+  type: "text",
+  delivery_status: 'sent' // This triggers the first checkmark
+});
 
   if (error) { console.error("Send failed:", error);
   }
