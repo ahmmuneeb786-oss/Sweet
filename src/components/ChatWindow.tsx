@@ -199,26 +199,25 @@ async function markMessagesAsRead() {
         filter: `chat_id=eq.${chatInfo.id}`,
       },
       async (payload) => {
-        // 1. Fetch the full message WITH profiles to prevent the white screen crash
-        const { data, error } = await supabase
+        // --- STEP 1: Fix the White Screen Crash ---
+        // Realtime payload doesn't have profiles. We must fetch it!
+        const { data: fullMessage, error } = await supabase
           .from('messages')
           .select('*, profiles(display_name, avatar_url, username)')
           .eq('id', payload.new.id)
           .single();
 
-        if (data && !error) {
-          const incomingMsg = data as unknown as MessageType;
-          
+        if (fullMessage && !error) {
+          const incomingMsg = fullMessage as unknown as MessageType;
+
           setMessages((prev) => {
-            // 2. Check if this message (optimistic or otherwise) already exists
-            const exists = prev.find(m => m.id === incomingMsg.id);
-            
+            // --- STEP 2: Fix the Double Message ---
+            // Check if we already have this ID (from our Optimistic UI)
+            const exists = prev.find((m) => m.id === incomingMsg.id);
             if (exists) {
-              // Replace the temp optimistic message with the real DB message (with correct status)
-              return prev.map(m => m.id === incomingMsg.id ? incomingMsg : m);
+              // Swap the "sending" version for the "sent" version
+              return prev.map((m) => (m.id === incomingMsg.id ? incomingMsg : m));
             }
-            
-            // Otherwise, add it as a new message
             return [...prev, incomingMsg];
           });
 
@@ -228,7 +227,22 @@ async function markMessagesAsRead() {
         }
       }
     )
-    // Keep your UPDATE and DELETE logic here as well...
+    .on(
+      'postgres_changes',
+      {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'messages',
+        filter: `chat_id=eq.${chatInfo.id}`,
+      },
+      (payload) => {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === payload.new.id ? { ...m, ...payload.new, profiles: m.profiles } : m
+          )
+        );
+      }
+    )
     .subscribe();
 
   return () => {
@@ -289,7 +303,7 @@ async function markMessagesAsRead() {
   setNewMessage("");
 
   const { error } = await supabase.from("messages").insert({
-    id: tempMessage.id,
+    
     chat_id: chatInfo.id, // Ensure this matches a UUID in the 'chats' table
     sender_id: user.id,
     content: tempMessage.content,
