@@ -136,14 +136,22 @@ useEffect(() => {
 
     let chatData: ChatInfo = { id: chat.id, type: chat.type, name: chat.name || 'Chat', theme: chat.theme };
 
-    const { data: otherParticipant } = await supabase
+    // Inside loadChat function
+// Inside loadChat function
+    const { data: otherParticipant, error: partError } = await supabase
       .from('chat_participants')
-      .select(`user_id, profiles (id, display_name, avatar_url, is_online, last_seen)`)
-      .eq('chat_id', chat.id) // Use the found chat.id
+      .select(`
+        user_id,
+        profiles:user_id (id, display_name, avatar_url, is_online, last_seen)
+      `)
+      .eq('chat_id', chat.id)
       .neq('user_id', user.id)
       .maybeSingle();
 
-    if (otherParticipant) {
+    if (partError) console.error("Participant fetch error:", partError);
+
+    // IMPORTANT: Map the fetched profile to chatData before setting state
+    if (otherParticipant && (otherParticipant as any).profiles) {
       chatData.otherUser = (otherParticipant as any).profiles;
     }
 
@@ -186,69 +194,52 @@ async function markMessagesAsRead() {
 }
 
   function subscribeToMessages() {
-  if (!chatInfo?.id) return;
+    if (!chatInfo?.id) return;
 
-  const channel = supabase
-    .channel(`chat_messages_${chatInfo.id}`)
-    .on(
-      'postgres_changes',
-      {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'messages',
-        filter: `chat_id=eq.${chatInfo.id}`,
-      },
-      async (payload) => {
-        // --- STEP 1: Fix the White Screen Crash ---
-        // Realtime payload doesn't have profiles. We must fetch it!
-        const { data: fullMessage, error } = await supabase
-          .from('messages')
-          .select('*, profiles(display_name, avatar_url, username)')
-          .eq('id', payload.new.id)
-          .single();
+    const channel = supabase
+      .channel(`chat_messages_${chatInfo.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'messages',
+          filter: `chat_id=eq.${chatInfo.id}`,
+        },
+        async (payload) => {
+          // Fetch full data so we don't crash on missing 'profiles'
+          const { data: fullMessage, error } = await supabase
+            .from('messages')
+            .select('*, profiles:sender_id(display_name, avatar_url, username)')
+            .eq('id', payload.new.id)
+            .single();
 
-        if (fullMessage && !error) {
-          const incomingMsg = fullMessage as unknown as MessageType;
+          if (fullMessage && !error) {
+            const incomingMsg = fullMessage as unknown as MessageType;
 
-          setMessages((prev) => {
-            // --- STEP 2: Fix the Double Message ---
-            // Check if we already have this ID (from our Optimistic UI)
-            const exists = prev.find((m) => m.id === incomingMsg.id);
-            if (exists) {
-              // Swap the "sending" version for the "sent" version
-              return prev.map((m) => (m.id === incomingMsg.id ? incomingMsg : m));
+            setMessages((prev) => {
+              // Match ID to avoid double-messages
+              const exists = prev.find((m) => m.id === incomingMsg.id);
+              if (exists) {
+                return prev.map((m) => (m.id === incomingMsg.id ? incomingMsg : m));
+              }
+              return [...prev, incomingMsg];
+            });
+
+            if (incomingMsg.sender_id !== user?.id) {
+              markMessagesAsRead();
             }
-            return [...prev, incomingMsg];
-          });
-
-          if (incomingMsg.sender_id !== user?.id) {
-            markMessagesAsRead();
           }
         }
-      }
-    )
-    .on(
-      'postgres_changes',
-      {
-        event: 'UPDATE',
-        schema: 'public',
-        table: 'messages',
-        filter: `chat_id=eq.${chatInfo.id}`,
-      },
-      (payload) => {
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === payload.new.id ? { ...m, ...payload.new, profiles: m.profiles } : m
-          )
-        );
-      }
-    )
-    .subscribe();
+      )
+      .subscribe((status) => {
+        console.log("REALTIME_STATUS:", status);
+      });
 
-  return () => {
-    supabase.removeChannel(channel);
-  };
-}
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }
 
   function subscribeToTyping() {
   if (!chatInfo?.id) return;
