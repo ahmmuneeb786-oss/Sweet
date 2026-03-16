@@ -257,6 +257,43 @@ async function markMessagesAsRead() {
   };
 }
 
+// Inside export function ChatWindow...
+
+useEffect(() => {
+  if (!chatInfo?.id) return;
+
+  // 1. Create the channel for this specific chat
+  const channel = supabase
+    .channel(`realtime-chat-${chatInfo.id}`)
+    .on(
+      'postgres_changes',
+      { 
+        event: 'INSERT', 
+        schema: 'public', 
+        table: 'messages', 
+        filter: `chat_id=eq.${chatInfo.id}` 
+      },
+      (payload) => {
+        // 2. This logic runs instantly when a new message hits the DB
+        console.log("New message received!", payload);
+        
+        // Only add if it's not already in state (prevents duplicates from optimistic updates)
+        setMessages((prev) => {
+          const exists = prev.find(m => m.id === payload.new.id);
+          if (exists) return prev;
+          return [...prev, payload.new as MessageType];
+        });
+      }
+    )
+    .subscribe((status) => {
+      console.log("Real-time Connection Status:", status);
+    });
+
+  // 3. Cleanup the connection when leaving the chat
+  return () => { 
+    supabase.removeChannel(channel); 
+  };
+}, [chatInfo?.id]); // Runs whenever the chat changes
   async function handleSendMessage(e: React.FormEvent | React.KeyboardEvent) {
   e.preventDefault();
   if (!newMessage.trim() || !user || !chatInfo) return; // Add chatInfo check
