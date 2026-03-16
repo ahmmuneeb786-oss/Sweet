@@ -50,8 +50,7 @@ export function ChatWindow({ chatId, theme }: ChatWindowProps) {
   const [messages, setMessages] = useState<MessageType[]>([]);
   const [chatInfo, setChatInfo] = useState<ChatInfo | null>(null);
   const [newMessage, setNewMessage] = useState('');
-  const [isTyping, setIsTyping] = useState(false);
-  const [typingUsers] = useState<string[]>([]);
+  const [isOtherTyping, setIsOtherTyping] = useState(false);
   const [loading, setLoading] = useState(true);
   const [showEmojiPanel, setShowEmojiPanel] = useState(false);
   const [failedMessages, setFailedMessages] = useState<Set<string>>(new Set());
@@ -167,10 +166,23 @@ useEffect(() => {
       .order('created_at', { ascending: true });
 
     if (error) throw error;
-    setMessages((data || []).map(m => ({ ...m, delivery_status: 'read' })));
+    setMessages(data || []);
   } catch (error) {
     console.error('Error loading messages:', error);
   }
+}
+
+async function markMessagesAsRead() {
+  if (!chatInfo?.id || !user) return;
+
+  const { error } = await supabase
+    .from('messages')
+    .update({ delivery_status: 'read' })
+    .eq('chat_id', chatInfo.id)
+    .neq('sender_id', user.id) // Only mark messages sent by the OTHER person
+    .neq('delivery_status', 'read'); // Only update if not already read
+
+  if (error) console.error('Error marking as read:', error);
 }
 
   function subscribeToMessages() {
@@ -187,62 +199,90 @@ useEffect(() => {
         filter: `chat_id=eq.${chatInfo.id}`, // Filter by permanent ID
       },
       async (payload) => {
-        if (payload.eventType === 'INSERT') {
-          // Explicitly define columns to avoid the "spread resource" parser error
-          const { data, error } = await supabase
-            .from('messages')
-            .select(`
-              id, 
-              chat_id, 
-              sender_id, 
-              content, 
-              type, 
-              media_url, 
-              reply_to_id, 
-              is_edited, 
-              is_deleted, 
-              created_at,
-              profiles (
-                display_name,
-                avatar_url,
-                username
-              )
-            `)
-            .eq('id', payload.new.id)
-            .single();
+          if (payload.eventType === 'INSERT') {
+            const { data, error } = await supabase
+              .from('messages')
+              .select(`
+                id, chat_id, sender_id, content, type, media_url, 
+                reply_to_id, is_edited, is_deleted, created_at, delivery_status,
+                profiles (display_name, avatar_url, username)
+              `)
+              .eq('id', payload.new.id)
+              .single();
 
-          if (data && !error) {
-            const newMessage = { ...data, delivery_status: 'read' } as unknown as MessageType;
-            setMessages((prev) => {
-              // Deduplication check
-              if (prev.some(m => m.id === newMessage.id)) return prev;
-              return [...prev, newMessage];
-            });
-          }
-        } else if (payload.eventType === 'UPDATE') {
-  setMessages((prev) => 
-    prev.map((m) => {
-      if (m.id === payload.new.id) {
-        // We merge the update but KEEP the old 'profiles' data 
-        // so the avatar and name don't disappear.
-        return { ...m, ...payload.new, profiles: m.profiles };
-      }
-      return m;
-    })
-  );
+            if (data && !error) {
+              // 1. REMOVE the hardcoded 'read' here. Use the actual DB status.
+              const incomingMsg = data as unknown as MessageType;
+              
+              setMessages((prev) => {if (data && !error) {
+  const incomingMsg = data as unknown as MessageType;
+  
+  setMessages((prev) => {
+    if (prev.some(m => m.id === incomingMsg.id)) return prev;
+    return [...prev, incomingMsg];
+  });
+
+  // ADD THIS: If I am looking at the chat, mark incoming messages as read immediately
+  if (incomingMsg.sender_id !== user?.id) {
+    markMessagesAsRead();
+  }
 }
-      } // <--- Added this to close the async function
-    ) // <--- Added this to close the .on()
+                if (prev.some(m => m.id === incomingMsg.id)) return prev;
+                return [...prev, incomingMsg];
+              });
+
+              // 2. If the message came from someone else, mark it as read in the DB
+              if (incomingMsg.sender_id !== user?.id) {
+                markMessagesAsRead();
+              }
+            }
+          } else if (payload.eventType === 'UPDATE') {
+            // 3. This is what turns the checkmarks blue (or pink) in real-time!
+            setMessages((prev) =>
+              prev.map((m) => {
+                if (m.id === payload.new.id) {
+                  return { 
+                    ...m, 
+                    ...payload.new, 
+                    profiles: m.profiles // Keep the profile data we already have
+                  };
+                }
+                return m;
+              })
+            );
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }
+
+  function subscribeToTyping() {
+  if (!chatInfo?.id) return;
+
+  const channel = supabase
+    .channel(`typing:${chatInfo.id}`)
+    .on('broadcast', { event: 'typing' }, ({ payload }) => {
+      // Don't show if the typing event is from me
+      if (payload.userId !== user?.id) {
+        setIsOtherTyping(true);
+        
+        // Hide after 3 seconds of no activity
+        if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+        typingTimeoutRef.current = setTimeout(() => {
+          setIsOtherTyping(false);
+        }, 3000);
+      }
+    })
     .subscribe();
 
   return () => {
     supabase.removeChannel(channel);
   };
 }
-
-  function subscribeToTyping() {
-    // Typing logic...
-  }
 
   async function handleSendMessage(e: React.FormEvent | React.KeyboardEvent) {
   e.preventDefault();
@@ -276,7 +316,8 @@ useEffect(() => {
     chat_id: chatInfo.id, // Ensure this matches a UUID in the 'chats' table
     sender_id: user.id,
     content: tempMessage.content,
-    type: "text"
+    type: "text",
+    delivery_status: 'sent'
   });
 
   if (error) { console.error("Send failed:", error);
@@ -285,20 +326,18 @@ useEffect(() => {
 
 useEffect(() => {
   if (chatInfo?.id) {
-    // 1. Load the history for the new room
     loadMessages();
+    markMessagesAsRead();
     
-    // 2. Start listening for new messages in this room
-    const unsubscribe = subscribeToMessages();
+    const unsubscribeMessages = subscribeToMessages();
+    const unsubscribeTyping = subscribeToTyping(); // Capture this
     
-    // 3. Cleanup: Stop listening to the old room when we switch friends
     return () => {
-      if (unsubscribe && typeof unsubscribe === 'function') {
-        unsubscribe();
-      }
+      if (unsubscribeMessages) unsubscribeMessages();
+      if (unsubscribeTyping) unsubscribeTyping(); // Clean up this
     };
   }
-}, [chatInfo?.id]); // This triggers correctly whenever the room ID changes
+}, [chatInfo?.id]);
 
   async function handleRetryMessage(messageId: string) {
     try {
@@ -351,22 +390,15 @@ useEffect(() => {
 }
 
   async function handleTyping() {
-    if (!user || !chatInfo?.id) return;
-    if (!isTyping) {
-      setIsTyping(true);
-      await supabase.from('typing_indicators').upsert({ chat_id: chatInfo.id, user_id: user.id, updated_at: new Date().toISOString() });
-    }
-    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-    typingTimeoutRef.current = setTimeout(async () => {
-      setIsTyping(false);
-      await removeTypingIndicator();
-    }, 3000);
-  }
+  if (!user || !chatInfo?.id) return;
 
-  async function removeTypingIndicator() {
-    if (!user || !chatInfo?.id) return;
-    await supabase.from('typing_indicators').delete().eq('chat_id', chatInfo.id).eq('user_id', user.id);
-  }
+  // This sends a "whisper" through Supabase that doesn't touch the DB
+  await supabase.channel(`typing:${chatInfo.id}`).send({
+    type: 'broadcast',
+    event: 'typing',
+    payload: { userId: user.id },
+  });
+}
 
   function scrollToBottom() { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }
 
@@ -525,17 +557,23 @@ useEffect(() => {
           );
         })}
 
-        {typingUsers.length > 0 && (
-          <div className={`flex items-center gap-2 text-sm ${theme === 'romantic' ? 'text-[#8B004B]' : 'text-gray-500 dark:text-gray-400'}`}>
-            <div className="flex gap-1">
-              <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-              <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-              <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-            </div>
-            <span>{typingUsers.length === 1 ? `${typingUsers[0]} is typing...` : `${typingUsers.length} people are typing...`}</span>
-          </div>
-        )}
-        <div ref={messagesEndRef} />
+        {/* Typing Indicator Placement */}
+{isOtherTyping && (
+  <div className={`flex items-center gap-2 p-2 ml-4 mb-2 animate-fade-in ${
+    theme === 'romantic' ? 'text-[#8B004B]' : 'text-gray-500 dark:text-gray-400'
+  }`}>
+    <div className="flex gap-1">
+      <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+      <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+      <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+    </div>
+    <span className="text-xs italic font-medium">
+      {chatInfo.otherUser?.display_name} is typing...
+    </span>
+  </div>
+)}
+
+<div ref={messagesEndRef} />
       </div>
 
       <div className={`p-4 border-t transition-colors duration-300 ${
