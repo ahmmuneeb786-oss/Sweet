@@ -186,52 +186,73 @@ async function markMessagesAsRead() {
 }
 
   function subscribeToMessages() {
-    if (!chatInfo?.id) return;
+  if (!chatInfo?.id) return;
 
-    const channel = supabase
-      .channel(`chat_messages_${chatInfo.id}`) // Unique channel name
-      .on(
-        'postgres_changes',
-        {
-          event: '*', // Listen for INSERT and UPDATE
-          schema: 'public',
-          table: 'messages',
-          filter: `chat_id=eq.${chatInfo.id}`,
-        },
-        async (payload) => {
-          if (payload.eventType === 'INSERT') {
-            const { data, error } = await supabase
-              .from('messages')
-              .select('*, profiles(display_name, avatar_url, username)')
-              .eq('id', payload.new.id)
-              .single();
+  const channel = supabase
+    .channel(`chat_messages_${chatInfo.id}`)
+    .on(
+      'postgres_changes',
+      {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'messages',
+        filter: `chat_id=eq.${chatInfo.id}`,
+      },
+      async (payload) => {
+        // Realtime doesn't send 'profiles' data, so we fetch it manually
+        const { data, error } = await supabase
+          .from('messages')
+          .select('*, profiles(display_name, avatar_url, username)')
+          .eq('id', payload.new.id)
+          .single();
 
-            if (data && !error) {
-              const incomingMsg = data as unknown as MessageType;
-              setMessages((prev) => {
-                if (prev.some(m => m.id === incomingMsg.id)) return prev;
-                return [...prev, incomingMsg];
-              });
+        if (data && !error) {
+          const incomingMsg = data as unknown as MessageType;
+          setMessages((prev) => {
+            if (prev.some((m) => m.id === incomingMsg.id)) return prev;
+            return [...prev, incomingMsg];
+          });
 
-              if (incomingMsg.sender_id !== user?.id) {
-                markMessagesAsRead();
-              }
-            }
-          } else if (payload.eventType === 'UPDATE') {
-            setMessages((prev) =>
-              prev.map((m) => 
-                m.id === payload.new.id ? { ...m, ...payload.new, profiles: m.profiles } : m
-              )
-            );
+          if (incomingMsg.sender_id !== user?.id) {
+            markMessagesAsRead();
           }
         }
-      )
-      .subscribe();
+      }
+    )
+    .on(
+      'postgres_changes',
+      {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'messages',
+        filter: `chat_id=eq.${chatInfo.id}`,
+      },
+      (payload) => {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === payload.new.id ? { ...m, ...payload.new, profiles: m.profiles } : m
+          )
+        );
+      }
+    )
+    .on(
+      'postgres_changes',
+      {
+        event: 'DELETE',
+        schema: 'public',
+        table: 'messages',
+        filter: `chat_id=eq.${chatInfo.id}`,
+      },
+      (payload) => {
+        setMessages((prev) => prev.filter((m) => m.id !== payload.old.id));
+      }
+    )
+    .subscribe();
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }
+  return () => {
+    supabase.removeChannel(channel);
+  };
+}
 
   function subscribeToTyping() {
   if (!chatInfo?.id) return;
@@ -257,43 +278,6 @@ async function markMessagesAsRead() {
   };
 }
 
-// Inside export function ChatWindow...
-
-useEffect(() => {
-  if (!chatInfo?.id) return;
-
-  // 1. Create the channel for this specific chat
-  const channel = supabase
-    .channel(`realtime-chat-${chatInfo.id}`)
-    .on(
-      'postgres_changes',
-      { 
-        event: 'INSERT', 
-        schema: 'public', 
-        table: 'messages', 
-        filter: `chat_id=eq.${chatInfo.id}` 
-      },
-      (payload) => {
-        // 2. This logic runs instantly when a new message hits the DB
-        console.log("New message received!", payload);
-        
-        // Only add if it's not already in state (prevents duplicates from optimistic updates)
-        setMessages((prev) => {
-          const exists = prev.find(m => m.id === payload.new.id);
-          if (exists) return prev;
-          return [...prev, payload.new as MessageType];
-        });
-      }
-    )
-    .subscribe((status) => {
-      console.log("Real-time Connection Status:", status);
-    });
-
-  // 3. Cleanup the connection when leaving the chat
-  return () => { 
-    supabase.removeChannel(channel); 
-  };
-}, [chatInfo?.id]); // Runs whenever the chat changes
   async function handleSendMessage(e: React.FormEvent | React.KeyboardEvent) {
   e.preventDefault();
   if (!newMessage.trim() || !user || !chatInfo) return; // Add chatInfo check
