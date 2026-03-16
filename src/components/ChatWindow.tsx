@@ -186,69 +186,42 @@ async function markMessagesAsRead() {
 }
 
   function subscribeToMessages() {
-  if (!chatInfo?.id) return; // Guard clause
+    if (!chatInfo?.id) return;
 
-  const channel = supabase
-    .channel(`messages:${chatInfo.id}`) // Use the permanent ID
-    .on(
-      'postgres_changes',
-      {
-        event: '*',
-        schema: 'public',
-        table: 'messages',
-        filter: `chat_id=eq.${chatInfo.id}`, // Filter by permanent ID
-      },
-      async (payload) => {
+    const channel = supabase
+      .channel(`chat_messages_${chatInfo.id}`) // Unique channel name
+      .on(
+        'postgres_changes',
+        {
+          event: '*', // Listen for INSERT and UPDATE
+          schema: 'public',
+          table: 'messages',
+          filter: `chat_id=eq.${chatInfo.id}`,
+        },
+        async (payload) => {
           if (payload.eventType === 'INSERT') {
             const { data, error } = await supabase
               .from('messages')
-              .select(`
-                id, chat_id, sender_id, content, type, media_url, 
-                reply_to_id, is_edited, is_deleted, created_at, delivery_status,
-                profiles (display_name, avatar_url, username)
-              `)
+              .select('*, profiles(display_name, avatar_url, username)')
               .eq('id', payload.new.id)
               .single();
 
             if (data && !error) {
-              // 1. REMOVE the hardcoded 'read' here. Use the actual DB status.
               const incomingMsg = data as unknown as MessageType;
-              
-              setMessages((prev) => {if (data && !error) {
-  const incomingMsg = data as unknown as MessageType;
-  
-  setMessages((prev) => {
-    if (prev.some(m => m.id === incomingMsg.id)) return prev;
-    return [...prev, incomingMsg];
-  });
-
-  // ADD THIS: If I am looking at the chat, mark incoming messages as read immediately
-  if (incomingMsg.sender_id !== user?.id) {
-    markMessagesAsRead();
-  }
-}
+              setMessages((prev) => {
                 if (prev.some(m => m.id === incomingMsg.id)) return prev;
                 return [...prev, incomingMsg];
               });
 
-              // 2. If the message came from someone else, mark it as read in the DB
               if (incomingMsg.sender_id !== user?.id) {
                 markMessagesAsRead();
               }
             }
           } else if (payload.eventType === 'UPDATE') {
-            // 3. This is what turns the checkmarks blue (or pink) in real-time!
             setMessages((prev) =>
-              prev.map((m) => {
-                if (m.id === payload.new.id) {
-                  return { 
-                    ...m, 
-                    ...payload.new, 
-                    profiles: m.profiles // Keep the profile data we already have
-                  };
-                }
-                return m;
-              })
+              prev.map((m) => 
+                m.id === payload.new.id ? { ...m, ...payload.new, profiles: m.profiles } : m
+              )
             );
           }
         }
@@ -325,18 +298,21 @@ async function markMessagesAsRead() {
 }
 
 useEffect(() => {
+  let messageUnsubscribe: (() => void) | undefined;
+  let typingUnsubscribe: (() => void) | undefined;
+
   if (chatInfo?.id) {
     loadMessages();
     markMessagesAsRead();
     
-    const unsubscribeMessages = subscribeToMessages();
-    const unsubscribeTyping = subscribeToTyping(); // Capture this
-    
-    return () => {
-      if (unsubscribeMessages) unsubscribeMessages();
-      if (unsubscribeTyping) unsubscribeTyping(); // Clean up this
-    };
+    messageUnsubscribe = subscribeToMessages();
+    typingUnsubscribe = subscribeToTyping();
   }
+
+  return () => {
+    if (messageUnsubscribe) messageUnsubscribe();
+    if (typingUnsubscribe) typingUnsubscribe();
+  };
 }, [chatInfo?.id]);
 
   async function handleRetryMessage(messageId: string) {
