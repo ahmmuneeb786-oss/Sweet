@@ -62,46 +62,42 @@ export function CreateChat({ theme, onClose, onChatCreated }: CreateChatProps) {
   }
 
   async function handleStartChat(friendId: string) {
-    if (!user) return;
+  if (!user) return;
 
-    try {
-      const { data: existingChat } = await supabase
-        .from('chats')
-        .select('id')
-        .eq('type', 'direct')
-        .in('id', [
-          `chat-${user.id}-${friendId}`,
-          `chat-${friendId}-${user.id}`
-        ])
-        .maybeSingle();
+  try {
+    const chatId = `chat-${[user.id, friendId].sort().join('-')}`;
 
-      if (existingChat) {
-        onChatCreated(existingChat.id);
-        return;
-      }
+    const { data: existingChat } = await supabase
+      .from('chats')
+      .select('id')
+      .eq('id', chatId)
+      .maybeSingle();
 
-      const chatId = `chat-${user.id}-${friendId}`;
-
-      const { error: chatError } = await supabase
-        .from('chats')
-        .insert({
-          id: chatId,
-          type: 'direct',
-          created_by: user.id
-        });
-
-      if (chatError) throw chatError;
-
-      await supabase.from('chat_participants').insert([
-        { chat_id: chatId, user_id: user.id, role: 'member' },
-        { chat_id: chatId, user_id: friendId, role: 'member' }
-      ]);
-
-      onChatCreated(chatId);
-    } catch (error) {
-      console.error('Error creating chat:', error);
+    if (existingChat) {
+      onChatCreated(existingChat.id);
+      return;
     }
+
+    const { error: chatError } = await supabase
+      .from('chats')
+      .insert({
+        id: chatId,
+        type: 'direct',
+        created_by: user.id
+      });
+
+    if (chatError) throw chatError;
+
+    await supabase.from('chat_participants').insert([
+      { chat_id: chatId, user_id: user.id, role: 'member' },
+      { chat_id: chatId, user_id: friendId, role: 'member' }
+    ]);
+
+    onChatCreated(chatId);
+  } catch (error) {
+    console.error('Error creating chat:', error);
   }
+}
 
   const filteredFriends = friends.filter(f =>
     f.display_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
