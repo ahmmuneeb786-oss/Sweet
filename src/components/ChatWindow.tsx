@@ -402,34 +402,37 @@ useEffect(() => {
 function subscribeToOnlineStatus() {
   if (!chatInfo?.otherUser?.id) return;
 
-  const channel = supabase
-    .channel(`user_status_${chatInfo.otherUser.id}`) // Unique channel name
-    .on(
-      'postgres_changes',
-      {
-        event: 'UPDATE', // We only care when the profile is updated
-        schema: 'public',
-        table: 'profiles',
-        filter: `id=eq.${chatInfo.otherUser.id}`,
-      },
-      (payload) => {
-        console.log("New Status Data:", payload.new);
-        
-        setChatInfo((prev) => {
-          if (!prev || !prev.otherUser) return prev;
-          // IMPORTANT: Check if the payload actually has the data
-          return {
-            ...prev,
-            otherUser: {
-              ...prev.otherUser,
-              is_online: payload.new.is_online ?? prev.otherUser.is_online,
-              last_seen: payload.new.last_seen ?? prev.otherUser.last_seen,
-            },
-          };
+  const otherUserId = chatInfo.otherUser.id;
+
+  const channel = supabase.channel(`online-status-${otherUserId}`)
+    .on('presence', { event: 'sync' }, () => {
+      const state = channel.presenceState();
+      
+      // Check if the other user's ID exists anywhere in the presence state
+      const isUserOnline = Object.values(state).flat().some(
+        (presence: any) => presence.user_id === otherUserId
+      );
+
+      setChatInfo((prev) => {
+        if (!prev || !prev.otherUser) return prev;
+        return {
+          ...prev,
+          otherUser: {
+            ...prev.otherUser,
+            is_online: isUserOnline,
+          },
+        };
+      });
+    })
+    .subscribe(async (status) => {
+      if (status === 'SUBSCRIBED') {
+        // Track your own presence so the other person can see YOU are online
+        await channel.track({
+          user_id: user?.id,
+          online_at: new Date().toISOString(),
         });
       }
-    )
-    .subscribe();
+    });
 
   return () => {
     supabase.removeChannel(channel);
