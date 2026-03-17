@@ -320,6 +320,7 @@ const { error } = await supabase.from("messages").insert({
 useEffect(() => {
   let messageUnsubscribe: (() => void) | undefined;
   let typingUnsubscribe: (() => void) | undefined;
+  let onlineStatusUnsubscribe: (() => void) | undefined;
 
   if (chatInfo?.id) {
     loadMessages();
@@ -327,13 +328,15 @@ useEffect(() => {
     
     messageUnsubscribe = subscribeToMessages();
     typingUnsubscribe = subscribeToTyping();
+    onlineStatusUnsubscribe = subscribeToOnlineStatus();
   }
 
   return () => {
     if (messageUnsubscribe) messageUnsubscribe();
     if (typingUnsubscribe) typingUnsubscribe();
+    if (onlineStatusUnsubscribe) onlineStatusUnsubscribe();
   };
-}, [chatInfo?.id]);
+}, [chatInfo?.id, chatInfo?.otherUser?.id]);
 
   async function handleRetryMessage(messageId: string) {
     try {
@@ -394,6 +397,42 @@ useEffect(() => {
     event: 'typing',
     payload: { userId: user.id },
   });
+}
+
+function subscribeToOnlineStatus() {
+  if (!chatInfo?.otherUser?.id) return;
+
+  // Listen for changes to the other user's profile row
+  const channel = supabase
+    .channel(`user_status:${chatInfo.otherUser.id}`)
+    .on(
+      'postgres_changes',
+      {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'profiles',
+        filter: `id=eq.${chatInfo.otherUser.id}`,
+      },
+      (payload) => {
+        // Look for this section inside subscribeToOnlineStatus
+setChatInfo((prev) => {
+  if (!prev || !prev.otherUser) return prev;
+  return {
+    ...prev,
+    otherUser: {
+      ...prev.otherUser, // 1. Keep the existing name, avatar, and ID
+      is_online: payload.new.is_online, // 2. Update status
+      last_seen: payload.new.last_seen, // 3. Update time
+    },
+  };
+});
+      }
+    )
+    .subscribe();
+
+  return () => {
+    supabase.removeChannel(channel);
+  };
 }
 
   function scrollToBottom() { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }
