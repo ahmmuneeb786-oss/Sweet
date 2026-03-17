@@ -59,17 +59,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => subscription.unsubscribe();
   }, []);
 
-  useEffect(() => {
-    const handleBeforeUnload = () => {
-      if (user) {
-        updateOnlineStatus(false);
-      }
-    };
-
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [user]);
-
   async function loadProfile(userId: string) {
     try {
       const { data, error } = await supabase
@@ -91,6 +80,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!user) return;
 
     try {
+      // We still update the DB so we know the LAST time they were seen
+      // but we don't rely on this for the "Green Dot" anymore
       await supabase
         .from('profiles')
         .update({
@@ -212,6 +203,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { error: error as Error };
     }
   }
+
+  // --- REAL-TIME PRESENCE LOGIC ---
+  useEffect(() => {
+    if (!user) return;
+
+    // Join a global channel that everyone uses to see who's online
+    const channel = supabase.channel('global-presence', {
+      config: {
+        presence: {
+          key: user.id,
+        },
+      },
+    });
+
+    channel.subscribe(async (status) => {
+      if (status === 'SUBSCRIBED') {
+        // Broadcast your presence to the world
+        await channel.track({
+          user_id: user.id,
+          online_at: new Date().toISOString(),
+        });
+        
+        // Update DB once so "Last Seen" is fresh
+        updateOnlineStatus(true);
+      }
+    });
+
+    return () => {
+      // When the component unmounts or user logs out, 
+      // Supabase automatically tells everyone you are offline.
+      supabase.removeChannel(channel);
+    };
+  }, [user]);
+  // --- END PRESENCE LOGIC ---
 
   const value = {
     user,
