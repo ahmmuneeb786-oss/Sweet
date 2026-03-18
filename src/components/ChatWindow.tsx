@@ -400,45 +400,27 @@ useEffect(() => {
 }
 
 function subscribeToOnlineStatus() {
-  // We use a fixed string like 'global-presence' so EVERYONE in the app is in the same bucket
-  if (!user || !chatInfo?.otherUser?.id) return;
+  if (!chatInfo?.otherUser?.id) return;
 
   const otherUserId = chatInfo.otherUser.id;
-
-  const channel = supabase.channel('global-presence', {
-    config: {
-      presence: {
-        key: user.id,
-      },
-    },
-  });
+  const channel = supabase.channel('global-presence');
 
   channel
     .on('presence', { event: 'sync' }, () => {
       const state = channel.presenceState();
       
-      // Now we check if the otherUser's ID exists anywhere in the APP, 
-      // not just this specific chat room.
-      const isUserOnline = !!state[otherUserId];
+      // We check the LIVE state, not the database column
+      const isOnline = !!state[otherUserId];
 
       setChatInfo((prev) => {
-        if (!prev || !prev.otherUser) return prev;
-        if (prev.otherUser.is_online === isUserOnline) return prev;
-        
+        if (!prev || !prev.otherUser || prev.otherUser.is_online === isOnline) return prev;
         return {
           ...prev,
-          otherUser: { ...prev.otherUser, is_online: isUserOnline },
+          otherUser: { ...prev.otherUser, is_online: isOnline }
         };
       });
     })
-    .subscribe(async (status) => {
-      if (status === 'SUBSCRIBED') {
-        await channel.track({
-          user_id: user.id,
-          online_at: new Date().toISOString(),
-        });
-      }
-    });
+    .subscribe();
 
   return () => {
     supabase.removeChannel(channel);

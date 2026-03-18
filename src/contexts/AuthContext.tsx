@@ -204,39 +204,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  // --- REAL-TIME PRESENCE LOGIC ---
+  // 1. GLOBAL PRESENCE TRACKER
   useEffect(() => {
     if (!user) return;
 
-    // Join a global channel that everyone uses to see who's online
+    // Connect to a global "heartbeat" channel
     const channel = supabase.channel('global-presence', {
-      config: {
-        presence: {
-          key: user.id,
-        },
-      },
+      config: { presence: { key: user.id } },
     });
 
     channel.subscribe(async (status) => {
       if (status === 'SUBSCRIBED') {
-        // Broadcast your presence to the world
+        // This is the magic part: it broadcasts your status
         await channel.track({
           user_id: user.id,
           online_at: new Date().toISOString(),
         });
         
-        // Update DB once so "Last Seen" is fresh
+        // Update the database once just for the "Last Seen" time
         updateOnlineStatus(true);
       }
     });
 
     return () => {
-      // When the component unmounts or user logs out, 
-      // Supabase automatically tells everyone you are offline.
+      // When you close the tab, this stops, and you appear offline instantly
       supabase.removeChannel(channel);
     };
   }, [user]);
-  // --- END PRESENCE LOGIC ---
 
   const value = {
     user,
