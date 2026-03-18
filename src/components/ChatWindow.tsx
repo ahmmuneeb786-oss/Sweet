@@ -142,10 +142,16 @@ const { data: otherParticipant, error: partError } = await supabase
 
     if (partError) console.error("Participant fetch error:", partError);
 
-    // IMPORTANT: Map the fetched profile to chatData before setting state
-    if (otherParticipant && (otherParticipant as any).profiles) {
-      chatData.otherUser = (otherParticipant as any).profiles;
-    }
+    // Inside loadChat function...
+if (otherParticipant && (otherParticipant as any).profiles) {
+  const profile = (otherParticipant as any).profiles;
+  chatData.otherUser = {
+    ...profile,
+    // CRITICAL: Start as false. 
+    // The Presence Sync will turn this true in a millisecond if they are actually online.
+    is_online: false 
+  };
+} 
 
     setChatInfo(chatData);
   } catch (error) {
@@ -408,26 +414,33 @@ function subscribeToOnlineStatus() {
   channel
     .on('presence', { event: 'sync' }, () => {
       const state = channel.presenceState();
-      
-      // IMPORTANT: If Hamza is NOT in this state object, he is OFFLINE.
       const isActuallyOnline = !!state[otherUserId];
 
       setChatInfo((prev) => {
         if (!prev || !prev.otherUser) return prev;
-        
-        // Only update if the live status is different from what we are showing
         if (prev.otherUser.is_online === isActuallyOnline) return prev;
 
         return {
           ...prev,
-          otherUser: { 
-            ...prev.otherUser, 
-            is_online: isActuallyOnline 
-          },
+          otherUser: { ...prev.otherUser, is_online: isActuallyOnline },
         };
       });
     })
-    .subscribe();
+    .subscribe(async (status) => {
+      if (status === 'SUBSCRIBED') {
+        // Force a sync check immediately upon subscribing
+        const state = channel.presenceState();
+        const isActuallyOnline = !!state[otherUserId];
+        
+        setChatInfo((prev) => {
+          if (!prev || !prev.otherUser) return prev;
+          return {
+            ...prev,
+            otherUser: { ...prev.otherUser, is_online: isActuallyOnline }
+          };
+        });
+      }
+    });
 
   return () => {
     supabase.removeChannel(channel);
