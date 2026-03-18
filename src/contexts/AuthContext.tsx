@@ -232,6 +232,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [user]);
 
+  useEffect(() => {
+  const handleVisibilityChange = () => {
+    if (document.visibilityState === 'visible') {
+      // When user comes back to the tab, we re-sync presence
+      // This forces the "Last seen" to update immediately
+      supabase.getChannels().forEach(ch => ch.track({ updated_at: Date.now() }));
+    }
+  };
+
+  document.addEventListener('visibilitychange', handleVisibilityChange);
+  return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+}, []);
+
   const value = {
     user,
     profile,
