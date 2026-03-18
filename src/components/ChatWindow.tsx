@@ -409,14 +409,21 @@ function subscribeToOnlineStatus() {
     .on('presence', { event: 'sync' }, () => {
       const state = channel.presenceState();
       
-      // We check the LIVE state, not the database column
-      const isOnline = !!state[otherUserId];
+      // IMPORTANT: If Hamza is NOT in this state object, he is OFFLINE.
+      const isActuallyOnline = !!state[otherUserId];
 
       setChatInfo((prev) => {
-        if (!prev || !prev.otherUser || prev.otherUser.is_online === isOnline) return prev;
+        if (!prev || !prev.otherUser) return prev;
+        
+        // Only update if the live status is different from what we are showing
+        if (prev.otherUser.is_online === isActuallyOnline) return prev;
+
         return {
           ...prev,
-          otherUser: { ...prev.otherUser, is_online: isOnline }
+          otherUser: { 
+            ...prev.otherUser, 
+            is_online: isActuallyOnline 
+          },
         };
       });
     })
@@ -426,6 +433,19 @@ function subscribeToOnlineStatus() {
     supabase.removeChannel(channel);
   };
 }
+
+useEffect(() => {
+  const handleVisibilityChange = () => {
+    if (document.visibilityState === 'visible') {
+      // When user comes back to the tab, we re-sync presence
+      // This forces the "Last seen" to update immediately
+      supabase.getChannels().forEach(ch => ch.track({ updated_at: Date.now() }));
+    }
+  };
+
+  document.addEventListener('visibilitychange', handleVisibilityChange);
+  return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+}, []);
 
   function scrollToBottom() { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }
 
