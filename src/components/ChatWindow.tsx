@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Send, Smile, Paperclip, Phone, Video, Image as ImageIcon, X, Mic, AlertCircle, Check } from 'lucide-react';
+import { Send, Smile, Paperclip, Phone, Video, Image as ImageIcon, X, Mic, AlertCircle, Check, ArrowLeft } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { Message } from './Message';
@@ -8,6 +8,7 @@ import { ChatMenu } from './ChatMenu';
 interface ChatWindowProps {
   chatId: string;
   theme: 'light' | 'dark' | 'romantic';
+  onBack?: () => void;
 }
 
 interface MessageType {
@@ -45,7 +46,7 @@ interface ChatInfo {
 
 const reactions = ['💖', '🥰', '😍', '💋', '😂'];
 
-export function ChatWindow({ chatId, theme }: ChatWindowProps) {
+export function ChatWindow({ chatId, theme, onBack }: ChatWindowProps) {
   const { user } = useAuth();
   const [messages, setMessages] = useState<MessageType[]>([]);
   const [chatInfo, setChatInfo] = useState<ChatInfo | null>(null);
@@ -57,6 +58,7 @@ export function ChatWindow({ chatId, theme }: ChatWindowProps) {
   const [sendingMessages, setSendingMessages] = useState<Set<string>>(new Set());
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [isOtherUserOnline, setIsOtherUserOnline] = useState(false);
 
   useEffect(() => {
   if (chatId && user) {
@@ -406,38 +408,37 @@ useEffect(() => {
 }
 
 function subscribeToOnlineStatus() {
-  if (!chatInfo?.otherUser?.id) return;
+  if (!chatInfo?.otherUser?.id || !user) return;
 
   const otherUserId = chatInfo.otherUser.id;
-  const channel = supabase.channel('global-presence');
+  
+  // We use a specific channel name for this chat room
+  const channel = supabase.channel(`presence:${chatInfo.id}`, {
+    config: {
+      presence: {
+        key: user.id,
+      },
+    },
+  });
 
   channel
     .on('presence', { event: 'sync' }, () => {
       const state = channel.presenceState();
-      const isActuallyOnline = !!state[otherUserId];
-
-      setChatInfo((prev) => {
-        if (!prev || !prev.otherUser) return prev;
-        if (prev.otherUser.is_online === isActuallyOnline) return prev;
-
-        return {
-          ...prev,
-          otherUser: { ...prev.otherUser, is_online: isActuallyOnline },
-        };
-      });
+      
+      // Check if the other user's ID exists anywhere in the presence state
+      const userIsPresent = Object.values(state)
+        .flat()
+        .some((presence: any) => presence.user_id === otherUserId);
+      
+      console.log("Is other user here?", userIsPresent);
+      setIsOtherUserOnline(userIsPresent);
     })
     .subscribe(async (status) => {
       if (status === 'SUBSCRIBED') {
-        // Force a sync check immediately upon subscribing
-        const state = channel.presenceState();
-        const isActuallyOnline = !!state[otherUserId];
-        
-        setChatInfo((prev) => {
-          if (!prev || !prev.otherUser) return prev;
-          return {
-            ...prev,
-            otherUser: { ...prev.otherUser, is_online: isActuallyOnline }
-          };
+        // You MUST track yourself for the channel to stay active/synced
+        await channel.track({
+          user_id: user.id,
+          online_at: new Date().toISOString(),
         });
       }
     });
@@ -502,6 +503,13 @@ useEffect(() => {
 }`}>      <div className={`px-6 py-4 border-b ${theme === 'romantic' ? 'border-[#FFB6C1]' : 'border-gray-200'} bg-gradient-to-r ${getThemeGradient()}`}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
+            {/* MOBILE BACK BUTTON */}
+      <button 
+        onClick={onBack} 
+        className="md:hidden p-2 -ml-2 hover:bg-white/20 rounded-full text-white transition-colors"
+      >
+        <ArrowLeft className="w-6 h-6" />
+      </button>
             {chatInfo.type === 'direct' && chatInfo.otherUser ? (
               <>
                 <div className="relative">
@@ -525,10 +533,10 @@ useEffect(() => {
                     {chatInfo.otherUser.display_name}
                   </h2>
                   <p className="text-sm text-white/80">
-                    {chatInfo.otherUser.is_online
+                     {isOtherUserOnline
                       ? 'Online'
-                      : `Last seen ${formatLastSeen(chatInfo.otherUser.last_seen)}`
-                    }
+                      : `Last seen ${formatLastSeen(chatInfo.otherUser?.last_seen || new Date().toISOString())}`
+                         }
                   </p>
                 </div>
               </>
