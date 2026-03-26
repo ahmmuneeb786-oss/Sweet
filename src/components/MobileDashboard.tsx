@@ -26,39 +26,46 @@ export function MobileDashboard({ theme, setTheme }: MobileDashboardProps) {
     'bg-gray-50 text-gray-900';
 
   return (
-    <div className={`h-screen w-full overflow-hidden relative ${bgClass}`}>
+    /* CHANGE 1: Added 'max-w-full' and 'overflow-x-hidden' to stop the right-side cut-off.
+       CHANGE 2: Used 'h-[100dvh]' (Dynamic Viewport Height) so it fits perfectly 
+       even when the mobile browser address bar pops up.
+    */
+    <div className={`h-[100dvh] w-full max-w-full overflow-x-hidden overflow-y-hidden flex flex-col relative ${bgClass}`}>
       {theme === 'romantic' && <FloatingHearts />}
 
-      {/* 1. LAYER ONE: Sidebars (Settings, Profile, etc.) */}
-      {/* On mobile, these should be fixed and cover the whole screen */}
-      <div className="z-[100]">
-        {showProfile && <ProfileSidebar onClose={() => setShowProfile(false)} theme={theme} />}
-        {showFriends && (
-          <FriendList 
-            theme={theme} 
-            onClose={() => setShowFriends(false)} 
-            onSelectUser={(user) => { setSelectedChatId(user.id); setShowFriends(false); }}
-            setActiveChatId={setSelectedChatId} 
-          />
-        )}
-        {showSettings && <Settings onClose={() => setShowSettings(false)} theme={theme} setTheme={setTheme} />}
-        {showCreateChat && (
-          <CreateChat
-            theme={theme}
-            onClose={() => setShowCreateChat(false)}
-            onChatCreated={(id) => { setSelectedChatId(id); setShowCreateChat(false); }}
-          />
-        )}
-      </div>
+      {/* 1. LAYER ONE: Sidebars */}
+      {/* CHANGE 3: Added 'fixed inset-0' wrapper to ensure sidebars 
+         don't push the main content to the side when they open.
+      */}
+      {(showProfile || showFriends || showSettings || showCreateChat) && (
+        <div className="fixed inset-0 z-[100] w-full h-full">
+          {showProfile && <ProfileSidebar onClose={() => setShowProfile(false)} theme={theme} />}
+          {showFriends && (
+            <FriendList 
+              theme={theme} 
+              onClose={() => setShowFriends(false)} 
+              onSelectUser={(user) => { setSelectedChatId(user.id); setShowFriends(false); }}
+              setActiveChatId={setSelectedChatId} 
+            />
+          )}
+          {showSettings && <Settings onClose={() => setShowSettings(false)} theme={theme} setTheme={setTheme} />}
+          {showCreateChat && (
+            <CreateChat
+              theme={theme}
+              onClose={() => setShowCreateChat(false)}
+              onChatCreated={(id) => { setSelectedChatId(id); setShowCreateChat(false); }}
+            />
+          )}
+        </div>
+      )}
 
-      {/* 2. LAYER TWO: Chat Window (Only shows if a chat is selected) */}
+      {/* 2. LAYER TWO: Chat Window */}
       {selectedChatId ? (
         <div className="flex flex-col h-full w-full animate-in slide-in-from-right duration-300">
-          {/* Header with Back Button */}
-          <div className={`p-4 flex items-center border-b ${theme === 'dark' ? 'border-gray-700' : 'border-pink-200'}`}>
+          <div className={`p-4 flex items-center border-b shrink-0 ${theme === 'dark' ? 'border-gray-700' : 'border-pink-200'}`}>
             <button 
               onClick={() => setSelectedChatId(null)}
-              className="mr-4 text-2xl"
+              className="mr-4 text-2xl active:scale-90 transition-transform"
             >
               ←
             </button>
@@ -70,8 +77,9 @@ export function MobileDashboard({ theme, setTheme }: MobileDashboardProps) {
           </div>
         </div>
       ) : (
-        /* 3. LAYER THREE: Chat List (The default view) */
-        <div className="h-full w-full">
+        /* 3. LAYER THREE: Chat List */
+        /* CHANGE 4: Added 'flex-1' and 'flex flex-col' to ensure it fills the height */
+        <div className="flex-1 flex flex-col h-full w-full overflow-hidden">
           <ChatList
             theme={theme}
             selectedChatId={selectedChatId}
@@ -85,4 +93,4 @@ export function MobileDashboard({ theme, setTheme }: MobileDashboardProps) {
       )}
     </div>
   );
-} 
+}

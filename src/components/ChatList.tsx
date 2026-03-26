@@ -170,7 +170,7 @@ export function ChatList({ selectedChatId, onSelectChat, onShowProfile, onShowFr
   }
 
   return (
-    <div className={`w-96 flex flex-col transition-colors duration-300 border-r ${
+    <div className={`w-full md:w-96 h-full flex flex-col transition-colors duration-300 md:border-r ${
   theme === 'dark' 
     ? 'bg-gray-900 border-gray-700' 
     : theme === 'romantic' 
@@ -197,8 +197,8 @@ export function ChatList({ selectedChatId, onSelectChat, onShowProfile, onShowFr
               )}
             </div>
             <div className="flex-1">
-              <h1 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                <Heart className="w-5 h-5 text-pink-500 fill-pink-500" />
+              <h1 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2 whitespace-nowrap">
+                <Heart className="w-5 h-5 text-pink-500 fill-pink-500 shrink-0" />
                 Sweet
               </h1>
               <p className="text-xs text-gray-500 dark:text-gray-400">@{profile?.username}</p>
@@ -220,10 +220,10 @@ export function ChatList({ selectedChatId, onSelectChat, onShowProfile, onShowFr
                   onClick={() => setShowMenu(false)}
                 />
                   <div className={`absolute right-0 top-full mt-2 w-64 rounded-xl shadow-lg py-2 z-20 border ${
-  theme === 'romantic' 
-    ? 'bg-[#FFE4E1] border-[#FFB6C1]' 
-    : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700'
-}`}>                  <button
+                    theme === 'romantic' 
+                     ? 'bg-[#FFE4E1] border-[#FFB6C1]' 
+                      : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700'
+                   }`}>                  <button
                     onClick={() => {
                       onShowProfile();
                       setShowMenu(false);
@@ -325,7 +325,7 @@ export function ChatList({ selectedChatId, onSelectChat, onShowProfile, onShowFr
               <button
                 key={chat.id}
                 onClick={() => onSelectChat(chat.id)}
-                className={`w-full p-4 flex items-start gap-3 transition-all ${
+                className={`w-full p-4 flex items-start gap-3 transition-all active:scale-[0.98] ${
   selectedChatId === chat.id 
     ? theme === 'romantic' ? 'bg-[#FFC0CB]/40' : 'bg-pink-50 dark:bg-pink-900/30' 
     : theme === 'romantic' ? 'hover:bg-[#FFC0CB]/20' : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'
