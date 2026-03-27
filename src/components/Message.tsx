@@ -237,19 +237,28 @@ async function handleCopy() {
 
         <div className="relative">
           <div className={`px-4 py-2 rounded-2xl ${getMessageClasses(isOwn)}`}>
-            {message.type === 'image' && message.media_url ? (
-              <div className="space-y-2">
-                <img
-                  src={message.media_url}
-                  alt="Shared image"
-                  className="max-w-full rounded-lg max-h-64"
-                />
-                {message.content && <p className="whitespace-pre-wrap break-words">{message.content}</p>}
-              </div>
-            ) : (
-              <p className="whitespace-pre-wrap break-words">{message.content}</p>
-            )}
-          </div>
+  {message.type === 'image' && message.media_url ? (
+    <div className="space-y-2">
+      <img
+        src={message.media_url}
+        alt="Shared image"
+        className="max-w-full rounded-lg max-h-64"
+      />
+      {message.content && <p className="whitespace-pre-wrap break-words">{message.content}</p>}
+    </div>
+  ) : message.type === 'audio' && message.media_url ? (
+    /* --- THIS IS THE NEW AUDIO PLAYER --- */
+    <div className="flex items-center py-2 min-w-[200px]">
+      <audio 
+        src={message.media_url} 
+        controls 
+        className={`h-8 custom-audio-player ${isOwn ? 'filter invert brightness-200' : ''}`}
+      />
+    </div>
+  ) : (
+    <p className="whitespace-pre-wrap break-words">{message.content}</p>
+  )}
+</div>
 
           {messageReactions.length > 0 && (
             <div className={`absolute -bottom-2 flex gap-1 flex-wrap ${isOwn ? 'right-2' : 'left-2'}`}>

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Send, Smile, Paperclip, Phone, Video, Image as ImageIcon, X, Mic, AlertCircle, Check, ArrowLeft } from 'lucide-react';
+import { Send, Smile, Paperclip, Phone, Video, Image as ImageIcon, X, AlertCircle, Check, ArrowLeft } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { Message } from './Message';
@@ -62,6 +62,9 @@ export function ChatWindow({ chatId, theme, onBack }: ChatWindowProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const mediaRecorder = useRef<MediaRecorder | null>(null);
+  const audioChunks = useRef<Blob[]>([]);
 
   useEffect(() => {
   if (chatId && user) {
@@ -567,6 +570,67 @@ useEffect(() => {
     );
   }
 
+  const handleVoiceUpload = async (audioBlob: Blob) => {
+    if (!chatInfo?.id || !user) return; // Added safety check
+
+    try {
+      const fileName = `${user.id}/${Date.now()}.wav`;
+
+      // 1. Upload to Supabase bucket
+      const { error: uploadError } = await supabase.storage
+  .from('message-media')
+  .upload(fileName, audioBlob);
+
+      if (uploadError) throw uploadError;
+
+      // 2. Get Public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('message-media')
+        .getPublicUrl(fileName);
+
+      // 3. Insert into database with the correct chat_id
+      const { error: messageError } = await supabase
+        .from('messages')
+        .insert({
+          chat_id: chatInfo.id, // CRITICAL: Use chatInfo.id here
+          sender_id: user.id,
+          content: '🎤 Voice Message',
+          type: 'audio',
+          media_url: publicUrl,
+          delivery_status: 'sent'
+        });
+
+      if (messageError) throw messageError;
+    } catch (error) {
+      console.error('Voice upload failed:', error);
+    }
+  };
+
+const startRecording = async () => {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    mediaRecorder.current = new MediaRecorder(stream);
+    audioChunks.current = [];
+
+    mediaRecorder.current.ondataavailable = (e) => audioChunks.current.push(e.data);
+    mediaRecorder.current.onstop = () => {
+      const audioBlob = new Blob(audioChunks.current, { type: 'audio/wav' });
+      handleVoiceUpload(audioBlob);
+    };
+
+    mediaRecorder.current.start();
+    setIsRecording(true);
+  } catch (err) {
+    console.error("Microphone denied", err);
+  }
+};
+
+const stopRecording = () => {
+  mediaRecorder.current?.stop();
+  setIsRecording(false);
+  mediaRecorder.current?.stream.getTracks().forEach(t => t.stop());
+};
+
   return (
     <div className={`flex-1 flex flex-col h-full overflow-hidden ${
       theme === 'dark'
@@ -766,13 +830,6 @@ useEffect(() => {
     />
 
           <div className="flex items-center mb-1">
-            <button 
-              type="button" 
-              onClick={() => alert("Voice messaging coming soon!")}
-              className="p-2 hover:bg-black/5 rounded-full transition-transform active:scale-75"
-            >
-              <Mic className="w-5 h-5 text-gray-500" />
-            </button>
 
             {/* MOVED IMAGE BUTTON INSIDE THE FLEX GROUP */}
             <button
@@ -838,7 +895,15 @@ useEffect(() => {
             </div>
           </div>
 
-          <div className="flex-1 min-w-0 relative">
+          <div className="flex-1 min-w-0 relative"> 
+            {isRecording && (
+              <div className="absolute inset-0 z-10 bg-inherit flex items-center pl-4 rounded-2xl pointer-events-none">
+                <span className="flex items-center gap-2 text-red-500 font-bold animate-pulse text-sm">
+                  <div className="w-2 h-2 bg-red-500 rounded-full" />
+                  Recording Voice Note...
+                </span>
+              </div>
+            )}
             <textarea
   ref={textareaRef}
   value={newMessage}
@@ -886,6 +951,26 @@ useEffect(() => {
               </button>
             )}
           </div>
+
+          {/* NEW: Voice Record Button placed before the Send button */}
+      <button
+        type="button"
+        onMouseDown={startRecording}
+        onMouseUp={stopRecording}
+        onTouchStart={startRecording}
+        onTouchEnd={stopRecording}
+        className={`p-3 rounded-full transition-all flex-shrink-0 ${
+          isRecording 
+            ? 'bg-red-500 text-white animate-pulse scale-110 shadow-lg' 
+            : 'text-gray-400 hover:text-pink-500 bg-gray-100 hover:bg-pink-50'
+        }`}
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill={isRecording ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"></path>
+          <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+          <line x1="12" y1="19" x2="12" y2="22"></line>
+        </svg>
+      </button>
 
           <button
             type="submit"
