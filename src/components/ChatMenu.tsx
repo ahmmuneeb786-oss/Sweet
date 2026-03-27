@@ -67,27 +67,39 @@ export function ChatMenu({ theme, chatId, onClose }: ChatMenuProps) {
 
   return (
     <>
-      {/* Menu Trigger */}
+      {/* 1. MENU TRIGGER BUTTON */}
       <button
         onClick={() => setShowMenu(!showMenu)}
-        className="p-2 hover:bg-white/10 rounded-full transition-colors"
+        className="p-2 hover:bg-white/10 rounded-full transition-colors active:scale-90"
       >
         <MoreVertical className={`w-5 h-5 ${theme === 'romantic' ? 'text-[#8B004B]' : 'text-white'}`} />
       </button>
 
-      {/* Menu Dropdown */}
+      {/* 2. MENU DROPDOWN / BOTTOM SHEET */}
       {showMenu && (
         <>
-          {/* Overlay to close menu */}
+          {/* Background Overlay */}
           <div
-            className="fixed inset-0 z-10"
-            onClick={() => { setShowMenu(false); onClose(); }} // <-- call onClose here
+            className="fixed inset-0 z-40 bg-black/20 backdrop-blur-[1px]"
+            onClick={() => { setShowMenu(false); onClose(); }}
           />
-          <div className={`absolute top-full right-0 mt-2 w-56 rounded-xl shadow-lg py-2 z-20 border transition-colors ${
-  theme === 'romantic' 
-    ? 'bg-[#FFE4E1] border-[#FFB6C1]' 
-    : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700'
-}`}>
+          
+          {/* Main Menu Container */}
+          <div className={`
+            /* Mobile Styles: Slides from bottom */
+            fixed bottom-0 left-0 right-0 w-full rounded-t-3xl z-50 px-2 pb-8 pt-4
+            /* Desktop Styles: Small dropdown */
+            md:absolute md:top-full md:bottom-auto md:left-auto md:right-0 md:w-56 md:rounded-xl md:p-0 md:pb-0 md:pt-0
+            shadow-2xl border transition-all animate-in slide-in-from-bottom md:slide-in-from-top-2 duration-300
+            ${theme === 'romantic' 
+              ? 'bg-[#FFE4E1] border-[#FFB6C1]' 
+              : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700'}
+          `}>
+            
+            {/* Mobile Grab Handle (Hidden on Desktop) */}
+            <div className="w-12 h-1.5 bg-gray-300 dark:bg-gray-600 rounded-full mx-auto mb-4 md:hidden" />
+
+            {/* Loop through Menu Items */}
             {menuItems.map((item, idx) => {
               const Icon = item.icon;
               return (
@@ -96,81 +108,73 @@ export function ChatMenu({ theme, chatId, onClose }: ChatMenuProps) {
                   onClick={() => {
                     item.action();
                     setShowMenu(false);
-                    onClose(); // <-- also close via prop
+                    onClose();
                   }}
-                  className={`w-full px-4 py-2 text-left flex items-center gap-3 transition-colors ${
-  theme === 'romantic' ? 'hover:bg-[#FFC0CB]/30' : 'hover:bg-gray-50 dark:hover:bg-gray-700'
-} ${
-  item.danger 
-    ? 'text-red-600' 
-    : theme === 'romantic' ? 'text-[#4B004B]' : 'text-gray-700 dark:text-gray-200'
-}`}
+                  className={`w-full px-6 md:px-4 py-4 md:py-2 text-left flex items-center gap-4 md:gap-3 transition-colors active:bg-black/5 ${
+                    theme === 'romantic' 
+                      ? 'hover:bg-[#FFC0CB]/30 text-[#4B004B]' 
+                      : 'hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200'
+                  } ${item.danger ? '!text-red-600' : ''}`}
                 >
-                  <Icon className="w-4 h-4" />
-                  <span className="text-sm font-medium">{item.label}</span>
+                  <Icon className="w-5 h-5 md:w-4 md:h-4" />
+                  <span className="text-base md:text-sm font-medium">{item.label}</span>
                 </button>
               );
             })}
 
-            {muteStatus && (
-              <>
-                <div className="border-t border-gray-200 my-2" />
-                <button
-                  onClick={() => { handleMuteChat(null); setShowMenu(false); onClose(); }}
-                  className="w-full px-4 py-2 text-left hover:bg-gray-50 flex items-center gap-3 text-gray-700"
-                >
-                  <Bell className="w-4 h-4" />
-                  <span className="text-sm font-medium">Unmute Chat</span>
-                </button>
-              </>
-            )}
-
-            {!muteStatus && (
-              <>
-                <div className="border-t border-gray-200 my-2" />
-                <div className="px-4 py-2">
-                  <p className={`text-xs font-medium mb-2 ${theme === 'romantic' ? 'text-[#8B004B]' : 'text-gray-700 dark:text-gray-400'}`}>Mute until...</p>
-                  <div className="space-y-1">
-                    {[
-                      { label: '8 hours', value: '8h' },
-                      { label: '1 week', value: '1w' },
-                      { label: 'Forever', value: 'forever' }
-                    ].map((option) => (
-                      <button
-  key={option.value}
-  onClick={() => { handleMuteChat(option.value as any); setShowMenu(false); onClose(); }}
-  className={`w-full px-3 py-1 text-left text-xs rounded transition-colors ${
-    theme === 'romantic' 
-      ? 'text-[#8B004B] hover:bg-[#FFB6C1]/40' 
-      : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
-  }`}
->
-                        {option.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </>
-            )}
+            {/* Mute Section */}
+            <div className="border-t border-gray-200 dark:border-gray-700 my-2" />
+            
+            <div className="px-6 md:px-4 py-2">
+              <p className={`text-xs font-bold uppercase tracking-wider mb-3 ${
+                theme === 'romantic' ? 'text-[#8B004B]' : 'text-gray-400'
+              }`}>
+                Mute Notifications
+              </p>
+              
+              <div className="flex gap-2 md:flex-col">
+                {[
+                  { label: '8h', value: '8h' },
+                  { label: '1w', value: '1w' },
+                  { label: 'Always', value: 'forever' }
+                ].map((option) => (
+                  <button
+                    key={option.value}
+                    onClick={() => { handleMuteChat(option.value as any); setShowMenu(false); onClose(); }}
+                    className={`flex-1 md:w-full px-3 py-3 md:py-1 text-center md:text-left text-xs font-bold rounded-xl transition-colors ${
+                      theme === 'romantic' 
+                        ? 'bg-white/50 text-[#8B004B] hover:bg-[#FFB6C1]/40' 
+                        : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200'
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         </>
       )}
 
-      {/* Search Messages Modal */}
+      {/* 3. SEARCH MESSAGES MODAL */}
       {showSearch && (
-        <>
-          <div
-            className="fixed inset-0 bg-black/50 z-40"
-            onClick={() => { setShowSearch(false); onClose(); }} // <-- use onClose
+        <div className="fixed inset-0 z-[100] flex items-start justify-center p-4 pt-20">
+          {/* Darker background for search */}
+          <div 
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm" 
+            onClick={() => { setShowSearch(false); onClose(); }} 
           />
-          <div className={`fixed inset-x-0 top-20 max-w-md mx-auto rounded-xl shadow-xl p-4 z-50 border transition-all ${
-  theme === 'romantic' ? 'bg-[#FFF0F5] border-[#FFB6C1]' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700'
-}`}>
+          
+          <div className={`relative w-full max-w-lg rounded-2xl shadow-2xl p-4 border animate-in zoom-in-95 duration-200 ${
+            theme === 'romantic' ? 'bg-[#FFF0F5] border-[#FFB6C1]' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700'
+          }`}>
             <div className="flex items-center justify-between mb-3">
-              <h3 className="font-semibold text-gray-900">Search Messages</h3>
+              <h3 className={`font-semibold ${theme === 'romantic' ? 'text-[#4B004B]' : 'text-gray-900 dark:text-white'}`}>
+                Search Messages
+              </h3>
               <button
-                onClick={() => { setShowSearch(false); onClose(); }} // <-- use onClose
-                className="p-1 hover:bg-gray-100 rounded"
+                onClick={() => { setShowSearch(false); onClose(); }}
+                className="p-1 hover:bg-black/5 rounded"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -180,14 +184,15 @@ export function ChatMenu({ theme, chatId, onClose }: ChatMenuProps) {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search in conversation..."
+              autoFocus
               className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-500 transition-colors ${
-    theme === 'romantic' 
-      ? 'bg-white border-[#FFB6C1] text-[#4B004B] placeholder:text-[#8B004B]/50' 
-      : 'bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white'
-  }`}
-/>
+                theme === 'romantic' 
+                  ? 'bg-white border-[#FFB6C1] text-[#4B004B] placeholder:text-[#8B004B]/50' 
+                  : 'bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white'
+              }`}
+            />
           </div>
-        </>
+        </div>
       )}
     </>
   );

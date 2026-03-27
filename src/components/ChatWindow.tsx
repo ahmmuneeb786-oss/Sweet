@@ -59,6 +59,9 @@ export function ChatWindow({ chatId, theme, onBack }: ChatWindowProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [isOtherUserOnline, setIsOtherUserOnline] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
   useEffect(() => {
   if (chatId && user) {
@@ -132,28 +135,35 @@ export function ChatWindow({ chatId, theme, onBack }: ChatWindowProps) {
     // Inside loadChat function
 // Inside loadChat function
     // Look for this section in loadChat
-const { data: otherParticipant, error: partError } = await supabase
+// 1. Get the other participant's ID first
+const { data: participantData, error: partError } = await supabase
   .from('chat_participants')
-  .select(`
-    user_id,
-    profiles:user_id (id, display_name, avatar_url, is_online, last_seen)
-  `) 
+  .select('user_id') 
   .eq('chat_id', chat.id)
   .neq('user_id', user.id)
   .maybeSingle();
 
-    if (partError) console.error("Participant fetch error:", partError);
+if (partError) console.error("Participant fetch error:", partError);
 
-    // Inside loadChat function...
-if (otherParticipant && (otherParticipant as any).profiles) {
-  const profile = (otherParticipant as any).profiles;
-  chatData.otherUser = {
-    ...profile,
-    // CRITICAL: Start as false. 
-    // The Presence Sync will turn this true in a millisecond if they are actually online.
-    is_online: false 
-  };
-} 
+// 2. If we found a user ID, go grab their profile details
+if (participantData?.user_id) {
+  const { data: profile, error: profileError } = await supabase
+    .from('profiles')
+    .select('id, display_name, avatar_url, is_online, last_seen')
+    .eq('id', participantData.user_id)
+    .single();
+
+  if (profile && !profileError) {
+    chatData.otherUser = {
+      id: profile.id,
+      display_name: profile.display_name,
+      avatar_url: profile.avatar_url,
+      // Keep your logic: Start as false, let Presence Sync take over
+      is_online: false, 
+      last_seen: profile.last_seen
+    };
+  }
+}
 
     setChatInfo(chatData);
   } catch (error) {
@@ -283,17 +293,51 @@ async function markMessagesAsRead() {
   };
 }
 
+async function uploadImage(file: File): Promise<string | null> {
+  try {
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${crypto.randomUUID()}.${fileExt}`;
+    // We'll keep it simple: just an uploads folder
+    const filePath = `uploads/${fileName}`; 
+
+    const { error: uploadError } = await supabase.storage
+      .from('chat-media') 
+      .upload(filePath, file);
+
+    if (uploadError) throw uploadError;
+
+    const { data } = supabase.storage
+      .from('chat-media')
+      .getPublicUrl(filePath);
+
+    return data.publicUrl;
+  } catch (error) {
+    console.error('Upload failed:', error);
+    return null;
+  }
+}
+
   async function handleSendMessage(e: React.FormEvent | React.KeyboardEvent) {
   e.preventDefault();
-  if (!newMessage.trim() || !user || !chatInfo) return; // Add chatInfo check
+  
+  // 1. New Validation: Allow if there is text OR a selected file
+  const messageContent = newMessage.trim();
+  if ((!messageContent && !selectedFile) || !user || !chatInfo) return;
 
+  const tempId = crypto.randomUUID();
+
+  const fileToUpload = selectedFile;
+
+  // 2. Create the "Optimistic" message object
   const tempMessage: MessageType = {
-    id: crypto.randomUUID(),
-    chat_id: chatInfo.id, // Use chatInfo.id instead of chatId prop
+    id: tempId,
+    chat_id: chatInfo.id,
     sender_id: user.id,
-    content: newMessage.trim(),
-    type: "text",
-    media_url: null,
+    content: messageContent || null,
+    // If we have a file, set type to "image", otherwise "text"
+    type: fileToUpload ? "image" : "text",
+    // Use the imagePreview (local blob) so it shows up instantly
+    media_url: imagePreview, 
     reply_to_id: null,
     is_edited: false,
     is_deleted: false,
@@ -306,23 +350,94 @@ async function markMessagesAsRead() {
     }
   };
 
-  // optimistic UI update
+  // 3. Update the UI state
   setMessages(prev => [...prev, tempMessage]);
 
+  // 4. Reset the inputs immediately for a clean feel
   setNewMessage("");
-
-  // Replace your existing insert block (around line 296) with this:
-const { error } = await supabase.from("messages").insert({
-  id: tempMessage.id, // <--- CRITICAL: Syncs the Optimistic UI with the Database
-  chat_id: chatInfo.id,
-  sender_id: user.id,
-  content: tempMessage.content,
-  type: "text",
-  delivery_status: 'sent' // This triggers the first checkmark
-});
-
-  if (error) { console.error("Send failed:", error);
+  setImagePreview(null);
+  setSelectedFile(null); // We'll handle the actual upload in the next step
+  
+  if (textareaRef.current) {
+    textareaRef.current.style.height = 'auto';
   }
+// --- START OF REMAINING PART ---
+  try {
+    let finalMediaUrl = null;
+
+    // 1. If there was a file, upload it now
+    if (fileToUpload) {
+      finalMediaUrl = await uploadImage(fileToUpload);
+      if (!finalMediaUrl) throw new Error("Image upload failed");
+    }
+
+    // 2. Insert the message
+    const { error } = await supabase.from("messages").insert({
+      id: tempId, 
+      chat_id: chatInfo.id,
+      sender_id: user.id,
+      content: messageContent || null,
+      // CRITICAL: Ensure 'type' is sent to the DB
+      type: fileToUpload ? "image" : "text", 
+      media_url: finalMediaUrl,
+      delivery_status: 'sent'
+    });
+
+    if (error) {
+      console.error("Supabase Insert Error:", error.message);
+      throw error;
+    }
+
+  } catch (error) {
+    console.error("Send failed:", error);
+    setFailedMessages(prev => new Set(prev).add(tempId));
+    // Remove the optimistic message or mark as failed
+    setMessages(prev => prev.map(m => 
+      m.id === tempId ? { ...m, delivery_status: undefined } : m
+    ));
+  }
+  // --- END OF REMAINING PART ---
+}
+
+function subscribeToOnlineStatus() {
+  if (!chatInfo?.otherUser?.id || !user) return;
+
+  const otherUserId = chatInfo.otherUser.id;
+  
+  // We use a specific channel name for this chat room
+  const channel = supabase.channel(`presence:${chatInfo.id}`, {
+    config: {
+      presence: {
+        key: user.id,
+      },
+    },
+  });
+
+  channel
+    .on('presence', { event: 'sync' }, () => {
+      const state = channel.presenceState();
+      
+      // Check if the other user's ID exists anywhere in the presence state
+      const userIsPresent = Object.values(state)
+        .flat()
+        .some((presence: any) => presence.user_id === otherUserId);
+      
+      console.log("Is other user here?", userIsPresent);
+      setIsOtherUserOnline(userIsPresent);
+    })
+    .subscribe(async (status) => {
+      if (status === 'SUBSCRIBED') {
+        // You MUST track yourself for the channel to stay active/synced
+        await channel.track({
+          user_id: user.id,
+          online_at: new Date().toISOString(),
+        });
+      }
+    });
+
+  return () => {
+    supabase.removeChannel(channel);
+  };
 }
 
 useEffect(() => {
@@ -407,47 +522,6 @@ useEffect(() => {
   });
 }
 
-function subscribeToOnlineStatus() {
-  if (!chatInfo?.otherUser?.id || !user) return;
-
-  const otherUserId = chatInfo.otherUser.id;
-  
-  // We use a specific channel name for this chat room
-  const channel = supabase.channel(`presence:${chatInfo.id}`, {
-    config: {
-      presence: {
-        key: user.id,
-      },
-    },
-  });
-
-  channel
-    .on('presence', { event: 'sync' }, () => {
-      const state = channel.presenceState();
-      
-      // Check if the other user's ID exists anywhere in the presence state
-      const userIsPresent = Object.values(state)
-        .flat()
-        .some((presence: any) => presence.user_id === otherUserId);
-      
-      console.log("Is other user here?", userIsPresent);
-      setIsOtherUserOnline(userIsPresent);
-    })
-    .subscribe(async (status) => {
-      if (status === 'SUBSCRIBED') {
-        // You MUST track yourself for the channel to stay active/synced
-        await channel.track({
-          user_id: user.id,
-          online_at: new Date().toISOString(),
-        });
-      }
-    });
-
-  return () => {
-    supabase.removeChannel(channel);
-  };
-}
-
 useEffect(() => {
   const handleVisibilityChange = () => {
     if (document.visibilityState === 'visible') {
@@ -494,22 +568,24 @@ useEffect(() => {
   }
 
   return (
-<div className={`flex-1 flex flex-col ${
-  theme === 'dark'
-    ? 'bg-gray-900 text-white'
-    : theme === 'romantic'
-    ? 'bg-[#FFE4E1] text-[#4B004B]'
-    : 'bg-white text-gray-900'
-}`}>      <div className={`px-6 py-4 border-b ${theme === 'romantic' ? 'border-[#FFB6C1]' : 'border-gray-200'} bg-gradient-to-r ${getThemeGradient()}`}>
+    <div className={`flex-1 flex flex-col h-full overflow-hidden ${
+      theme === 'dark'
+        ? 'bg-gray-900 text-white'
+        : theme === 'romantic'
+        ? 'bg-[#FFE4E1] text-[#4B004B]'
+        : 'bg-white text-gray-900'
+    }`}>
+      {/* HEADER SECTION */}
+      <div className={`px-4 md:px-6 py-3 md:py-4 border-b ${theme === 'romantic' ? 'border-[#FFB6C1]' : 'border-gray-200'} bg-gradient-to-r ${getThemeGradient()} shadow-sm z-10`}>
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            {/* MOBILE BACK BUTTON */}
-      <button 
-        onClick={onBack} 
-        className="md:hidden p-2 -ml-2 hover:bg-white/20 rounded-full text-white transition-colors"
-      >
-        <ArrowLeft className="w-6 h-6" />
-      </button>
+          <div className="flex items-center gap-2 md:gap-3">
+            <button 
+              onClick={onBack} 
+              className="md:hidden p-2 -ml-2 hover:bg-white/20 rounded-full text-white transition-colors active:scale-90"
+            >
+              <ArrowLeft className="w-6 h-6" />
+            </button>
+
             {chatInfo.type === 'direct' && chatInfo.otherUser ? (
               <>
                 <div className="relative">
@@ -517,49 +593,46 @@ useEffect(() => {
                     <img
                       src={chatInfo.otherUser.avatar_url}
                       alt={chatInfo.otherUser.display_name}
-                      className="w-12 h-12 rounded-full object-cover border-2 border-white"
+                      className="w-10 h-10 md:w-12 md:h-12 rounded-full object-cover border-2 border-white/50"
                     />
                   ) : (
-                    <div className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center text-white font-medium border-2 border-white">
+                    <div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center text-white font-medium border-2 border-white/50">
                       {chatInfo.otherUser.display_name[0]}
                     </div>
                   )}
-                  {chatInfo.otherUser.is_online && (
+                  {isOtherUserOnline && (
                     <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white rounded-full" />
                   )}
                 </div>
-                <div>
-                  <h2 className="text-lg font-semibold text-white">
+                <div className="min-w-0">
+                  <h2 className="text-base md:text-lg font-bold text-white truncate max-w-[150px] md:max-w-none">
                     {chatInfo.otherUser.display_name}
                   </h2>
-                  <p className="text-sm text-white/80">
-                     {isOtherUserOnline
+                  <p className="text-[10px] md:text-xs text-white/80 font-medium">
+                    {isOtherUserOnline
                       ? 'Online'
-                      : `Last seen ${formatLastSeen(chatInfo.otherUser?.last_seen || new Date().toISOString())}`
-                         }
+                      : `Last seen ${formatLastSeen(chatInfo.otherUser?.last_seen || new Date().toISOString())}`}
                   </p>
                 </div>
               </>
             ) : (
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center text-white border-2 border-white">
+                <div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center text-white border-2 border-white">
                   👥
                 </div>
                 <div>
-                  <h2 className="text-lg font-semibold text-white">
-                    {chatInfo.name}
-                  </h2>
-                  <p className="text-sm text-white/80">Group chat</p>
+                  <h2 className="text-base md:text-lg font-bold text-white">{chatInfo.name}</h2>
+                  <p className="text-[10px] text-white/80 uppercase tracking-widest font-bold">Group chat</p>
                 </div>
               </div>
             )}
           </div>
 
-          <div className="flex items-center gap-2">
-            <button className="p-2 hover:bg-white/20 backdrop-blur-sm rounded-full transition-colors">
+          <div className="flex items-center gap-1 md:gap-2">
+            <button className="hidden sm:flex p-2 hover:bg-white/20 backdrop-blur-sm rounded-full transition-colors">
               <Phone className="w-5 h-5 text-white" />
             </button>
-            <button className="p-2 hover:bg-white/20 backdrop-blur-sm rounded-full transition-colors">
+            <button className="hidden sm:flex p-2 hover:bg-white/20 backdrop-blur-sm rounded-full transition-colors">
               <Video className="w-5 h-5 text-white" />
             </button>
             <ChatMenu chatId={chatInfo.id} onClose={() => {}} theme={theme}/>
@@ -567,9 +640,12 @@ useEffect(() => {
         </div>
       </div>
 
-      <div className={`flex-1 overflow-y-auto p-6 space-y-4 transition-colors duration-300 ${
-        theme === 'dark' ? 'bg-gray-900' : theme === 'romantic' ? 'bg-[#FFE4E1]/50' : 'bg-gray-50'
-         }`}>
+      {/* MESSAGES AREA - WITH FULL LOGIC RESTORED */}
+      <div 
+        className={`flex-1 overflow-y-auto p-4 md:p-6 space-y-4 transition-colors duration-300 scroll-smooth overscroll-behavior-y-contain ${
+          theme === 'dark' ? 'bg-gray-900' : theme === 'romantic' ? 'bg-[#FFE4E1]/30' : 'bg-gray-50'
+        }`}
+      >
         {messages.map((message, index) => {
           const showAvatar = index === 0 || messages[index - 1].sender_id !== message.sender_id;
           const isOwn = message.sender_id === user?.id;
@@ -586,11 +662,13 @@ useEffect(() => {
                 theme={theme}
                 onDelete={() => handleDeleteMessage(message.id)}
               />
+              
+              {/* RESTORED STATUS INDICATORS (Sending/Failed/Ticks) */}
               {isOwn && (
                 <div className="flex flex-col items-end gap-1 mt-1 px-4">
                   {isSending && (
-                    <div className="flex items-center gap-1 text-xs text-gray-500">
-                      <div className="w-3 h-3 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+                    <div className="flex items-center gap-1 text-[10px] text-gray-500">
+                      <div className="w-2.5 h-2.5 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
                       <span>Sending...</span>
                     </div>
                   )}
@@ -598,7 +676,7 @@ useEffect(() => {
                   {isFailed && (
                     <button
                       onClick={() => handleRetryMessage(message.id)}
-                      className="flex items-center gap-1 text-xs text-red-600 hover:text-red-700"
+                      className="flex items-center gap-1 text-[10px] text-red-600 font-bold"
                     >
                       <AlertCircle className="w-3 h-3" />
                       <span>Failed - Tap to retry</span>
@@ -615,7 +693,7 @@ useEffect(() => {
                           <Check className={`w-3 h-3 -ml-1.5 ${theme === 'romantic' ? 'text-[#FF1493]' : 'text-blue-500'}`} />
                         </div>
                       ) : (
-                        message.delivery_status === 'sent' && <Check className="w-3 h-3" />
+                        message.delivery_status === 'sent' && <Check className="w-3 h-3 opacity-60" />
                       )}
                     </div>
                   )}
@@ -625,132 +703,197 @@ useEffect(() => {
           );
         })}
 
-        {/* Typing Indicator Placement */}
-{isOtherTyping && (
-  <div className={`flex items-center gap-2 p-2 ml-4 mb-2 animate-fade-in ${
-    theme === 'romantic' ? 'text-[#8B004B]' : 'text-gray-500 dark:text-gray-400'
-  }`}>
-    <div className="flex gap-1">
-      <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-      <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-      <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+        {/* TYPING INDICATOR */}
+        {isOtherTyping && (
+          <div className={`flex items-center gap-2 p-2 ml-4 mb-2 animate-in fade-in slide-in-from-left-2 duration-300 ${
+            theme === 'romantic' ? 'text-[#8B004B]' : 'text-gray-500 dark:text-gray-400'
+          }`}>
+            <div className="flex gap-1">
+              <span className="w-1.5 h-1.5 bg-current opacity-40 rounded-full animate-bounce" />
+              <span className="w-1.5 h-1.5 bg-current opacity-60 rounded-full animate-bounce [animation-delay:0.2s]" />
+              <span className="w-1.5 h-1.5 bg-current opacity-100 rounded-full animate-bounce [animation-delay:0.4s]" />
+            </div>
+            <span className="text-xs italic font-semibold">{chatInfo.otherUser?.display_name} is typing...</span>
+          </div>
+        )}
+        <div ref={messagesEndRef} className="h-2" />
+      </div>
+
+      {/* INPUT AREA */}
+      <div className={`p-3 md:p-4 border-t transition-colors duration-300 ${
+        theme === 'dark' ? 'bg-gray-800 border-gray-700' : theme === 'romantic' ? 'bg-[#FFF0F5] border-[#FFB6C1]' : 'bg-white border-gray-200'
+      }`}>
+
+       {imagePreview && (
+  <div className="relative inline-block mb-3 animate-in zoom-in-95 duration-200">
+    <div className="relative rounded-2xl overflow-hidden border-2 border-pink-400 shadow-lg">
+      <img 
+        src={imagePreview} 
+        alt="Preview" 
+        className="max-h-32 w-auto object-cover"
+      />
+      <button
+        onClick={() => {
+          setImagePreview(null);
+          setSelectedFile(null);
+        }}
+        className="absolute top-1 right-1 p-1 bg-black/50 hover:bg-black/70 rounded-full text-white transition-colors"
+      >
+        <X className="w-4 h-4" />
+      </button>
     </div>
-    <span className="text-xs italic font-medium">
-      {chatInfo.otherUser?.display_name} is typing...
-    </span>
   </div>
 )}
 
-<div ref={messagesEndRef} />
-      </div>
+        <form onSubmit={handleSendMessage} className="flex items-end gap-2 max-w-6xl mx-auto">
+          {/* Hidden Image Input */}
+          <input
+           type="file"
+           id="imageInput"
+           accept="image/*"
+           hidden
+           onChange={(e) => {
+           const file = e.target.files?.[0];
+           if (file) {
+           setSelectedFile(file);
+           const reader = new FileReader();
+           reader.onloadend = () => {
+           setImagePreview(reader.result as string);
+           };
+           reader.readAsDataURL(file);
+        }
+     }}
+    />
 
-      <div className={`p-4 border-t transition-colors duration-300 ${
-        theme === 'dark' ? 'bg-gray-800 border-gray-700' : theme === 'romantic' ? 'bg-[#FFF0F5] border-[#FFB6C1]' : 'bg-white border-gray-200'
-          }`}>
-        <form onSubmit={handleSendMessage} className="flex items-end gap-2">
-          <div className="flex gap-2">
+          <div className="flex items-center mb-1">
+            <button 
+              type="button" 
+              onClick={() => alert("Voice messaging coming soon!")}
+              className="p-2 hover:bg-black/5 rounded-full transition-transform active:scale-75"
+            >
+              <Mic className="w-5 h-5 text-gray-500" />
+            </button>
+
+            {/* MOVED IMAGE BUTTON INSIDE THE FLEX GROUP */}
             <button
               type="button"
-              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors"
+              onClick={() => document.getElementById('imageInput')?.click()}
+              className="p-2 hover:bg-black/5 rounded-full transition-all active:scale-90"
             >
-              <Paperclip className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+              <ImageIcon className="w-5 h-5 text-gray-500" />
             </button>
-            <button
-              type="button"
-              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors"
-            >
-              <ImageIcon className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+            
+            <button type="button" className="p-2 hover:bg-black/5 rounded-full hidden sm:block">
+              <Paperclip className="w-5 h-5 text-gray-500" />
             </button>
+            
             <div className="relative">
               <button
                 type="button"
                 onClick={() => setShowEmojiPanel(!showEmojiPanel)}
-                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors"
+                className="p-2 hover:bg-black/5 rounded-full"
               >
-                <Smile className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+                <Smile className="w-5 h-5 text-gray-500" />
               </button>
               {showEmojiPanel && (
-  <>
-    <div
-      className="fixed inset-0 z-10"
-      onClick={() => setShowEmojiPanel(false)}
-    />
-    <div
-      className="fixed inset-0 z-10"
-      onClick={() => setShowEmojiPanel(false)}
-    />
-    <div className={`absolute bottom-full left-0 mb-2 p-3 rounded-xl shadow-lg border grid grid-cols-6 gap-2 z-20 w-64 transition-colors duration-300 ${
-  theme === 'romantic' 
-    ? 'bg-[#FFE4E1] border-[#FFB6C1]' 
-    : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700'
-}`}>
-      {/* Close button using X */}
-      <button
-        type="button"
-        onClick={() => setShowEmojiPanel(false)}
-        className="absolute top-1 right-1 p-1"
-      >
-        <X className="w-4 h-4" />
-      </button>
-
-      {/* Emoji grid */}
-      {['💖','🥰','😍','💋','❤️', '😍', '😘', '💘', '🌹', '💞', '😂', '😭', '😢', '🔥', '👍', '🎉'].map((emoji) => (
-        <button
-          key={emoji}
-          type="button"
-          onClick={() => {
-            setNewMessage(newMessage + emoji);
-            setShowEmojiPanel(false);
-          }}
-          className="text-2xl hover:scale-125 transition-transform"
+  <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4">
+    {/* Backdrop */}
+    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowEmojiPanel(false)} />
+    
+    <div className={`relative w-full max-w-[320px] rounded-2xl shadow-2xl border flex flex-col z-[60] animate-in slide-in-from-bottom-4 duration-200 ${
+      theme === 'romantic' ? 'bg-[#FFE4E1] border-[#FFB6C1]' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700'
+    }`}>
+      
+      {/* NEW: Panel Header with X Button */}
+      <div className="flex items-center justify-between p-3 border-b border-black/5">
+        <span className="text-xs font-bold uppercase tracking-wider opacity-60">Select Emoji</span>
+        <button 
+          onClick={() => setShowEmojiPanel(false)}
+          className="p-1.5 hover:bg-black/5 rounded-full transition-colors"
         >
-          {emoji}
+          <X className="w-5 h-5" />
         </button>
-      ))}
+      </div>
+
+      {/* Emoji Grid */}
+      <div className="p-4 grid grid-cols-6 gap-2">
+        {['💖','🥰','😍','💋','❤️','😘','💘','🌹','💞','😂','😭','😢','🔥','👍','🎉','✨','🦋','🧸'].map((emoji) => (
+          <button
+            key={emoji}
+            type="button"
+            onClick={() => { 
+              setNewMessage(prev => prev + emoji); 
+              // Optional: Keep it open if they want to spam emojis, or close it:
+              // setShowEmojiPanel(false); 
+            }}
+            className="text-2xl hover:scale-125 transition-transform active:scale-90 p-1"
+          >
+            {emoji}
+          </button>
+        ))}
+      </div>
     </div>
-  </>
+  </div>
 )}
             </div>
-            <button
-              type="button"
-              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors"
-            >
-              <Mic className="w-5 h-5 text-gray-600" />
-            </button>
           </div>
 
-          <div className="flex-1">
+          <div className="flex-1 min-w-0 relative">
             <textarea
-              value={newMessage}
-              onChange={(e) => {
-                setNewMessage(e.target.value);
-                handleTyping();
-              }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSendMessage(e);
-                }
-              }}
-              placeholder="Spread love..."
-              rows={1}
-              className={`w-full px-4 py-2 border rounded-2xl focus:outline-none focus:ring-2 focus:ring-pink-500 resize-none transition-colors ${
-  theme === 'romantic' 
-    ? 'bg-white border-[#FFB6C1] text-[#4B004B] placeholder:text-[#8B004B]/50 focus:ring-[#FF69B4]' 
-    : theme === 'dark'
-    ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:ring-pink-500'
-    : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400 focus:ring-pink-400'
-}`}
-            />
+  ref={textareaRef}
+  value={newMessage}
+  onChange={(e) => {
+    setNewMessage(e.target.value);
+    handleTyping();
+    
+    // Auto-expand logic
+    e.target.style.height = 'auto';
+    const newHeight = Math.min(e.target.scrollHeight, 150);
+    e.target.style.height = `${newHeight}px`;
+  }}
+  onKeyDown={(e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSendMessage(e);
+    }
+  }}
+  placeholder="Spread love..."
+  rows={1}
+  className={`w-full pl-4 pr-10 py-2.5 border rounded-2xl focus:outline-none focus:ring-2 resize-none transition-all text-sm md:text-base 
+    ${/* NEW: Hide scrollbar by default, only show if overflow happens */ ''}
+    scrollbar-none overflow-hidden hover:overflow-y-auto
+    ${
+    theme === 'romantic' 
+      ? 'bg-white border-[#FFB6C1] text-[#4B004B] focus:ring-[#FF69B4]' 
+      : theme === 'dark'
+      ? 'bg-gray-700 border-gray-600 text-white focus:ring-pink-500'
+      : 'bg-gray-50 border-gray-300 text-gray-900 focus:ring-pink-400'
+  }`}
+  style={{ 
+    maxHeight: '150px', 
+    minHeight: '44px',
+    lineHeight: '1.5',
+    overflowY: newMessage.length > 50 ? 'auto' : 'hidden' // Smart toggle
+  }}
+/>
+            {newMessage.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setNewMessage('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
           </div>
 
           <button
             type="submit"
-            disabled={!newMessage.trim()}
-            className={`p-3 rounded-full transition-all ${
-              newMessage.trim()
-                ? `bg-gradient-to-r ${getThemeGradient()} text-white hover:scale-105`
-                : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+            disabled={!newMessage.trim() && !selectedFile}
+            className={`p-3 rounded-full transition-all active:scale-95 flex-shrink-0 ${
+              (newMessage.trim() || selectedFile)
+                ? `bg-gradient-to-r ${getThemeGradient()} text-white shadow-md`
+                : 'bg-gray-200 text-gray-400'
             }`}
           >
             <Send className="w-5 h-5" />
