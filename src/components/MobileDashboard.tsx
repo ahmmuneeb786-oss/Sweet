@@ -62,18 +62,8 @@ export function MobileDashboard({ theme, setTheme }: MobileDashboardProps) {
       {/* 2. LAYER TWO: Chat Window */}
       {selectedChatId ? (
         <div className="flex flex-col h-full w-full animate-in slide-in-from-right duration-300">
-          <div className={`p-4 flex items-center border-b shrink-0 ${theme === 'dark' ? 'border-gray-700' : 'border-pink-200'}`}>
-            <button 
-              onClick={() => setSelectedChatId(null)}
-              className="mr-4 text-2xl active:scale-90 transition-transform"
-            >
-              ←
-            </button>
-            <span className="font-bold text-lg">Chatting...</span>
-          </div>
-          
           <div className="flex-1 overflow-hidden">
-            <ChatWindow chatId={selectedChatId} theme={theme} />
+            <ChatWindow chatId={selectedChatId} theme={theme} onBack={() => setSelectedChatId(null)}/>
           </div>
         </div>
       ) : (

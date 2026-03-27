@@ -580,7 +580,7 @@ useEffect(() => {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 md:gap-3">
             <button 
-              onClick={onBack} 
+              onClick={onBack}
               className="md:hidden p-2 -ml-2 hover:bg-white/20 rounded-full text-white transition-colors active:scale-90"
             >
               <ArrowLeft className="w-6 h-6" />
