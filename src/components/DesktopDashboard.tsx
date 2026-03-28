@@ -31,19 +31,6 @@ export function DesktopDashboard({ theme, setTheme }: DashboardProps) {
     >
       {theme === 'romantic' && <FloatingHearts />}
 
-      {/* Theme toggle button */}
-      <button
-        onClick={() => {
-          // Cycle theme: light → dark → romantic → light
-          if (theme === 'light') setTheme('dark');
-          else if (theme === 'dark') setTheme('romantic');
-          else setTheme('romantic'); // theme === 'romantic'
-        }}
-        className="absolute top-4 right-4 px-4 py-2 bg-pink-500 text-white rounded-lg z-50"
-      >
-        Toggle Theme
-      </button>
-
       {/* Chat list sidebar */}
       <ChatList
         theme={theme}

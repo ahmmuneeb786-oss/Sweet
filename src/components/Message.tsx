@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { MoreVertical, Reply, Forward, Copy, Star, Trash2, CreditCard as Edit3, Heart, Play, Pause } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
@@ -40,6 +40,9 @@ export function Message({ message, isOwn, showAvatar, reactions, theme, onDelete
   const [messageReactions, setMessageReactions] = useState<Reaction[]>([]);
   const [userReactionMap, setUserReactionMap] = useState<Map<string, string>>(new Map());
   const [isPlaying, setIsPlaying] = useState(false);
+  const [duration, setDuration] = useState(0);
+  const [currentTime, setCurrentTime] = useState(0);
+  const audioRef = useRef<HTMLAudioElement>(null);
 
   useEffect(() => {
     loadReactions();
@@ -171,6 +174,15 @@ async function handleCopy() {
       }
     }
   }
+
+  // Helper to format audio seconds (e.g., 65 -> 1:05)
+  const formatAudioTime = (seconds: number) => {
+    if (isNaN(seconds)) return "0:00";
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
   // Function to get proper message bubble classes based on theme and sender
   const getMessageClasses = (own: boolean) => {
     if (theme === 'romantic') {
@@ -249,56 +261,69 @@ async function handleCopy() {
     </div>
   ) : message.type === 'voice' && message.media_url ? (
   /* --- ROMANTIC STYLISH VOICE PLAYER --- */
-  <div className="flex flex-col gap-1 min-w-[220px] py-1">
-    <div className="flex items-center gap-3">
-      {/* Play/Pause Heart Circle */}
-      <button 
-        onClick={() => {
-          const audio = document.getElementById(`audio-${message.id}`) as HTMLAudioElement;
-          if (isPlaying) { audio.pause(); } else { audio.play(); }
-          setIsPlaying(!isPlaying);
-        }}
-        className={`w-10 h-10 rounded-full flex items-center justify-center transition-all active:scale-90 shadow-sm ${
-          isOwn ? 'bg-white/20 hover:bg-white/30' : 'bg-white hover:bg-pink-50'
-        }`}
-      >
-        {isPlaying ? (
-          <Pause size={18} className={isOwn ? 'text-white' : 'text-[#FF69B4]'} fill="currentColor" />
-        ) : (
-          <Play size={18} className={`ml-1 ${isOwn ? 'text-white' : 'text-[#FF69B4]'}`} fill="currentColor" />
-        )}
-      </button>
+  <div className="flex flex-col gap-1 min-w-[260px] md:min-w-[280px] py-1">
+  <div className="flex items-center gap-3 w-full">
+    {/* Play Button */}
+    <button 
+      type="button"
+      onClick={() => {
+        if (isPlaying) { audioRef.current?.pause(); } 
+        else { audioRef.current?.play(); }
+        setIsPlaying(!isPlaying);
+      }}
+      className={`w-10 h-10 rounded-full flex-shrink-0 flex items-center justify-center transition-all active:scale-90 shadow-sm ${
+        isOwn ? 'bg-white/20 hover:bg-white/30' : 'bg-white hover:bg-pink-50'
+      }`}
+    >
+      {isPlaying ? <Pause size={18} fill="currentColor" /> : <Play size={18} className="ml-1" fill="currentColor" />}
+    </button>
 
-      {/* Decorative Waveform Bars */}
-      <div className="flex items-center gap-[3px] h-8 flex-1">
-        {[0.4, 0.7, 0.5, 0.9, 0.6, 0.8, 0.4, 0.9, 0.5, 0.7, 0.4].map((height, i) => (
-          <div 
-            key={i}
-            className={`w-[3px] rounded-full transition-all duration-300 ${
-              isOwn ? 'bg-white/60' : 'bg-[#FF69B4]/40'
-            } ${isPlaying ? 'animate-pulse scale-y-125' : ''}`}
-            style={{ 
-              height: `${height * 100}%`,
-              animationDelay: `${i * 0.1}s` 
-            }}
-          />
-        ))}
-      </div>
-      
-      {/* Hidden Audio Element */}
-      <audio 
-        id={`audio-${message.id}`}
-        src={message.media_url} 
-        onEnded={() => setIsPlaying(false)}
-        className="hidden"
-      />
+    {/* Waveform - flex-1 stretches it to fill the gap */}
+    <div className="flex items-center gap-[3px] h-8 flex-1 justify-between px-1">
+      {[0.4, 0.7, 0.5, 0.9, 0.6, 0.8, 0.4, 0.9, 0.5, 0.7, 0.4, 0.8, 0.6, 0.9, 0.5].map((height, i, arr) => {
+        const progress = (currentTime / duration) * 100;
+        const barPercent = (i / arr.length) * 100;
+        const isFilled = progress >= barPercent;
+
+        return (
+  <div 
+    key={i} 
+    className={`w-[3px] rounded-full transition-all duration-300 ${
+      isFilled 
+        ? (isOwn ? 'bg-white scale-y-125' : 'bg-[#FF1493] scale-y-125') 
+        /* --- UPDATED COLORS BELOW FOR BETTER VISIBILITY --- */
+        : (isOwn ? 'bg-white/50' : 'bg-[#8B004B]/20') 
+    } ${isPlaying && isFilled ? 'animate-pulse' : ''}`}
+    style={{ 
+      height: `${height * 100}%`, 
+      animationDelay: `${i * 0.05}s`,
+      /* Adding a slight border/shadow to help them pop if needed */
+      boxShadow: !isFilled ? '0 1px 2px rgba(0,0,0,0.05)' : 'none'
+    }} 
+  />
+);
+      })}
     </div>
-    
-    {/* Optional: Label it "Voice Note" for extra style */}
-    <div className={`text-[10px] font-medium opacity-70 ${isOwn ? 'text-white' : 'text-[#8B004B]'}`}>
-       Voice Note • Whisper
+
+    {/* The Heartbeat Timer on the Right */}
+    <div className={`text-xs font-mono font-bold flex-shrink-0 transition-all duration-500 min-w-[35px] ${
+      isPlaying 
+        ? (isOwn ? 'text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.8)]' : 'text-[#FF1493] drop-shadow-[0_0_8px_rgba(255,20,147,0.5)]') 
+        : (isOwn ? 'text-white/80' : 'text-[#8B004B]/60')
+    }`}>
+      {isPlaying ? formatAudioTime(currentTime) : (duration > 0 ? formatAudioTime(duration) : "0:00")}
     </div>
+
+    <audio 
+      ref={audioRef}
+      src={message.media_url} 
+      onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
+      onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
+      onEnded={() => { setIsPlaying(false); setCurrentTime(0); }}
+      className="hidden"
+    />
   </div>
+</div>
 ) : (
     <p className="whitespace-pre-wrap break-words">{message.content}</p>
   )}
