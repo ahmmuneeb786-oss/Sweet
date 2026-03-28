@@ -414,6 +414,10 @@ async function uploadImage(file: File): Promise<string | null> {
       throw error;
     }
 
+    setAudioBlob(null);
+    setRecordedAudioUrl(null);
+    setRecordingDuration(0);
+
   } catch (error) {
     console.error("Send failed:", error);
     setMessages(prev => prev.filter(m => m.id !== tempId));
@@ -588,42 +592,6 @@ useEffect(() => {
       </div>
     );
   }
-
-  const handleVoiceUpload = async (audioBlob: Blob) => {
-    if (!chatInfo?.id || !user) return; // Added safety check
-
-    try {
-      const fileName = `${user.id}/${Date.now()}.wav`;
-
-      // 1. Upload to Supabase bucket
-      const { error: uploadError } = await supabase.storage
-  .from('message-media')
-  .upload(fileName, audioBlob);
-
-      if (uploadError) throw uploadError;
-
-      // 2. Get Public URL
-      const { data: { publicUrl } } = supabase.storage
-        .from('message-media')
-        .getPublicUrl(fileName);
-
-      // 3. Insert into database with the correct chat_id
-      const { error: messageError } = await supabase
-        .from('messages')
-        .insert({
-          chat_id: chatInfo.id, // CRITICAL: Use chatInfo.id here
-          sender_id: user.id,
-          content: '🎤 Voice Message',
-          type: 'audio',
-          media_url: publicUrl,
-          delivery_status: 'sent'
-        });
-
-      if (messageError) throw messageError;
-    } catch (error) {
-      console.error('Voice upload failed:', error);
-    }
-  };
 
 const handleMicClick = (e: React.MouseEvent) => {
   e.preventDefault();
@@ -870,25 +838,10 @@ const formatDuration = (seconds: number) => {
 )}
 
         <form 
-  onSubmit={async (e) => {
-    e.preventDefault();
-    
-    // Check if there is a voice note ready to be sent
-    if (audioBlob) {
-      try {
-        await handleVoiceUpload(audioBlob);
-        setRecordedAudioUrl(null); // Clear the preview UI
-        setAudioBlob(null);        // Reset the blob state
-      } catch (error) {
-        console.error("Error sending voice note:", error);
-      }
-    } else {
-      // Otherwise, proceed with normal message sending
-      handleSendMessage(e);
-    }
-  }} 
+  onSubmit={handleSendMessage} 
   className="flex items-end gap-2 max-w-6xl mx-auto relative"
 >
+  
   {/* Hidden Image Input - Keep this exactly as you have it */}
   <input
     type="file"
