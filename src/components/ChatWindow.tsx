@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Send, Smile, Paperclip, Phone, Video, Image as ImageIcon, X, AlertCircle, Check, ArrowLeft } from 'lucide-react';
+import { Send, Smile, Paperclip, Phone, Video, Image as ImageIcon, X, Mic, AlertCircle, Check, ArrowLeft } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { Message } from './Message';
@@ -65,6 +65,10 @@ export function ChatWindow({ chatId, theme, onBack }: ChatWindowProps) {
   const [isRecording, setIsRecording] = useState(false);
   const mediaRecorder = useRef<MediaRecorder | null>(null);
   const audioChunks = useRef<Blob[]>([]);
+  const [recordedAudioUrl, setRecordedAudioUrl] = useState<string | null>(null);
+  const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
+  const [recordingDuration, setRecordingDuration] = useState(0);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
   if (chatId && user) {
@@ -611,24 +615,37 @@ const startRecording = async () => {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     mediaRecorder.current = new MediaRecorder(stream);
     audioChunks.current = [];
+    
+    setRecordingDuration(0);
+    timerRef.current = setInterval(() => {
+      setRecordingDuration(prev => prev + 1);
+    }, 1000);
 
     mediaRecorder.current.ondataavailable = (e) => audioChunks.current.push(e.data);
     mediaRecorder.current.onstop = () => {
-      const audioBlob = new Blob(audioChunks.current, { type: 'audio/wav' });
-      handleVoiceUpload(audioBlob);
+      const blob = new Blob(audioChunks.current, { type: 'audio/wav' });
+      setAudioBlob(blob);
+      setRecordedAudioUrl(URL.createObjectURL(blob));
     };
 
     mediaRecorder.current.start();
     setIsRecording(true);
   } catch (err) {
-    console.error("Microphone denied", err);
+    console.error("Mic access denied", err);
   }
 };
 
 const stopRecording = () => {
+  if (timerRef.current) clearInterval(timerRef.current);
   mediaRecorder.current?.stop();
   setIsRecording(false);
   mediaRecorder.current?.stream.getTracks().forEach(t => t.stop());
+};
+
+const formatDuration = (seconds: number) => {
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return `${mins}:${secs.toString().padStart(2, '0')}`;
 };
 
   return (
@@ -644,7 +661,7 @@ const stopRecording = () => {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 md:gap-3">
             <button 
-              onClick={onBack}
+              onClick={onBack} 
               className="md:hidden p-2 -ml-2 hover:bg-white/20 rounded-full text-white transition-colors active:scale-90"
             >
               <ArrowLeft className="w-6 h-6" />
@@ -809,25 +826,44 @@ const stopRecording = () => {
   </div>
 )}
 
-        <form onSubmit={handleSendMessage} className="flex items-end gap-2 max-w-6xl mx-auto">
-          {/* Hidden Image Input */}
-          <input
-           type="file"
-           id="imageInput"
-           accept="image/*"
-           hidden
-           onChange={(e) => {
-           const file = e.target.files?.[0];
-           if (file) {
-           setSelectedFile(file);
-           const reader = new FileReader();
-           reader.onloadend = () => {
-           setImagePreview(reader.result as string);
-           };
-           reader.readAsDataURL(file);
-        }
-     }}
-    />
+        <form 
+  onSubmit={async (e) => {
+    e.preventDefault();
+    
+    // Check if there is a voice note ready to be sent
+    if (audioBlob) {
+      try {
+        await handleVoiceUpload(audioBlob);
+        setRecordedAudioUrl(null); // Clear the preview UI
+        setAudioBlob(null);        // Reset the blob state
+      } catch (error) {
+        console.error("Error sending voice note:", error);
+      }
+    } else {
+      // Otherwise, proceed with normal message sending
+      handleSendMessage(e);
+    }
+  }} 
+  className="flex items-end gap-2 max-w-6xl mx-auto relative"
+>
+  {/* Hidden Image Input - Keep this exactly as you have it */}
+  <input
+    type="file"
+    id="imageInput"
+    accept="image/*"
+    hidden
+    onChange={(e) => {
+      const file = e.target.files?.[0];
+      if (file) {
+        setSelectedFile(file);
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          setImagePreview(reader.result as string);
+        };
+        reader.readAsDataURL(file);
+      }
+    }}
+  />
 
           <div className="flex items-center mb-1">
 
@@ -895,94 +931,117 @@ const stopRecording = () => {
             </div>
           </div>
 
-          <div className="flex-1 min-w-0 relative"> 
-            {isRecording && (
-              <div className="absolute inset-0 z-10 bg-inherit flex items-center pl-4 rounded-2xl pointer-events-none">
-                <span className="flex items-center gap-2 text-red-500 font-bold animate-pulse text-sm">
-                  <div className="w-2 h-2 bg-red-500 rounded-full" />
-                  Recording Voice Note...
-                </span>
-              </div>
-            )}
-            <textarea
-  ref={textareaRef}
-  value={newMessage}
-  onChange={(e) => {
-    setNewMessage(e.target.value);
-    handleTyping();
-    
-    // Auto-expand logic
-    e.target.style.height = 'auto';
-    const newHeight = Math.min(e.target.scrollHeight, 150);
-    e.target.style.height = `${newHeight}px`;
-  }}
-  onKeyDown={(e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSendMessage(e);
-    }
-  }}
-  placeholder="Spread love..."
-  rows={1}
-  className={`w-full pl-4 pr-10 py-2.5 border rounded-2xl focus:outline-none focus:ring-2 resize-none transition-all text-sm md:text-base 
-    ${/* NEW: Hide scrollbar by default, only show if overflow happens */ ''}
-    scrollbar-none overflow-hidden hover:overflow-y-auto
-    ${
-    theme === 'romantic' 
-      ? 'bg-white border-[#FFB6C1] text-[#4B004B] focus:ring-[#FF69B4]' 
-      : theme === 'dark'
-      ? 'bg-gray-700 border-gray-600 text-white focus:ring-pink-500'
-      : 'bg-gray-50 border-gray-300 text-gray-900 focus:ring-pink-400'
-  }`}
-  style={{ 
-    maxHeight: '150px', 
-    minHeight: '44px',
-    lineHeight: '1.5',
-    overflowY: newMessage.length > 50 ? 'auto' : 'hidden' // Smart toggle
-  }}
-/>
-            {newMessage.length > 0 && (
-              <button
-                type="button"
-                onClick={() => setNewMessage('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1"
+          {/* MIDDLE AREA: Swaps between Textarea, Recording Aura, or Audio Preview */}
+          <div className="flex-1 min-w-0 relative flex items-center min-h-[44px]">
+            {isRecording ? (
+              /* THE ROMANTIC PULSING AURA ANIMATION */
+              <div 
+                className="flex-1 flex items-center justify-between px-4 h-full rounded-2xl animate-in fade-in zoom-in-95 duration-200 shadow-inner overflow-hidden"
+                style={{ backgroundColor: '#FFC0CB', border: '1px solid #FFB6C1' }}
               >
-                <X className="w-4 h-4" />
-              </button>
+                <div className="flex items-center gap-3">
+                  <div className="relative flex items-center justify-center">
+                    {/* Unique Layered Aura based on your palette */}
+                    <div className="absolute w-10 h-10 rounded-full animate-ping opacity-30" style={{ backgroundColor: '#FF69B4' }}></div>
+                    <div className="absolute w-7 h-7 rounded-full animate-pulse opacity-50" style={{ backgroundColor: '#FFC0CB' }}></div>
+                    <div className="w-3 h-3 rounded-full relative z-10" style={{ backgroundColor: '#FF4500' }}></div>
+                  </div>
+                  <span className="text-sm font-bold tracking-tight" style={{ color: '#4B004B' }}>
+                    Recording Voice...
+                  </span>
+                </div>
+                <div className="font-mono text-sm font-black px-2 py-0.5 rounded-lg bg-white/40" style={{ color: '#8B004B' }}>
+                  {formatDuration(recordingDuration)}
+                </div>
+              </div>
+            ) : recordedAudioUrl ? (
+              /* PREVIEW BOX WITH CANCEL CROSS */
+              <div 
+                className="flex-1 flex items-center gap-2 px-2 h-full rounded-2xl border-2 animate-in slide-in-from-left-2 duration-300"
+                style={{ backgroundColor: '#FFE4E1', borderColor: '#FFB6C1' }}
+              >
+                <button 
+                  type="button" 
+                  onClick={() => { setRecordedAudioUrl(null); setAudioBlob(null); }}
+                  className="p-1.5 hover:bg-white/50 rounded-full transition-all hover:rotate-90"
+                  style={{ color: '#FF4500' }}
+                >
+                  <X className="w-5 h-5" />
+                </button>
+                {/* Audio preview for the user */}
+                <audio src={recordedAudioUrl} controls className="flex-1 h-8 scale-95" />
+              </div>
+            ) : (
+              /* NORMAL TEXTAREA */
+              <>
+                <textarea
+                  ref={textareaRef}
+                  value={newMessage}
+                  onChange={(e) => {
+                    setNewMessage(e.target.value);
+                    handleTyping();
+                    e.target.style.height = 'auto';
+                    const newHeight = Math.min(e.target.scrollHeight, 150);
+                    e.target.style.height = `${newHeight}px`;
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSendMessage(e);
+                    }
+                  }}
+                  placeholder="Spread love..."
+                  rows={1}
+                  className={`w-full pl-4 pr-10 py-2.5 border rounded-2xl focus:outline-none focus:ring-2 resize-none transition-all text-sm md:text-base scrollbar-none 
+                    ${theme === 'romantic' ? 'bg-white border-[#FFB6C1] text-[#4B004B] focus:ring-[#FF69B4]' : 'bg-gray-50 border-gray-300 focus:ring-pink-400'}`}
+                  style={{ 
+                    maxHeight: '150px', 
+                    minHeight: '44px',
+                    lineHeight: '1.5',
+                  }}
+                />
+                {newMessage.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setNewMessage('')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </>
             )}
           </div>
 
-          {/* NEW: Voice Record Button placed before the Send button */}
-      <button
-        type="button"
-        onMouseDown={startRecording}
-        onMouseUp={stopRecording}
-        onTouchStart={startRecording}
-        onTouchEnd={stopRecording}
-        className={`p-3 rounded-full transition-all flex-shrink-0 ${
-          isRecording 
-            ? 'bg-red-500 text-white animate-pulse scale-110 shadow-lg' 
-            : 'text-gray-400 hover:text-pink-500 bg-gray-100 hover:bg-pink-50'
-        }`}
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill={isRecording ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"></path>
-          <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
-          <line x1="12" y1="19" x2="12" y2="22"></line>
-        </svg>
-      </button>
+          {/* RIGHT BUTTONS: Mic & Send remain separate as requested */}
+          <div className="flex items-center gap-2 mb-0.5">
+            <button
+              type="button"
+              onMouseDown={startRecording}
+              onMouseUp={stopRecording}
+              onTouchStart={startRecording}
+              onTouchEnd={stopRecording}
+              className={`p-3 rounded-full transition-all flex-shrink-0 ${
+                isRecording 
+                  ? 'bg-red-500 text-white scale-125 shadow-lg rotate-12' 
+                  : 'text-gray-400 hover:text-pink-500 bg-gray-100 hover:bg-pink-50'
+              }`}
+            >
+              <Mic className={`w-5 h-5 ${isRecording ? 'animate-pulse' : ''}`} />
+            </button>
 
-          <button
-            type="submit"
-            disabled={!newMessage.trim() && !selectedFile}
-            className={`p-3 rounded-full transition-all active:scale-95 flex-shrink-0 ${
-              (newMessage.trim() || selectedFile)
-                ? `bg-gradient-to-r ${getThemeGradient()} text-white shadow-md`
-                : 'bg-gray-200 text-gray-400'
-            }`}
-          >
-            <Send className="w-5 h-5" />
-          </button>
+            <button
+              type="submit"
+              disabled={(!newMessage.trim() && !selectedFile && !audioBlob) || isRecording}
+              className={`p-3 rounded-full transition-all active:scale-95 flex-shrink-0 ${
+                (newMessage.trim() || selectedFile || audioBlob)
+                  ? `bg-gradient-to-r from-[#FF69B4] to-[#FF1493] text-white shadow-md`
+                  : 'bg-gray-200 text-gray-400'
+              }`}
+            >
+              <Send className="w-5 h-5" />
+            </button>
+          </div>
         </form>
       </div>
     </div>
