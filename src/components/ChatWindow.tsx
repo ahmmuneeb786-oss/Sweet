@@ -611,23 +611,20 @@ useEffect(() => {
   };
 
 const startRecording = async (e: React.MouseEvent | React.TouchEvent) => {
-  if (e.cancelable) e.preventDefault(); 
-  
+  if (e.cancelable) e.preventDefault();
+  if ('vibrate' in navigator) navigator.vibrate(10);
+  e.stopPropagation();
+
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     mediaRecorder.current = new MediaRecorder(stream);
     audioChunks.current = [];
     
-    // FIX: Clear existing timer and reset to 0
     if (timerRef.current) clearInterval(timerRef.current);
     setRecordingDuration(0);
-    
-    // FIX: Use functional update to prevent double-counting
-    timerRef.current = setInterval(() => {
-      setRecordingDuration(prev => prev + 1);
-    }, 1000);
+    timerRef.current = setInterval(() => setRecordingDuration(prev => prev + 1), 1000);
 
-    mediaRecorder.current.ondataavailable = (e) => audioChunks.current.push(e.data);
+    mediaRecorder.current.ondataavailable = (event) => audioChunks.current.push(event.data);
     mediaRecorder.current.onstop = () => {
       const blob = new Blob(audioChunks.current, { type: 'audio/wav' });
       setAudioBlob(blob);
@@ -637,34 +634,37 @@ const startRecording = async (e: React.MouseEvent | React.TouchEvent) => {
     mediaRecorder.current.start();
     setIsRecording(true);
 
-    // FIX: Global listener so it stops even if your finger slides off the button
+    // Create a local handler that we can remove easily
     const handleGlobalUp = () => {
       stopRecording();
       window.removeEventListener('mouseup', handleGlobalUp);
       window.removeEventListener('touchend', handleGlobalUp);
     };
+
     window.addEventListener('mouseup', handleGlobalUp);
     window.addEventListener('touchend', handleGlobalUp);
 
   } catch (err) {
-    console.error("Mic Error:", err);
+    console.error("Mic Error", err);
   }
 };
 
 const stopRecording = () => {
+  // 1. Clear the timer
   if (timerRef.current) {
     clearInterval(timerRef.current);
     timerRef.current = null;
   }
+  
+  // 2. Stop the actual recording hardware
   if (mediaRecorder.current && mediaRecorder.current.state !== 'inactive') {
     mediaRecorder.current.stop();
+    // This turns off the red mic light in the browser immediately
     mediaRecorder.current.stream.getTracks().forEach(track => track.stop());
   }
+  
+  // 3. Update the UI state
   setIsRecording(false);
-
-  // ADD THESE TO PREVENT "GHOST" LISTENERS
-  window.removeEventListener('mouseup', stopRecording);
-  window.removeEventListener('touchend', stopRecording);
 };
 
 const formatDuration = (seconds: number) => {
@@ -958,111 +958,105 @@ const formatDuration = (seconds: number) => {
 
           <div className="flex-1 min-w-0 relative flex items-center h-12 overflow-hidden">
   {isRecording ? (
-    <div className="flex-1 flex items-center justify-between px-4 h-full rounded-2xl relative bg-[#FFC0CB]/30 border border-[#FFB6C1]">
-      {/* THE BLOOMING HEARTS */}
-      <div className="absolute inset-0 pointer-events-none">
-        {[1, 2, 3].map((i) => (
-          <span key={i} 
-            className={`absolute bottom-2 text-[#FF69B4] animate-bloom opacity-0`}
-            style={{ left: `${20 + (i * 20)}%`, animationDelay: `${i * 0.6}s` }}
-          >
-            ❤️
-          </span>
-        ))}
-      </div>
-
+    /* HEARTBEAT RECORDING BOX */
+    <div className="flex-1 flex items-center justify-between px-4 h-full rounded-2xl relative bg-gradient-to-r from-[#FFE4E1] to-[#FFC0CB] border border-[#FFB6C1] shadow-inner animate-in fade-in zoom-in-95 duration-300">
+      
+      {/* THE BEATING HEART & SPARKLES */}
       <div className="flex items-center gap-3 z-10">
-        <div className="w-2 h-2 bg-[#FF4500] rounded-full animate-pulse shadow-[0_0_8px_#FF4500]" />
-        <span className="text-sm font-medium italic text-[#4B004B]">
-          Whispering love...
-        </span>
+        <div className="relative flex items-center justify-center">
+          {/* Main Heart with double-beat animation */}
+          <span className="text-2xl animate-heartbeat inline-block drop-shadow-sm">❤️</span>
+          
+          {/* Sparkles drifting away from the heart */}
+          <span className="absolute -top-1 -right-2 animate-sparkle text-[12px] text-yellow-400">✨</span>
+          <span className="absolute -bottom-1 -right-4 animate-sparkle text-[10px] text-yellow-200" style={{ animationDelay: '0.7s' }}>✨</span>
+          <span className="absolute top-2 -right-6 animate-sparkle text-[8px] text-pink-400" style={{ animationDelay: '1.2s' }}>✨</span>
+        </div>
+        
+        <div className="flex flex-col leading-tight">
+          <span className="text-xs font-bold text-[#4B004B] animate-pulse">
+            Listening to your heart...
+          </span>
+          <span className="text-[10px] text-[#8B004B] italic opacity-80">
+            recording a sweet note
+          </span>
+        </div>
       </div>
 
-      <div className="font-mono text-sm font-bold text-[#8B004B] z-10">
+      {/* TIMER WITH SOFT NEON GLOW */}
+      <div className="font-mono text-sm font-bold text-[#8B004B] z-10 bg-white/70 px-3 py-1 rounded-full shadow-sm border border-white/50">
         {formatDuration(recordingDuration)}
       </div>
-
-      {/* THE GROWING VINE (Bottom Border) */}
-      <div 
-        className="absolute bottom-0 left-0 h-1 bg-[#FF69B4] transition-all duration-700 ease-linear shadow-[0_0_5px_#FF69B4]"
-        style={{ width: `${Math.min((recordingDuration / 60) * 100, 100)}%` }}
-      />
     </div>
   ) : recordedAudioUrl ? (
-              /* PREVIEW BOX WITH CANCEL CROSS */
-              <div 
-                className="flex-1 flex items-center gap-2 px-2 h-full rounded-2xl border-2 animate-in slide-in-from-left-2 duration-300"
-                style={{ backgroundColor: '#FFE4E1', borderColor: '#FFB6C1' }}
-              >
-                <button 
-                  type="button" 
-                  onClick={() => { setRecordedAudioUrl(null); setAudioBlob(null); }}
-                  className="p-1.5 hover:bg-white/50 rounded-full transition-all hover:rotate-90"
-                  style={{ color: '#FF4500' }}
-                >
-                  <X className="w-5 h-5" />
-                </button>
-                {/* Audio preview for the user */}
-                <audio src={recordedAudioUrl} controls className="flex-1 h-8 scale-95" />
-              </div>
-            ) : (
-              /* NORMAL TEXTAREA */
-              <>
-                <textarea
-                  ref={textareaRef}
-                  value={newMessage}
-                  onChange={(e) => {
-                    setNewMessage(e.target.value);
-                    handleTyping();
-                    e.target.style.height = 'auto';
-                    const newHeight = Math.min(e.target.scrollHeight, 150);
-                    e.target.style.height = `${newHeight}px`;
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      handleSendMessage(e);
-                    }
-                  }}
-                  placeholder="Spread love..."
-                  rows={1}
-                  className={`w-full pl-4 pr-10 py-2.5 border rounded-2xl focus:outline-none focus:ring-2 resize-none transition-all text-sm md:text-base scrollbar-none 
-                    ${theme === 'romantic' ? 'bg-white border-[#FFB6C1] text-[#4B004B] focus:ring-[#FF69B4]' : 'bg-gray-50 border-gray-300 focus:ring-pink-400'}`}
-                  style={{ 
-                    maxHeight: '150px', 
-                    minHeight: '44px',
-                    lineHeight: '1.5',
-                  }}
-                />
-                {newMessage.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setNewMessage('')}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                )}
-              </>
-            )}
+    /* PREVIEW BOX (Unchanged) */
+    <div className="flex-1 flex items-center gap-2 px-2 h-full rounded-2xl border-2 animate-in slide-in-from-left-2 duration-300"
+         style={{ backgroundColor: '#FFE4E1', borderColor: '#FFB6C1' }}>
+      <button 
+        type="button" 
+        onClick={() => { setRecordedAudioUrl(null); setAudioBlob(null); }}
+        className="p-1.5 hover:bg-white/50 rounded-full transition-all hover:rotate-90 text-[#FF4500]"
+      >
+        <X className="w-5 h-5" />
+      </button>
+      <audio src={recordedAudioUrl} controls className="flex-1 h-8 scale-95" />
+    </div>
+  ) : (
+    /* TEXTAREA (Unchanged) */
+    <>
+      <textarea
+        ref={textareaRef}
+        value={newMessage}
+        onChange={(e) => {
+          setNewMessage(e.target.value);
+          handleTyping();
+          e.target.style.height = 'auto';
+          e.target.style.height = `${Math.min(e.target.scrollHeight, 150)}px`;
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            handleSendMessage(e);
+          }
+        }}
+        placeholder="Spread love..."
+        rows={1}
+        className={`w-full pl-4 pr-10 py-2.5 border rounded-2xl focus:outline-none focus:ring-2 resize-none transition-all text-sm md:text-base scrollbar-none 
+          ${theme === 'romantic' ? 'bg-white border-[#FFB6C1] text-[#4B004B] focus:ring-[#FF69B4]' : 'bg-gray-50 border-gray-300 focus:ring-pink-400'}`}
+        style={{ maxHeight: '150px', minHeight: '44px', lineHeight: '1.5' }}
+      />
+      {newMessage.length > 0 && (
+        <button
+          type="button"
+          onClick={() => setNewMessage('')}
+          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1"
+        >
+          <X className="w-4 h-4" />
+        </button>
+      )}
+    </>
+  )}
           </div>
 
           {/* RIGHT BUTTONS: Mic & Send remain separate as requested */}
           <div className="flex items-center gap-2 mb-0.5">
             <button
-              type="button"
-              onMouseDown={startRecording}
-              onMouseUp={stopRecording}
-              onTouchStart={startRecording}
-              onTouchEnd={stopRecording}
-              className={`p-3 rounded-full transition-all flex-shrink-0 ${
-                isRecording 
-                  ? 'bg-red-500 text-white scale-125 shadow-lg rotate-12' 
-                  : 'text-gray-400 hover:text-pink-500 bg-gray-100 hover:bg-pink-50'
-              }`}
-            >
-              <Mic className={`w-5 h-5 ${isRecording ? 'animate-pulse' : ''}`} />
-            </button>
+  type="button"
+  // ONLY start events here
+  onMouseDown={startRecording}
+  onTouchStart={startRecording}
+  // REMOVE onMouseUp and onTouchEnd from here! 
+  // Our startRecording function handles the "Stop" globally.
+  className={`p-3 rounded-full transition-all flex-shrink-0 outline-none select-none ${
+    isRecording 
+      ? 'bg-red-500 text-white scale-125 shadow-lg rotate-12' 
+      : 'text-gray-400 hover:text-pink-500 bg-gray-100 hover:bg-pink-50'
+  }`}
+  // Prevents the ghost "click" event after holding
+  onClick={(e) => e.preventDefault()}
+>
+  <Mic className={`w-5 h-5 ${isRecording ? 'animate-pulse' : ''}`} />
+</button>
 
             <button
               type="submit"
