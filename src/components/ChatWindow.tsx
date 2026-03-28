@@ -610,13 +610,19 @@ useEffect(() => {
     }
   };
 
-const startRecording = async () => {
+const startRecording = async (e: React.MouseEvent | React.TouchEvent) => {
+  if (e.cancelable) e.preventDefault(); 
+  
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     mediaRecorder.current = new MediaRecorder(stream);
     audioChunks.current = [];
     
+    // FIX: Clear existing timer and reset to 0
+    if (timerRef.current) clearInterval(timerRef.current);
     setRecordingDuration(0);
+    
+    // FIX: Use functional update to prevent double-counting
     timerRef.current = setInterval(() => {
       setRecordingDuration(prev => prev + 1);
     }, 1000);
@@ -630,16 +636,35 @@ const startRecording = async () => {
 
     mediaRecorder.current.start();
     setIsRecording(true);
+
+    // FIX: Global listener so it stops even if your finger slides off the button
+    const handleGlobalUp = () => {
+      stopRecording();
+      window.removeEventListener('mouseup', handleGlobalUp);
+      window.removeEventListener('touchend', handleGlobalUp);
+    };
+    window.addEventListener('mouseup', handleGlobalUp);
+    window.addEventListener('touchend', handleGlobalUp);
+
   } catch (err) {
-    console.error("Mic access denied", err);
+    console.error("Mic Error:", err);
   }
 };
 
 const stopRecording = () => {
-  if (timerRef.current) clearInterval(timerRef.current);
-  mediaRecorder.current?.stop();
+  if (timerRef.current) {
+    clearInterval(timerRef.current);
+    timerRef.current = null;
+  }
+  if (mediaRecorder.current && mediaRecorder.current.state !== 'inactive') {
+    mediaRecorder.current.stop();
+    mediaRecorder.current.stream.getTracks().forEach(track => track.stop());
+  }
   setIsRecording(false);
-  mediaRecorder.current?.stream.getTracks().forEach(t => t.stop());
+
+  // ADD THESE TO PREVENT "GHOST" LISTENERS
+  window.removeEventListener('mouseup', stopRecording);
+  window.removeEventListener('touchend', stopRecording);
 };
 
 const formatDuration = (seconds: number) => {
@@ -931,30 +956,39 @@ const formatDuration = (seconds: number) => {
             </div>
           </div>
 
-          {/* MIDDLE AREA: Swaps between Textarea, Recording Aura, or Audio Preview */}
-          <div className="flex-1 min-w-0 relative flex items-center min-h-[44px]">
-            {isRecording ? (
-              /* THE ROMANTIC PULSING AURA ANIMATION */
-              <div 
-                className="flex-1 flex items-center justify-between px-4 h-full rounded-2xl animate-in fade-in zoom-in-95 duration-200 shadow-inner overflow-hidden"
-                style={{ backgroundColor: '#FFC0CB', border: '1px solid #FFB6C1' }}
-              >
-                <div className="flex items-center gap-3">
-                  <div className="relative flex items-center justify-center">
-                    {/* Unique Layered Aura based on your palette */}
-                    <div className="absolute w-10 h-10 rounded-full animate-ping opacity-30" style={{ backgroundColor: '#FF69B4' }}></div>
-                    <div className="absolute w-7 h-7 rounded-full animate-pulse opacity-50" style={{ backgroundColor: '#FFC0CB' }}></div>
-                    <div className="w-3 h-3 rounded-full relative z-10" style={{ backgroundColor: '#FF4500' }}></div>
-                  </div>
-                  <span className="text-sm font-bold tracking-tight" style={{ color: '#4B004B' }}>
-                    Recording Voice...
-                  </span>
-                </div>
-                <div className="font-mono text-sm font-black px-2 py-0.5 rounded-lg bg-white/40" style={{ color: '#8B004B' }}>
-                  {formatDuration(recordingDuration)}
-                </div>
-              </div>
-            ) : recordedAudioUrl ? (
+          <div className="flex-1 min-w-0 relative flex items-center h-12 overflow-hidden">
+  {isRecording ? (
+    <div className="flex-1 flex items-center justify-between px-4 h-full rounded-2xl relative bg-[#FFC0CB]/30 border border-[#FFB6C1]">
+      {/* THE BLOOMING HEARTS */}
+      <div className="absolute inset-0 pointer-events-none">
+        {[1, 2, 3].map((i) => (
+          <span key={i} 
+            className={`absolute bottom-2 text-[#FF69B4] animate-bloom opacity-0`}
+            style={{ left: `${20 + (i * 20)}%`, animationDelay: `${i * 0.6}s` }}
+          >
+            ❤️
+          </span>
+        ))}
+      </div>
+
+      <div className="flex items-center gap-3 z-10">
+        <div className="w-2 h-2 bg-[#FF4500] rounded-full animate-pulse shadow-[0_0_8px_#FF4500]" />
+        <span className="text-sm font-medium italic text-[#4B004B]">
+          Whispering love...
+        </span>
+      </div>
+
+      <div className="font-mono text-sm font-bold text-[#8B004B] z-10">
+        {formatDuration(recordingDuration)}
+      </div>
+
+      {/* THE GROWING VINE (Bottom Border) */}
+      <div 
+        className="absolute bottom-0 left-0 h-1 bg-[#FF69B4] transition-all duration-700 ease-linear shadow-[0_0_5px_#FF69B4]"
+        style={{ width: `${Math.min((recordingDuration / 60) * 100, 100)}%` }}
+      />
+    </div>
+  ) : recordedAudioUrl ? (
               /* PREVIEW BOX WITH CANCEL CROSS */
               <div 
                 className="flex-1 flex items-center gap-2 px-2 h-full rounded-2xl border-2 animate-in slide-in-from-left-2 duration-300"

@@ -4,3 +4,13 @@
 
 .romantic-theme .bg-white { background-color: #FFF0F5 !important; }
 .romantic-theme .text-gray-900 { color: #4B004B !important; }
+
+@keyframes heart-bloom {
+  0% { transform: translateY(0) scale(0); opacity: 0; }
+  50% { opacity: 1; }
+  100% { transform: translateY(-40px) scale(1.5); opacity: 0; }
+}
+
+.animate-bloom {
+  animation: heart-bloom 2s ease-out infinite;
+}
