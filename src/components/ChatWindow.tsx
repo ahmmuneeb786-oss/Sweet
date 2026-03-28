@@ -329,22 +329,26 @@ async function uploadImage(file: File): Promise<string | null> {
   
   // 1. New Validation: Allow if there is text OR a selected file
   const messageContent = newMessage.trim();
-  if ((!messageContent && !selectedFile) || !user || !chatInfo) return;
+  if ((!messageContent && !selectedFile && !audioBlob) || !user || !chatInfo) return;
 
   const tempId = crypto.randomUUID();
 
   const fileToUpload = selectedFile;
+
+  const voiceToUpload = audioBlob;
+
+  const voicePreview = recordedAudioUrl;
 
   // 2. Create the "Optimistic" message object
   const tempMessage: MessageType = {
     id: tempId,
     chat_id: chatInfo.id,
     sender_id: user.id,
-    content: messageContent || null,
+    content: voiceToUpload ? "Voice Note" : (messageContent || null),
     // If we have a file, set type to "image", otherwise "text"
-    type: fileToUpload ? "image" : "text",
+    type: voiceToUpload ? "voice" : (fileToUpload ? "image" : "text"),
     // Use the imagePreview (local blob) so it shows up instantly
-    media_url: imagePreview, 
+    media_url: voiceToUpload ? voicePreview : imagePreview, 
     reply_to_id: null,
     is_edited: false,
     is_deleted: false,
@@ -363,6 +367,7 @@ async function uploadImage(file: File): Promise<string | null> {
   // 4. Reset the inputs immediately for a clean feel
   setNewMessage("");
   setImagePreview(null);
+  setAudioBlob(null);
   setSelectedFile(null); // We'll handle the actual upload in the next step
   
   if (textareaRef.current) {
@@ -378,14 +383,28 @@ async function uploadImage(file: File): Promise<string | null> {
       if (!finalMediaUrl) throw new Error("Image upload failed");
     }
 
+    else if (voiceToUpload) {
+      const fileName = `${user.id}/${Date.now()}.wav`;
+      const { error: uploadError } = await supabase.storage
+        .from('voice-notes')
+        .upload(fileName, voiceToUpload);
+
+      if (uploadError) throw uploadError;
+
+      const { data: urlData } = supabase.storage
+        .from('voice-notes')
+        .getPublicUrl(fileName);
+      
+      finalMediaUrl = urlData.publicUrl;
+    }
+
     // 2. Insert the message
     const { error } = await supabase.from("messages").insert({
       id: tempId, 
       chat_id: chatInfo.id,
       sender_id: user.id,
-      content: messageContent || null,
-      // CRITICAL: Ensure 'type' is sent to the DB
-      type: fileToUpload ? "image" : "text", 
+      content: voiceToUpload ? "Voice Note" : (messageContent || null),
+      type: voiceToUpload ? "voice" : (fileToUpload ? "image" : "text"), 
       media_url: finalMediaUrl,
       delivery_status: 'sent'
     });
@@ -397,13 +416,9 @@ async function uploadImage(file: File): Promise<string | null> {
 
   } catch (error) {
     console.error("Send failed:", error);
-    setFailedMessages(prev => new Set(prev).add(tempId));
-    // Remove the optimistic message or mark as failed
-    setMessages(prev => prev.map(m => 
-      m.id === tempId ? { ...m, delivery_status: undefined } : m
-    ));
+    setMessages(prev => prev.filter(m => m.id !== tempId));
+    alert("Message failed to send. Try again, love!");
   }
-  // --- END OF REMAINING PART ---
 }
 
 function subscribeToOnlineStatus() {

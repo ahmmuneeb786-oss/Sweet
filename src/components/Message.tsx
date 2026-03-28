@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { MoreVertical, Reply, Forward, Copy, Star, Trash2, CreditCard as Edit3, Heart } from 'lucide-react';
+import { MoreVertical, Reply, Forward, Copy, Star, Trash2, CreditCard as Edit3, Heart, Play, Pause } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 
@@ -39,6 +39,7 @@ export function Message({ message, isOwn, showAvatar, reactions, theme, onDelete
   const [showReactions, setShowReactions] = useState(false);
   const [messageReactions, setMessageReactions] = useState<Reaction[]>([]);
   const [userReactionMap, setUserReactionMap] = useState<Map<string, string>>(new Map());
+  const [isPlaying, setIsPlaying] = useState(false);
 
   useEffect(() => {
     loadReactions();
@@ -246,16 +247,59 @@ async function handleCopy() {
       />
       {message.content && <p className="whitespace-pre-wrap break-words">{message.content}</p>}
     </div>
-  ) : message.type === 'audio' && message.media_url ? (
-    /* --- THIS IS THE NEW AUDIO PLAYER --- */
-    <div className="flex items-center py-2 min-w-[200px]">
+  ) : message.type === 'voice' && message.media_url ? (
+  /* --- ROMANTIC STYLISH VOICE PLAYER --- */
+  <div className="flex flex-col gap-1 min-w-[220px] py-1">
+    <div className="flex items-center gap-3">
+      {/* Play/Pause Heart Circle */}
+      <button 
+        onClick={() => {
+          const audio = document.getElementById(`audio-${message.id}`) as HTMLAudioElement;
+          if (isPlaying) { audio.pause(); } else { audio.play(); }
+          setIsPlaying(!isPlaying);
+        }}
+        className={`w-10 h-10 rounded-full flex items-center justify-center transition-all active:scale-90 shadow-sm ${
+          isOwn ? 'bg-white/20 hover:bg-white/30' : 'bg-white hover:bg-pink-50'
+        }`}
+      >
+        {isPlaying ? (
+          <Pause size={18} className={isOwn ? 'text-white' : 'text-[#FF69B4]'} fill="currentColor" />
+        ) : (
+          <Play size={18} className={`ml-1 ${isOwn ? 'text-white' : 'text-[#FF69B4]'}`} fill="currentColor" />
+        )}
+      </button>
+
+      {/* Decorative Waveform Bars */}
+      <div className="flex items-center gap-[3px] h-8 flex-1">
+        {[0.4, 0.7, 0.5, 0.9, 0.6, 0.8, 0.4, 0.9, 0.5, 0.7, 0.4].map((height, i) => (
+          <div 
+            key={i}
+            className={`w-[3px] rounded-full transition-all duration-300 ${
+              isOwn ? 'bg-white/60' : 'bg-[#FF69B4]/40'
+            } ${isPlaying ? 'animate-pulse scale-y-125' : ''}`}
+            style={{ 
+              height: `${height * 100}%`,
+              animationDelay: `${i * 0.1}s` 
+            }}
+          />
+        ))}
+      </div>
+      
+      {/* Hidden Audio Element */}
       <audio 
+        id={`audio-${message.id}`}
         src={message.media_url} 
-        controls 
-        className={`h-8 custom-audio-player ${isOwn ? 'filter invert brightness-200' : ''}`}
+        onEnded={() => setIsPlaying(false)}
+        className="hidden"
       />
     </div>
-  ) : (
+    
+    {/* Optional: Label it "Voice Note" for extra style */}
+    <div className={`text-[10px] font-medium opacity-70 ${isOwn ? 'text-white' : 'text-[#8B004B]'}`}>
+       Voice Note • Whisper
+    </div>
+  </div>
+) : (
     <p className="whitespace-pre-wrap break-words">{message.content}</p>
   )}
 </div>
