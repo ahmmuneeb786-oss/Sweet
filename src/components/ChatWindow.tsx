@@ -610,21 +610,27 @@ useEffect(() => {
     }
   };
 
-const startRecording = async (e: React.MouseEvent | React.TouchEvent) => {
-  // CRITICAL: This stops the "Tap" behavior. 
-  // It forces the browser to only care about the Long Press.
-  if (e.cancelable) e.preventDefault();
-  
+const handleMicClick = (e: React.MouseEvent) => {
+  e.preventDefault();
+  if (isRecording) {
+    stopRecording();
+  } else {
+    startRecording();
+  }
+};
+
+const startRecording = async () => {
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     mediaRecorder.current = new MediaRecorder(stream);
     audioChunks.current = [];
     
+    // Timer Reset
     setRecordingDuration(0);
     if (timerRef.current) clearInterval(timerRef.current);
     timerRef.current = setInterval(() => setRecordingDuration(p => p + 1), 1000);
 
-    mediaRecorder.current.ondataavailable = (event) => audioChunks.current.push(event.data);
+    mediaRecorder.current.ondataavailable = (e) => audioChunks.current.push(e.data);
     mediaRecorder.current.onstop = () => {
       const blob = new Blob(audioChunks.current, { type: 'audio/wav' });
       setAudioBlob(blob);
@@ -633,38 +639,35 @@ const startRecording = async (e: React.MouseEvent | React.TouchEvent) => {
 
     mediaRecorder.current.start();
     setIsRecording(true);
-
-    // LISTEN TO THE WHOLE WINDOW:
-    // If she pulls her finger off the button OR off the screen, it stops.
-    window.addEventListener('mouseup', stopRecording, { once: true });
-    window.addEventListener('touchend', stopRecording, { once: true });
-
   } catch (err) {
-    console.error("Mic Error", err);
+    console.error("Mic Error:", err);
+    alert("Microphone access denied.");
   }
 };
 
 const stopRecording = () => {
-  // Stop the timer
+  // 1. Kill the timer immediately
   if (timerRef.current) {
     clearInterval(timerRef.current);
     timerRef.current = null;
   }
 
-  // Stop the hardware and kill the red light
+  // 2. STOP HARDWARE (The most important part)
   if (mediaRecorder.current && mediaRecorder.current.state !== 'inactive') {
+    // Get the stream from the recorder
+    const stream = mediaRecorder.current.stream;
+    
+    // Stop the recorder itself
     mediaRecorder.current.stop();
-    mediaRecorder.current.stream.getTracks().forEach(track => {
-        track.stop();
-        track.enabled = false;
+    
+    // LOOP through all tracks (Mic, etc.) and FORCE them to stop
+    stream.getTracks().forEach(track => {
+      track.stop();      // Kills the hardware process
+      track.enabled = false; // Disables the data flow
     });
   }
 
   setIsRecording(false);
-  
-  // Cleanup listeners so they don't fire again
-  window.removeEventListener('mouseup', stopRecording);
-  window.removeEventListener('touchend', stopRecording);
 };
 
 const formatDuration = (seconds: number) => {
@@ -1042,16 +1045,24 @@ const formatDuration = (seconds: number) => {
           <div className="flex items-center gap-2 mb-0.5">
             <button
   type="button"
-  // ONLY start the recording on the press
-  onMouseDown={startRecording}
-  onTouchStart={startRecording}
-  // We handle the STOP globally in the code above, 
-  // so we don't need onMouseUp or onTouchEnd here!
-  className={`p-3 rounded-full transition-all flex-shrink-0 select-none touch-none ${
-    isRecording ? 'bg-red-500 scale-125' : 'bg-gray-100'
+  onClick={handleMicClick}
+  className={`p-3 rounded-full transition-all flex-shrink-0 relative ${
+    isRecording 
+      ? 'bg-red-500 text-white scale-110 shadow-[0_0_15px_rgba(239,68,68,0.5)]' 
+      : 'text-gray-400 hover:text-pink-500 bg-gray-100'
   }`}
 >
-  <Mic />
+  {/* Icon Toggle */}
+  {isRecording ? (
+    <div className="w-5 h-5 bg-white rounded-sm animate-pulse" />
+  ) : (
+    <Mic className="w-5 h-5" />
+  )}
+  
+  {/* Visual Indicator Ring */}
+  {isRecording && (
+    <span className="absolute inset-0 rounded-full border-4 border-red-500 animate-ping opacity-25"></span>
+  )}
 </button>
 
             <button
