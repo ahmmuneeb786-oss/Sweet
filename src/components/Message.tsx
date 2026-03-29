@@ -260,70 +260,65 @@ async function handleCopy() {
       {message.content && <p className="whitespace-pre-wrap break-words">{message.content}</p>}
     </div>
   ) : message.type === 'voice' && message.media_url ? (
-  /* --- ROMANTIC STYLISH VOICE PLAYER --- */
-  <div className="flex flex-col gap-1 min-w-[260px] md:min-w-[280px] py-1">
-  <div className="flex items-center gap-3 w-full">
-    {/* Play Button */}
-    <button 
-      type="button"
-      onClick={() => {
-        if (isPlaying) { audioRef.current?.pause(); } 
-        else { audioRef.current?.play(); }
-        setIsPlaying(!isPlaying);
-      }}
-      className={`w-10 h-10 rounded-full flex-shrink-0 flex items-center justify-center transition-all active:scale-90 shadow-sm ${
-        isOwn ? 'bg-white/20 hover:bg-white/30' : 'bg-white hover:bg-pink-50'
-      }`}
-    >
-      {isPlaying ? <Pause size={18} fill="currentColor" /> : <Play size={18} className="ml-1" fill="currentColor" />}
-    </button>
+  /* --- SMART RESPONSIVE VOICE PLAYER --- */
+  <div className="flex flex-col gap-1 w-[65vw] min-w-[140px] max-w-[280px] py-1">
+    <div className="flex items-center gap-2 md:gap-3 w-full">
+      {/* Play Button - Scales slightly based on screen */}
+      <button 
+        type="button"
+        onClick={() => {
+          if (isPlaying) { audioRef.current?.pause(); } 
+          else { audioRef.current?.play(); }
+          setIsPlaying(!isPlaying);
+        }}
+        className={`w-9 h-9 md:w-10 md:h-10 rounded-full flex-shrink-0 flex items-center justify-center transition-all active:scale-95 shadow-sm ${
+          isOwn ? 'bg-white/20 hover:bg-white/30' : 'bg-white hover:bg-pink-50'
+        }`}
+      >
+        {isPlaying ? <Pause size={16} fill="currentColor" /> : <Play size={16} className="ml-0.5" fill="currentColor" />}
+      </button>
 
-    {/* Waveform - flex-1 stretches it to fill the gap */}
-    <div className="flex items-center gap-[3px] h-8 flex-1 justify-between px-1">
-      {[0.4, 0.7, 0.5, 0.9, 0.6, 0.8, 0.4, 0.9, 0.5, 0.7, 0.4, 0.8, 0.6, 0.9, 0.5].map((height, i, arr) => {
-        const progress = (currentTime / duration) * 100;
-        const barPercent = (i / arr.length) * 100;
-        const isFilled = progress >= barPercent;
+      {/* Waveform - The 'flex-1' makes this the "stretchy" part */}
+      <div className="flex items-center gap-[1px] xs:gap-[2px] sm:gap-[3px] h-8 flex-1 justify-between px-1">
+        {[0.4, 0.7, 0.5, 0.9, 0.6, 0.8, 0.4, 0.9, 0.5, 0.7, 0.4, 0.8].map((height, i, arr) => {
+          const progress = (currentTime / duration) * 100;
+          const barPercent = (i / arr.length) * 100;
+          const isFilled = progress >= barPercent;
 
-        return (
+          return (
   <div 
     key={i} 
-    className={`w-[3px] rounded-full transition-all duration-300 ${
-      isFilled 
-        ? (isOwn ? 'bg-white scale-y-125' : 'bg-[#FF1493] scale-y-125') 
-        /* --- UPDATED COLORS BELOW FOR BETTER VISIBILITY --- */
-        : (isOwn ? 'bg-white/50' : 'bg-[#8B004B]/20') 
-    } ${isPlaying && isFilled ? 'animate-pulse' : ''}`}
-    style={{ 
-      height: `${height * 100}%`, 
-      animationDelay: `${i * 0.05}s`,
-      /* Adding a slight border/shadow to help them pop if needed */
-      boxShadow: !isFilled ? '0 1px 2px rgba(0,0,0,0.05)' : 'none'
-    }} 
+    className={`w-[1.5px] sm:w-[3px] rounded-full transition-all duration-300 
+      ${i > 5 ? 'hidden sm:block' : 'block'} 
+      ${isFilled 
+          ? (isOwn ? 'bg-white scale-y-110' : 'bg-[#FF1493] scale-y-110') 
+          : (isOwn ? 'bg-white/40' : 'bg-[#8B004B]/20') 
+      } ${isPlaying && isFilled ? 'animate-pulse' : ''}`}
+    style={{ height: `${height * 100}%`, animationDelay: `${i * 0.05}s` }} 
   />
 );
-      })}
-    </div>
+        })}
+      </div>
 
-    {/* The Heartbeat Timer on the Right */}
-    <div className={`text-xs font-mono font-bold flex-shrink-0 transition-all duration-500 min-w-[35px] ${
-      isPlaying 
-        ? (isOwn ? 'text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.8)]' : 'text-[#FF1493] drop-shadow-[0_0_8px_rgba(255,20,147,0.5)]') 
-        : (isOwn ? 'text-white/80' : 'text-[#8B004B]/60')
-    }`}>
-      {isPlaying ? formatAudioTime(currentTime) : (duration > 0 ? formatAudioTime(duration) : "0:00")}
-    </div>
+      {/* Timer - Right-aligned and stays put */}
+      <div className={`text-[10px] sm:text-xs font-mono font-bold flex-shrink-0 min-w-[32px] text-right ${
+        isPlaying 
+          ? (isOwn ? 'text-white' : 'text-[#FF1493]') 
+          : (isOwn ? 'text-white/80' : 'text-[#8B004B]/60')
+      }`}>
+        {formatAudioTime(isPlaying ? currentTime : (duration > 0 ? duration : 0))}
+      </div>
 
-    <audio 
-      ref={audioRef}
-      src={message.media_url} 
-      onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
-      onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
-      onEnded={() => { setIsPlaying(false); setCurrentTime(0); }}
-      className="hidden"
-    />
+      <audio 
+        ref={audioRef}
+        src={message.media_url} 
+        onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
+        onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
+        onEnded={() => { setIsPlaying(false); setCurrentTime(0); }}
+        className="hidden"
+      />
+    </div>
   </div>
-</div>
 ) : (
     <p className="whitespace-pre-wrap break-words">{message.content}</p>
   )}

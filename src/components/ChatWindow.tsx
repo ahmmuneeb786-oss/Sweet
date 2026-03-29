@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { Message } from './Message';
 import { ChatMenu } from './ChatMenu';
+import { SweetKeyboard } from './SweetKeyboard';
 
 interface ChatWindowProps {
   chatId: string;
@@ -69,6 +70,7 @@ export function ChatWindow({ chatId, theme, onBack }: ChatWindowProps) {
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [recordingDuration, setRecordingDuration] = useState(0);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const [showSweetKeyboard, setShowSweetKeyboard] = useState(false);
 
   useEffect(() => {
   if (chatId && user) {
@@ -734,6 +736,7 @@ const formatDuration = (seconds: number) => {
 
       {/* MESSAGES AREA - WITH FULL LOGIC RESTORED */}
       <div 
+      onClick={() => setShowSweetKeyboard(false)}
         className={`flex-1 overflow-y-auto p-4 md:p-6 space-y-4 transition-colors duration-300 scroll-smooth overscroll-behavior-y-contain ${
           theme === 'dark' ? 'bg-gray-900' : theme === 'romantic' ? 'bg-[#FFE4E1]/30' : 'bg-gray-50'
         }`}
@@ -978,6 +981,8 @@ const formatDuration = (seconds: number) => {
       <textarea
         ref={textareaRef}
         value={newMessage}
+        inputMode="none"
+        onFocus={() => setShowSweetKeyboard(true)}
         onChange={(e) => {
           setNewMessage(e.target.value);
           handleTyping();
@@ -1047,6 +1052,24 @@ const formatDuration = (seconds: number) => {
           </div>
         </form>
       </div>
-    </div>
+    {showSweetKeyboard && (
+        <SweetKeyboard 
+          onInput={(char: string) => {
+            setNewMessage(prev => prev + char);
+            if (textareaRef.current) {
+              // This triggers your auto-resize logic when typing from custom keys
+              textareaRef.current.style.height = 'auto';
+              textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 150)}px`;
+            }
+          }}
+          onDelete={() => setNewMessage(prev => prev.slice(0, -1))}
+          onSend={() => {
+            handleSendMessage(new Event('submit') as any);
+            // Optional: Hide keyboard after sending
+            // setShowSweetKeyboard(false);
+          }}
+        />
+      )}
+    </div> // This is the final closing div of ChatWindow
   );
 }
