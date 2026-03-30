@@ -1025,24 +1025,44 @@ const formatDuration = (seconds: number) => {
         </form>
       </div>
     {showSweetKeyboard && (
-        <SweetKeyboard 
-        newMessage={newMessage}
-          onInput={(char: string) => {
-            setNewMessage(prev => prev + char);
-            if (textareaRef.current) {
-              // This triggers your auto-resize logic when typing from custom keys
-              textareaRef.current.style.height = 'auto';
-              textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 150)}px`;
-            }
-          }}
-          onDelete={() => setNewMessage(prev => prev.slice(0, -1))}
-          onSend={() => {
-            handleSendMessage(new Event('submit') as any);
-            // Optional: Hide keyboard after sending
-            // setShowSweetKeyboard(false);
-          }}
-        />
-      )}
+  <SweetKeyboard 
+    newMessage={newMessage}
+    onInput={(input) => {
+      // 1. CHECK IF INPUT IS A FILE (From Gallery Button)
+      if (input instanceof File) {
+        setSelectedFile(input);
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          setImagePreview(reader.result as string);
+        };
+        reader.readAsDataURL(input);
+        // We don't resize the textarea for images, so we return early
+        return;
+      }
+
+      // 2. ELSE HANDLE TEXT (Your Original Logic)
+      setNewMessage(prev => prev + input);
+      handleTyping();
+
+      if (textareaRef.current) {
+        // This triggers your auto-resize logic
+        textareaRef.current.style.height = 'auto';
+        textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 150)}px`;
+      }
+    }}
+    onDelete={() => {
+      setNewMessage(prev => prev.slice(0, -1));
+      // Reset height if field becomes empty
+      if (newMessage.length <= 1 && textareaRef.current) {
+        textareaRef.current.style.height = 'auto';
+      }
+    }}
+    onSend={() => {
+      handleSendMessage(new Event('submit') as any);
+      // Optional: setShowSweetKeyboard(false);
+    }}
+  />
+)}
     </div> // This is the final closing div of ChatWindow
   );
 }
