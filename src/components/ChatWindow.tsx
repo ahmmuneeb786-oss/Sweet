@@ -820,53 +820,51 @@ const formatDuration = (seconds: number) => {
       }`}>
 
        {imagePreview && (
-  <div className="relative inline-block mb-3 animate-in zoom-in-95 duration-200">
-    <div className="relative rounded-2xl overflow-hidden border-2 border-pink-400 shadow-lg">
-      <img 
-        src={imagePreview} 
-        alt="Preview" 
-        className="max-h-32 w-auto object-cover"
-      />
-      <button
-        onClick={() => {
-          setImagePreview(null);
-          setSelectedFile(null);
-        }}
-        className="absolute top-1 right-1 p-1 bg-black/50 hover:bg-black/70 rounded-full text-white transition-colors"
-      >
-        <X className="w-4 h-4" />
-      </button>
-    </div>
-  </div>
-)}
+          <div className="relative inline-block mb-3 animate-in zoom-in-95 duration-200">
+            <div className="relative rounded-2xl overflow-hidden border-2 border-pink-400 shadow-lg">
+              <img 
+                src={imagePreview} 
+                alt="Preview" 
+                className="max-h-32 w-auto object-cover"
+              />
+              <button
+                onClick={() => {
+                  setImagePreview(null);
+                  setSelectedFile(null);
+                }}
+                className="absolute top-1 right-1 p-1 bg-black/50 hover:bg-black/70 rounded-full text-white transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
 
         <form 
-  onSubmit={handleSendMessage} 
-  className="flex items-end gap-2 max-w-6xl mx-auto relative"
->
+          onSubmit={handleSendMessage} 
+          className="flex items-end gap-2 max-w-6xl mx-auto relative"
+        >
   
-  {/* Hidden Image Input - Keep this exactly as you have it */}
-  <input
-    type="file"
-    id="imageInput"
-    accept="image/*"
-    hidden
-    onChange={(e) => {
-      const file = e.target.files?.[0];
-      if (file) {
-        setSelectedFile(file);
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          setImagePreview(reader.result as string);
-        };
-        reader.readAsDataURL(file);
-      }
-    }}
-  />
+  {/* Hidden Image Input */}
+          <input
+            type="file"
+            id="imageInput"
+            accept="image/*"
+            hidden
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) {
+                setSelectedFile(file);
+                const reader = new FileReader();
+                reader.onloadend = () => {
+                  setImagePreview(reader.result as string);
+                };
+                reader.readAsDataURL(file);
+              }
+            }}
+          />
 
           <div className="flex items-center mb-1">
-
-            {/* MOVED IMAGE BUTTON INSIDE THE FLEX GROUP */}
             <button
               type="button"
               onClick={() => document.getElementById('imageInput')?.click()}
@@ -888,155 +886,129 @@ const formatDuration = (seconds: number) => {
                 <Smile className="w-5 h-5 text-gray-500" />
               </button>
               {showEmojiPanel && (
-  <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4">
-    {/* Backdrop */}
-    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowEmojiPanel(false)} />
-    
-    <div className={`relative w-full max-w-[320px] rounded-2xl shadow-2xl border flex flex-col z-[60] animate-in slide-in-from-bottom-4 duration-200 ${
-      theme === 'romantic' ? 'bg-[#FFE4E1] border-[#FFB6C1]' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700'
-    }`}>
+                <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4">
+                  <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowEmojiPanel(false)} />
+                  <div className={`relative w-full max-w-[320px] rounded-2xl shadow-2xl border flex flex-col z-[60] animate-in slide-in-from-bottom-4 duration-200 ${
+                    theme === 'romantic' ? 'bg-[#FFE4E1] border-[#FFB6C1]' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700'
+                  }`}>
       
-      {/* NEW: Panel Header with X Button */}
       <div className="flex items-center justify-between p-3 border-b border-black/5">
-        <span className="text-xs font-bold uppercase tracking-wider opacity-60">Select Emoji</span>
-        <button 
-          onClick={() => setShowEmojiPanel(false)}
-          className="p-1.5 hover:bg-black/5 rounded-full transition-colors"
-        >
-          <X className="w-5 h-5" />
-        </button>
-      </div>
-
-      {/* Emoji Grid */}
-      <div className="p-4 grid grid-cols-6 gap-2">
-        {['💖','🥰','😍','💋','❤️','😘','💘','🌹','💞','😂','😭','😢','🔥','👍','🎉','✨','🦋','🧸'].map((emoji) => (
-          <button
-            key={emoji}
-            type="button"
-            onClick={() => { 
-              setNewMessage(prev => prev + emoji); 
-              // Optional: Keep it open if they want to spam emojis, or close it:
-              // setShowEmojiPanel(false); 
-            }}
-            className="text-2xl hover:scale-125 transition-transform active:scale-90 p-1"
-          >
-            {emoji}
-          </button>
-        ))}
-      </div>
-    </div>
-  </div>
-)}
+                      <span className="text-xs font-bold uppercase tracking-wider opacity-60">Select Emoji</span>
+                      <button 
+                        onClick={() => setShowEmojiPanel(false)}
+                        className="p-1.5 hover:bg-black/5 rounded-full transition-colors"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+                    <div className="p-4 grid grid-cols-6 gap-2">
+                      {['💖','🥰','😍','💋','❤️','😘','💘','🌹','💞','😂','😭','😢','🔥','👍','🎉','✨','🦋','🧸'].map((emoji) => (
+                        <button
+                          key={emoji}
+                          type="button"
+                          onClick={() => { 
+                            setNewMessage(prev => prev + emoji); 
+                          }}
+                          className="text-2xl hover:scale-125 transition-transform active:scale-90 p-1"
+                        >
+                          {emoji}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
           <div className="flex-1 min-w-0 relative flex items-center h-12 overflow-hidden">
-  {isRecording ? (
-    /* HEARTBEAT RECORDING BOX */
-    <div className="flex-1 flex items-center justify-between px-4 h-full rounded-2xl relative bg-gradient-to-r from-[#FFE4E1] to-[#FFC0CB] border border-[#FFB6C1] shadow-inner animate-in fade-in zoom-in-95 duration-300">
-      
-      {/* THE BEATING HEART & SPARKLES */}
-      <div className="flex items-center gap-3 z-10">
-        <div className="relative flex items-center justify-center">
-          {/* Main Heart with double-beat animation */}
-          <span className="text-2xl animate-heartbeat inline-block drop-shadow-sm">❤️</span>
-          
-          {/* Sparkles drifting away from the heart */}
-          <span className="absolute -top-1 -right-2 animate-sparkle text-[12px] text-yellow-400">✨</span>
-          <span className="absolute -bottom-1 -right-4 animate-sparkle text-[10px] text-yellow-200" style={{ animationDelay: '0.7s' }}>✨</span>
-          <span className="absolute top-2 -right-6 animate-sparkle text-[8px] text-pink-400" style={{ animationDelay: '1.2s' }}>✨</span>
-        </div>
-        
-        <div className="flex flex-col leading-tight">
-          <span className="text-xs font-bold text-[#4B004B] animate-pulse">
-            Listening to your heart...
-          </span>
-          <span className="text-[10px] text-[#8B004B] italic opacity-80">
-            recording a sweet note
-          </span>
-        </div>
-      </div>
-
-      {/* TIMER WITH SOFT NEON GLOW */}
-      <div className="font-mono text-sm font-bold text-[#8B004B] z-10 bg-white/70 px-3 py-1 rounded-full shadow-sm border border-white/50">
-        {formatDuration(recordingDuration)}
-      </div>
-    </div>
-  ) : recordedAudioUrl ? (
-    /* PREVIEW BOX (Unchanged) */
-    <div className="flex-1 flex items-center gap-2 px-2 h-full rounded-2xl border-2 animate-in slide-in-from-left-2 duration-300"
-         style={{ backgroundColor: '#FFE4E1', borderColor: '#FFB6C1' }}>
-      <button 
-        type="button" 
-        onClick={() => { setRecordedAudioUrl(null); setAudioBlob(null); }}
-        className="p-1.5 hover:bg-white/50 rounded-full transition-all hover:rotate-90 text-[#FF4500]"
-      >
-        <X className="w-5 h-5" />
-      </button>
-      <audio src={recordedAudioUrl} controls className="flex-1 h-8 scale-95" />
-    </div>
-  ) : (
-    /* TEXTAREA (Unchanged) */
-    <>
-      <textarea
-        ref={textareaRef}
-        value={newMessage}
-        inputMode="none"
-        onFocus={() => setShowSweetKeyboard(true)}
-        onChange={(e) => {
-          setNewMessage(e.target.value);
-          handleTyping();
-          e.target.style.height = 'auto';
-          e.target.style.height = `${Math.min(e.target.scrollHeight, 150)}px`;
-        }}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            handleSendMessage(e);
-          }
-        }}
-        placeholder="Spread love..."
-        rows={1}
-        className={`w-full pl-4 pr-10 py-2.5 border rounded-2xl focus:outline-none focus:ring-2 resize-none transition-all text-sm md:text-base scrollbar-none 
-          ${theme === 'romantic' ? 'bg-white border-[#FFB6C1] text-[#4B004B] focus:ring-[#FF69B4]' : 'bg-gray-50 border-gray-300 focus:ring-pink-400'}`}
-        style={{ maxHeight: '150px', minHeight: '44px', lineHeight: '1.5' }}
-      />
-      {newMessage.length > 0 && (
-        <button
-          type="button"
-          onClick={() => setNewMessage('')}
-          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1"
-        >
-          <X className="w-4 h-4" />
-        </button>
-      )}
-    </>
-  )}
+            {isRecording ? (
+              <div className="flex-1 flex items-center justify-between px-4 h-full rounded-2xl relative bg-gradient-to-r from-[#FFE4E1] to-[#FFC0CB] border border-[#FFB6C1] shadow-inner animate-in fade-in zoom-in-95 duration-300">
+                <div className="flex items-center gap-3 z-10">
+                  <div className="relative flex items-center justify-center">
+                    <span className="text-2xl animate-heartbeat inline-block drop-shadow-sm">❤️</span>
+                    <span className="absolute -top-1 -right-2 animate-sparkle text-[12px] text-yellow-400">✨</span>
+                    <span className="absolute -bottom-1 -right-4 animate-sparkle text-[10px] text-yellow-200" style={{ animationDelay: '0.7s' }}>✨</span>
+                    <span className="absolute top-2 -right-6 animate-sparkle text-[8px] text-pink-400" style={{ animationDelay: '1.2s' }}>✨</span>
+                  </div>
+                  <div className="flex flex-col leading-tight">
+                    <span className="text-xs font-bold text-[#4B004B] animate-pulse">Listening to your heart...</span>
+                    <span className="text-[10px] text-[#8B004B] italic opacity-80">recording a sweet note</span>
+                  </div>
+                </div>
+                <div className="font-mono text-sm font-bold text-[#8B004B] z-10 bg-white/70 px-3 py-1 rounded-full shadow-sm border border-white/50">
+                  {formatDuration(recordingDuration)}
+                </div>
+              </div>
+            ) : recordedAudioUrl ? (
+              <div className="flex-1 flex items-center gap-2 px-2 h-full rounded-2xl border-2 animate-in slide-in-from-left-2 duration-300"
+                   style={{ backgroundColor: '#FFE4E1', borderColor: '#FFB6C1' }}>
+                <button 
+                  type="button" 
+                  onClick={() => { setRecordedAudioUrl(null); setAudioBlob(null); }}
+                  className="p-1.5 hover:bg-white/50 rounded-full transition-all hover:rotate-90 text-[#FF4500]"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+                <audio src={recordedAudioUrl} controls className="flex-1 h-8 scale-95" />
+              </div>
+            ) : (
+              <>
+                <textarea
+                  ref={textareaRef}
+                  value={newMessage}
+                  inputMode="none"
+                  onFocus={() => setShowSweetKeyboard(true)}
+                  onChange={(e) => {
+                    setNewMessage(e.target.value);
+                    handleTyping();
+                    e.target.style.height = 'auto';
+                    e.target.style.height = `${Math.min(e.target.scrollHeight, 150)}px`;
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSendMessage(e);
+                    }
+                  }}
+                  placeholder="Spread love..."
+                  rows={1}
+                  className={`w-full pl-4 pr-10 py-2.5 border rounded-2xl focus:outline-none focus:ring-2 resize-none transition-all text-sm md:text-base scrollbar-none md:scrollbar-hidden
+                    ${theme === 'romantic' ? 'bg-white border-[#FFB6C1] text-[#4B004B] focus:ring-[#FF69B4]' : 'bg-gray-50 border-gray-300 focus:ring-pink-400'}`}
+                  style={{ maxHeight: '150px', minHeight: '44px', lineHeight: '1.5' }}
+                />
+                {newMessage.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setNewMessage('')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </>
+            )}
           </div>
 
-          {/* RIGHT BUTTONS: Mic & Send remain separate as requested */}
           <div className="flex items-center gap-2 mb-0.5">
             <button
-  type="button"
-  onClick={handleMicClick}
-  className={`p-3 rounded-full transition-all flex-shrink-0 relative ${
-    isRecording 
-      ? 'bg-red-500 text-white scale-110 shadow-[0_0_15px_rgba(239,68,68,0.5)]' 
-      : 'text-gray-400 hover:text-pink-500 bg-gray-100'
-  }`}
->
-  {/* Icon Toggle */}
-  {isRecording ? (
-    <div className="w-5 h-5 bg-white rounded-sm animate-pulse" />
-  ) : (
-    <Mic className="w-5 h-5" />
-  )}
-  
-  {/* Visual Indicator Ring */}
-  {isRecording && (
-    <span className="absolute inset-0 rounded-full border-4 border-red-500 animate-ping opacity-25"></span>
-  )}
-</button>
+              type="button"
+              onClick={handleMicClick}
+              className={`p-3 rounded-full transition-all flex-shrink-0 relative ${
+                isRecording 
+                  ? 'bg-red-500 text-white scale-110 shadow-[0_0_15px_rgba(239,68,68,0.5)]' 
+                  : 'text-gray-400 hover:text-pink-500 bg-gray-100'
+              }`}
+            >
+              {isRecording ? (
+                <div className="w-5 h-5 bg-white rounded-sm animate-pulse" />
+              ) : (
+                <Mic className="w-5 h-5" />
+              )}
+              {isRecording && (
+                <span className="absolute inset-0 rounded-full border-4 border-red-500 animate-ping opacity-25"></span>
+              )}
+            </button>
 
             <button
               type="submit"
@@ -1054,6 +1026,7 @@ const formatDuration = (seconds: number) => {
       </div>
     {showSweetKeyboard && (
         <SweetKeyboard 
+        newMessage={newMessage}
           onInput={(char: string) => {
             setNewMessage(prev => prev + char);
             if (textareaRef.current) {
