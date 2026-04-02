@@ -1,10 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
-import { MapPin, X } from 'lucide-react';
+import { MapPin, X, Loader2 } from 'lucide-react'; // Added Loader2 for a cute spinner
 
-// Fix for Leaflet default icon path issues in React
 const icon = L.icon({
   iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
   shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
@@ -20,24 +19,39 @@ interface MapPickerProps {
 function RecenterMap({ position }: { position: [number, number] }) {
   const map = useMapEvents({});
   useEffect(() => {
-    map.setView(position, 13); // This forces the map to move its "eyes" to the pin
+    map.flyTo(position, 15, { duration: 0.5 }); // Zoomed in a bit more for accuracy
   }, [position, map]);
   return null;
 }
 
 export default function LocationPicker({ onSelect, onCancel }: MapPickerProps) {
-  const [position, setPosition] = useState<[number, number]>([25.2048, 55.2708]);
+  const [position, setPosition] = useState<[number, number] | null>(null);
+  
+  // 1. Use a Ref to hold the ID so it doesn't get lost during renders
+  const watchIdRef = useRef<number | null>(null);
 
-  // This finds your real location when the component opens
   useEffect(() => {
-    navigator.geolocation.getCurrentPosition(
+    console.log("GPS Hardware: Powering ON ✨");
+
+    watchIdRef.current = navigator.geolocation.watchPosition(
       (pos) => {
         const { latitude, longitude } = pos.coords;
         setPosition([latitude, longitude]);
       },
-      (err) => console.log("GPS Denied"),
-      { enableHighAccuracy: true }
+      (err) => {
+        setPosition([25.2048, 55.2708]);
+        console.error("GPS Error:", err.message);
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     );
+
+    // 2. This ONLY runs when the entire LocationPicker is removed from the screen
+    return () => {
+      if (watchIdRef.current !== null) {
+        navigator.geolocation.clearWatch(watchIdRef.current);
+        console.log("GPS Hardware: Powering OFF 🔒");
+      }
+    };
   }, []);
 
   function LocationMarker() {
@@ -46,13 +60,27 @@ export default function LocationPicker({ onSelect, onCancel }: MapPickerProps) {
         setPosition([e.latlng.lat, e.latlng.lng]);
       },
     });
-    return <Marker position={position} icon={icon} />;
+    return position ? <Marker position={position} icon={icon} /> : null;
   }
+
+  // 2. SHOW LOADING SCREEN if position is null
+  if (!position) {
+    return (
+      <div className="fixed inset-0 z-[999] flex items-center justify-center bg-black/60 backdrop-blur-sm">
+        <div className="bg-white p-8 rounded-[32px] flex flex-col items-center gap-4 shadow-2xl animate-in zoom-in-95">
+          <Loader2 className="w-10 h-10 text-pink-500 animate-spin" />
+          <p className="text-pink-600 font-black tracking-widest text-sm uppercase">Finding You...</p>
+          <button onClick={onCancel} className="text-xs text-gray-400 font-bold mt-2 uppercase">Cancel</button>
+        </div>
+      </div>
+    );
+  }
+
+  // 3. SHOW MAP only when position is found
   return (
     <div className="fixed inset-0 z-[999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
       <div className="bg-white w-full max-w-md rounded-[32px] overflow-hidden shadow-2xl flex flex-col animate-in zoom-in-95 duration-200">
         
-        {/* Header */}
         <div className="p-5 bg-pink-500 text-white flex justify-between items-center">
           <div className="flex items-center gap-2">
             <MapPin className="w-5 h-5" />
@@ -63,19 +91,18 @@ export default function LocationPicker({ onSelect, onCancel }: MapPickerProps) {
           </button>
         </div>
         
-        {/* Map Area */}
         <div className="h-[350px] w-full relative">
-          <MapContainer center={position} zoom={13} style={{ height: '100%', width: '100%' }}>
+          {/* MapContainer now uses the device position found in useEffect */}
+          <MapContainer center={position} zoom={15} style={{ height: '100%', width: '100%' }}>
             <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
             <RecenterMap position={position} />
             <LocationMarker />
           </MapContainer>
-          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-[1000] bg-white/90 px-4 py-1 rounded-full shadow-sm text-[10px] text-pink-600 font-bold border border-pink-100">
-            TAP MAP TO MOVE PIN
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-[1000] bg-white/90 px-4 py-1 rounded-full shadow-sm text-[10px] text-pink-600 font-bold border border-pink-100 uppercase">
+            Tap to move pin
           </div>
         </div>
 
-        {/* Action Button */}
         <div className="p-6">
           <button 
             onClick={() => onSelect(position[0], position[1])} 
