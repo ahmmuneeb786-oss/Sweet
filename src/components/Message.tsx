@@ -248,8 +248,8 @@ async function handleCopy() {
           <span className="text-xs px-2 text-gray-600 dark:text-gray-400 romantic-theme:text-pink-600">{message.profiles.display_name}</span>
         )}
 
-        <div className="relative">
-          <div className={`px-4 py-2 rounded-2xl ${getMessageClasses(isOwn)}`}>
+        <div className={`relative max-w-[85%] sm:max-w-md ${isOwn ? 'items-end' : 'items-start'}`}>
+  <div className={`px-4 py-2 rounded-2xl shadow-sm break-words overflow-hidden ${getMessageClasses(isOwn)}`}>
   {message.type === 'image' && message.media_url ? (
     <div className="space-y-2">
       <img

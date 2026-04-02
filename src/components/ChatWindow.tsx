@@ -76,6 +76,7 @@ export function ChatWindow({ chatId, theme, onBack }: ChatWindowProps) {
   const [isRecordingVideoNote, setIsRecordingVideoNote] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const videoChunksRef = useRef<Blob[]>([]);
+  const [showLocationPicker, setShowLocationPicker] = useState(false);
 
   useEffect(() => {
   if (chatId && user) {
@@ -719,6 +720,37 @@ const formatDuration = (seconds: number) => {
   return `${mins}:${secs.toString().padStart(2, '0')}`;
 };
 
+const shareLocation = () => {
+  if (!navigator.geolocation) {
+    alert("Geolocation is not supported by your browser");
+    return;
+  }
+
+  // Optional: Show a loading state here if you want
+  navigator.geolocation.getCurrentPosition(
+    (position) => {
+      const { latitude, longitude } = position.coords;
+      
+      // This creates a clickable Google Maps link
+      const mapUrl = `https://www.google.com/maps?q=${latitude},${longitude}`;
+      
+      // We send this as a specialized object or just a text string
+      // using your existing handleSendMessage logic
+      const locationData = {
+        content: `📍 Shared Location: ${mapUrl}`,
+        type: 'text' // For now, we send as text so it's clickable
+      };
+
+      // Mocking the event object your handleSendMessage likely expects
+      handleSendMessage(new Event('submit') as any, locationData.content);
+    },
+    (error) => {
+      console.error(error);
+      alert("Please allow location access to share your place! 🎀");
+    }
+  );
+};
+
   return (
     <div className={`flex-1 flex flex-col h-full overflow-hidden ${
       theme === 'dark'
@@ -1174,6 +1206,11 @@ const formatDuration = (seconds: number) => {
   <SweetKeyboard 
     newMessage={newMessage}
     onInput={(input: any) => {
+
+      if (input === 'LOCATION_START') {
+        shareLocation();
+        return; // Don't let 'LOCATION_START' text go into the message box
+      }
       // 1. Check if the keyboard is triggering the camera overlay
       if (input === 'VIDEO_START') {
       setIsRecordingVideoNote(true); // This opens the screen we added in Step 2

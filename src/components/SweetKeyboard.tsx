@@ -55,7 +55,17 @@ export const SweetKeyboard = ({ onInput, onDelete, onSend }: SweetKeyboardProps)
             </button>
 
             <button className="flex flex-col items-center gap-1 opacity-50"><div className="p-2 bg-white/80 rounded-full text-pink-500"><Clipboard className="w-4 h-4" /></div><span className="text-[9px]">COPY</span></button>
-            <button className="flex flex-col items-center gap-1 opacity-50"><div className="p-2 bg-white/80 rounded-full text-pink-500"><MapPin className="w-4 h-4" /></div><span className="text-[9px]">PLACE</span></button>
+            <button 
+  type="button"
+  onClick={() => onInput('LOCATION_START')} // Signal to open the map
+  className="flex flex-col items-center gap-1 active:scale-90 transition-all group"
+>
+  <div className="p-2 bg-white/80 rounded-full text-pink-500 group-active:bg-pink-500 group-active:text-white">
+    <MapPin className="w-4 h-4" />
+  </div>
+  <span className="text-[9px] font-black text-pink-600 uppercase">Place</span>
+</button>
+
             <button className="flex flex-col items-center gap-1 opacity-50"><div className="p-2 bg-white/80 rounded-full text-pink-500"><FileText className="w-4 h-4" /></div><span className="text-[9px]">DOCS</span></button>
           </div>
         ) : (
