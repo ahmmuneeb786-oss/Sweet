@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
@@ -17,9 +17,28 @@ interface MapPickerProps {
   onCancel: () => void;
 }
 
+function RecenterMap({ position }: { position: [number, number] }) {
+  const map = useMapEvents({});
+  useEffect(() => {
+    map.setView(position, 13); // This forces the map to move its "eyes" to the pin
+  }, [position, map]);
+  return null;
+}
+
 export default function LocationPicker({ onSelect, onCancel }: MapPickerProps) {
-  // Default position (Change this to your city's lat/lng if you want)
-  const [position, setPosition] = useState<[number, number]>([25.2048, 55.2708]); 
+  const [position, setPosition] = useState<[number, number]>([25.2048, 55.2708]);
+
+  // This finds your real location when the component opens
+  useEffect(() => {
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const { latitude, longitude } = pos.coords;
+        setPosition([latitude, longitude]);
+      },
+      (err) => console.log("GPS Denied"),
+      { enableHighAccuracy: true }
+    );
+  }, []);
 
   function LocationMarker() {
     useMapEvents({
@@ -29,7 +48,6 @@ export default function LocationPicker({ onSelect, onCancel }: MapPickerProps) {
     });
     return <Marker position={position} icon={icon} />;
   }
-
   return (
     <div className="fixed inset-0 z-[999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
       <div className="bg-white w-full max-w-md rounded-[32px] overflow-hidden shadow-2xl flex flex-col animate-in zoom-in-95 duration-200">
@@ -49,6 +67,7 @@ export default function LocationPicker({ onSelect, onCancel }: MapPickerProps) {
         <div className="h-[350px] w-full relative">
           <MapContainer center={position} zoom={13} style={{ height: '100%', width: '100%' }}>
             <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+            <RecenterMap position={position} />
             <LocationMarker />
           </MapContainer>
           <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-[1000] bg-white/90 px-4 py-1 rounded-full shadow-sm text-[10px] text-pink-600 font-bold border border-pink-100">
