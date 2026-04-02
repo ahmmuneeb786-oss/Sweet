@@ -91,30 +91,31 @@ export function ChatWindow({ chatId, theme, onBack }: ChatWindowProps) {
 useEffect(() => {
   let stream: MediaStream | null = null;
 
-  async function enableStream() {
-    if (isRecordingVideoNote) {
+  if (isRecordingVideoNote) {
+    const startCamera = async () => {
       try {
         stream = await navigator.mediaDevices.getUserMedia({ 
-          video: true, 
+          video: { facingMode: 'user' }, 
           audio: true 
         });
         
         const videoElement = document.getElementById('full-screen-video') as HTMLVideoElement;
         if (videoElement) {
           videoElement.srcObject = stream;
+          // Play is vital to see the live feed
+          await videoElement.play();
         }
       } catch (err) {
-        // --- THIS IS THE ERROR THROW ---
-        console.error("Camera error:", err);
+        console.error("Camera access denied:", err);
         alert("Please allow camera and microphone access to record your sweet note! ❤️");
-        setIsRecordingVideoNote(false); // Close the black overlay since it won't work
+        setIsRecordingVideoNote(false);
       }
-    }
+    };
+
+    startCamera();
   }
 
-  enableStream();
-
-  // Cleanup function to turn off the camera light when the overlay closes
+  // CLEANUP: Turns off the camera lens when the heart closes
   return () => {
     if (stream) {
       stream.getTracks().forEach(track => track.stop());
@@ -713,44 +714,62 @@ const formatDuration = (seconds: number) => {
     }`}>
 
       {isRecordingVideoNote && (
-      <div className="fixed inset-0 z-[9999] bg-black/90 backdrop-blur-md flex flex-col items-center justify-center animate-in fade-in duration-300">
-        <div className="relative w-full h-full flex flex-col items-center justify-center">
-          {/* Heart Shaped Camera View */}
-          <div className="relative w-80 h-80 md:w-[500px] md:[500px] aspect-square">
-            <video 
-              id="video-preview-full"
-              autoPlay 
-              muted 
-              playsInline 
-              className="w-full h-full object-cover bg-gray-800 shadow-[0_0_50px_rgba(255,105,180,0.3)]"
-              style={{ 
-                clipPath: 'path("M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z")',
-                transform: 'scale(15)' // Scales the path to fit the container
-              }}
-            />
-          </div>
-          
-          {/* Overlay Controls */}
-          <div className="absolute bottom-12 flex items-center gap-8">
-            <button 
-              type="button"
-              onClick={() => setIsRecordingVideoNote(false)}
-              className="p-4 bg-white/10 hover:bg-white/20 rounded-full text-white backdrop-blur-md transition-transform active:scale-90"
-            >
-              <X className="w-8 h-8" />
-            </button>
-            
-            {/* This is the Heart Record Button */}
-            <button 
-              type="button"
-              className="p-8 bg-gradient-to-tr from-pink-500 to-rose-400 rounded-full text-white shadow-2xl animate-pulse"
-            >
-              <Check className="w-10 h-10" />
-            </button>
-          </div>
-        </div>
+  <div className="fixed inset-0 z-[9999] bg-black/95 backdrop-blur-md flex flex-col items-center justify-center animate-in fade-in duration-300">
+    <div className="relative flex flex-col items-center justify-center w-full max-w-lg">
+      
+      {/* The Heart "Cutout" */}
+      <div className="relative w-80 h-80 md:w-[500px] md:h-[500px] flex items-center justify-center overflow-hidden">
+        <video 
+          id="full-screen-video"
+          autoPlay 
+          muted 
+          playsInline 
+          className="w-full h-full object-cover"
+          style={{ 
+            // This creates the heart shape window
+            clipPath: 'path("M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z")',
+            transform: 'scale(20)', // Blows up the tiny 24px path to fill the 500px div
+          }}
+        />
+        
+        {/* Decorative Glow Border */}
+        <div 
+          className="absolute inset-0 pointer-events-none bg-gradient-to-t from-pink-500/20 to-transparent"
+          style={{ 
+            clipPath: 'path("M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z")',
+            transform: 'scale(20.2)',
+          }}
+        />
       </div>
-    )}
+
+      {/* Control Buttons */}
+      <div className="mt-12 flex items-center gap-10">
+        <button 
+          type="button"
+          onClick={() => setIsRecordingVideoNote(false)}
+          className="p-4 bg-white/10 hover:bg-white/20 rounded-full text-white border border-white/20"
+        >
+          <X className="w-8 h-8" />
+        </button>
+        
+        <button 
+          type="button"
+          className="p-8 bg-pink-500 hover:bg-pink-600 rounded-full text-white shadow-[0_0_30px_rgba(236,72,153,0.5)] animate-pulse"
+          onClick={() => {
+            // Your recording stop logic will go here
+            setIsRecordingVideoNote(false);
+          }}
+        >
+          <Check className="w-10 h-10" />
+        </button>
+      </div>
+      
+      <p className="text-pink-400 font-bold mt-8 tracking-widest text-xs uppercase">
+        Recording your heart...
+      </p>
+    </div>
+  </div>
+)}
 
       {/* HEADER SECTION */}
       <div className={`px-4 md:px-6 py-3 md:py-4 border-b ${theme === 'romantic' ? 'border-[#FFB6C1]' : 'border-gray-200'} bg-gradient-to-r ${getThemeGradient()} shadow-sm z-10`}>
