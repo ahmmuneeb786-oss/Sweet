@@ -71,6 +71,9 @@ export function ChatWindow({ chatId, theme, onBack }: ChatWindowProps) {
   const [recordingDuration, setRecordingDuration] = useState(0);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const [showSweetKeyboard, setShowSweetKeyboard] = useState(false);
+  const [videoPreview, setVideoPreview] = useState<string | null>(null);
+  const [selectedVideo, setSelectedVideo] = useState<Blob | null>(null);
+  const [isRecordingVideoNote, setIsRecordingVideoNote] = useState(false);
 
   useEffect(() => {
   if (chatId && user) {
@@ -83,6 +86,41 @@ export function ChatWindow({ chatId, theme, onBack }: ChatWindowProps) {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+// Inside ChatWindow.tsx
+useEffect(() => {
+  let stream: MediaStream | null = null;
+
+  async function enableStream() {
+    if (isRecordingVideoNote) {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ 
+          video: true, 
+          audio: true 
+        });
+        
+        const videoElement = document.getElementById('full-screen-video') as HTMLVideoElement;
+        if (videoElement) {
+          videoElement.srcObject = stream;
+        }
+      } catch (err) {
+        // --- THIS IS THE ERROR THROW ---
+        console.error("Camera error:", err);
+        alert("Please allow camera and microphone access to record your sweet note! ❤️");
+        setIsRecordingVideoNote(false); // Close the black overlay since it won't work
+      }
+    }
+  }
+
+  enableStream();
+
+  // Cleanup function to turn off the camera light when the overlay closes
+  return () => {
+    if (stream) {
+      stream.getTracks().forEach(track => track.stop());
+    }
+  };
+}, [isRecordingVideoNote]);
 
   async function loadChat() {
   if (!user || !chatId) return;
@@ -331,7 +369,9 @@ async function uploadImage(file: File): Promise<string | null> {
   
   // 1. New Validation: Allow if there is text OR a selected file
   const messageContent = newMessage.trim();
-  if ((!messageContent && !selectedFile && !audioBlob) || !user || !chatInfo) return;
+  if ((!messageContent && !selectedFile && !audioBlob && !selectedVideo) || !user || !chatInfo) return;
+  const videoToUpload = selectedVideo; // Grab the video
+  const videoUrlPreview = videoPreview;
 
   const tempId = crypto.randomUUID();
 
@@ -348,9 +388,9 @@ async function uploadImage(file: File): Promise<string | null> {
     sender_id: user.id,
     content: voiceToUpload ? "Voice Note" : (messageContent || null),
     // If we have a file, set type to "image", otherwise "text"
-    type: voiceToUpload ? "voice" : (fileToUpload ? "image" : "text"),
+    type: videoToUpload ? "video" : voiceToUpload ? "voice" : (fileToUpload ? "image" : "text"),
     // Use the imagePreview (local blob) so it shows up instantly
-    media_url: voiceToUpload ? voicePreview : imagePreview, 
+    media_url: videoToUpload ? videoUrlPreview : voiceToUpload ? voicePreview : imagePreview, 
     reply_to_id: null,
     is_edited: false,
     is_deleted: false,
@@ -370,7 +410,9 @@ async function uploadImage(file: File): Promise<string | null> {
   setNewMessage("");
   setImagePreview(null);
   setAudioBlob(null);
-  setSelectedFile(null); // We'll handle the actual upload in the next step
+  setSelectedFile(null);
+  setVideoPreview(null);
+  setSelectedVideo(null);
   
   if (textareaRef.current) {
     textareaRef.current.style.height = 'auto';
@@ -669,6 +711,47 @@ const formatDuration = (seconds: number) => {
         ? 'bg-[#FFE4E1] text-[#4B004B]'
         : 'bg-white text-gray-900'
     }`}>
+
+      {isRecordingVideoNote && (
+      <div className="fixed inset-0 z-[9999] bg-black/90 backdrop-blur-md flex flex-col items-center justify-center animate-in fade-in duration-300">
+        <div className="relative w-full h-full flex flex-col items-center justify-center">
+          {/* Heart Shaped Camera View */}
+          <div className="relative w-80 h-80 md:w-[500px] md:[500px] aspect-square">
+            <video 
+              id="video-preview-full"
+              autoPlay 
+              muted 
+              playsInline 
+              className="w-full h-full object-cover bg-gray-800 shadow-[0_0_50px_rgba(255,105,180,0.3)]"
+              style={{ 
+                clipPath: 'path("M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z")',
+                transform: 'scale(15)' // Scales the path to fit the container
+              }}
+            />
+          </div>
+          
+          {/* Overlay Controls */}
+          <div className="absolute bottom-12 flex items-center gap-8">
+            <button 
+              type="button"
+              onClick={() => setIsRecordingVideoNote(false)}
+              className="p-4 bg-white/10 hover:bg-white/20 rounded-full text-white backdrop-blur-md transition-transform active:scale-90"
+            >
+              <X className="w-8 h-8" />
+            </button>
+            
+            {/* This is the Heart Record Button */}
+            <button 
+              type="button"
+              className="p-8 bg-gradient-to-tr from-pink-500 to-rose-400 rounded-full text-white shadow-2xl animate-pulse"
+            >
+              <Check className="w-10 h-10" />
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+
       {/* HEADER SECTION */}
       <div className={`px-4 md:px-6 py-3 md:py-4 border-b ${theme === 'romantic' ? 'border-[#FFB6C1]' : 'border-gray-200'} bg-gradient-to-r ${getThemeGradient()} shadow-sm z-10`}>
         <div className="flex items-center justify-between">
@@ -835,6 +918,31 @@ const formatDuration = (seconds: number) => {
                 className="absolute top-1 right-1 p-1 bg-black/50 hover:bg-black/70 rounded-full text-white transition-colors"
               >
                 <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* VIDEO NOTE PREVIEW (The "Typing Box" version) */}
+        {videoPreview && (
+          <div className="relative inline-block mb-3 animate-in zoom-in-95 group">
+            <div className="relative rounded-2xl overflow-hidden border-2 border-pink-400 shadow-lg w-32 h-32 bg-black">
+              <video 
+                src={videoPreview} 
+                className="w-full h-full object-cover" 
+                autoPlay 
+                loop 
+                muted 
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  setVideoPreview(null);
+                  setSelectedVideo(null);
+                }}
+                className="absolute top-1 right-1 p-1 bg-black/60 rounded-full text-white"
+              >
+                <X className="w-3 h-3" />
               </button>
             </div>
           </div>
@@ -1027,40 +1135,42 @@ const formatDuration = (seconds: number) => {
     {showSweetKeyboard && (
   <SweetKeyboard 
     newMessage={newMessage}
-    onInput={(input) => {
-      // 1. CHECK IF INPUT IS A FILE (From Gallery Button)
-      if (input instanceof File) {
-        setSelectedFile(input);
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          setImagePreview(reader.result as string);
-        };
-        reader.readAsDataURL(input);
-        // We don't resize the textarea for images, so we return early
+    onInput={(input: any) => {
+      // 1. Check if the keyboard is triggering the camera overlay
+      if (input === 'VIDEO_START') {
+      setIsRecordingVideoNote(true); // This opens the screen we added in Step 2
+      return; // Stop here so "VIDEO_START" doesn't go into the text box
+    }
+
+      // 2. Check for Video/Image Blobs
+      if (input instanceof Blob || input instanceof File) {
+        if (input.type.includes('video')) {
+          setSelectedVideo(input); // Saving the video value
+          setVideoPreview(URL.createObjectURL(input));
+        } else {
+          setSelectedFile(input as File);
+          const reader = new FileReader();
+          reader.onloadend = () => setImagePreview(reader.result as string);
+          reader.readAsDataURL(input);
+        }
         return;
       }
 
-      // 2. ELSE HANDLE TEXT (Your Original Logic)
+      // 3. Regular Text Logic
       setNewMessage(prev => prev + input);
       handleTyping();
-
       if (textareaRef.current) {
-        // This triggers your auto-resize logic
         textareaRef.current.style.height = 'auto';
         textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 150)}px`;
       }
     }}
     onDelete={() => {
       setNewMessage(prev => prev.slice(0, -1));
-      // Reset height if field becomes empty
       if (newMessage.length <= 1 && textareaRef.current) {
         textareaRef.current.style.height = 'auto';
       }
     }}
-    onSend={() => {
-      handleSendMessage(new Event('submit') as any);
-      // Optional: setShowSweetKeyboard(false);
-    }}
+    onSend={() => handleSendMessage(new Event('submit') as any)}
   />
 )}
     </div> // This is the final closing div of ChatWindow
