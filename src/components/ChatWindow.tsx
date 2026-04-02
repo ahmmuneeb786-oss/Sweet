@@ -74,6 +74,8 @@ export function ChatWindow({ chatId, theme, onBack }: ChatWindowProps) {
   const [videoPreview, setVideoPreview] = useState<string | null>(null);
   const [selectedVideo, setSelectedVideo] = useState<Blob | null>(null);
   const [isRecordingVideoNote, setIsRecordingVideoNote] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const videoChunksRef = useRef<Blob[]>([]);
 
   useEffect(() => {
   if (chatId && user) {
@@ -102,24 +104,37 @@ useEffect(() => {
         const videoElement = document.getElementById('full-screen-video') as HTMLVideoElement;
         if (videoElement) {
           videoElement.srcObject = stream;
-          // Play is vital to see the live feed
           await videoElement.play();
         }
+
+        // --- ADD THIS START RECORDING LOGIC ---
+        videoChunksRef.current = []; // Clear old data
+        const recorder = new MediaRecorder(stream);
+        
+        recorder.ondataavailable = (e) => {
+          if (e.data.size > 0) videoChunksRef.current.push(e.data);
+        };
+
+        recorder.onstop = () => {
+          const videoBlob = new Blob(videoChunksRef.current, { type: 'video/mp4' });
+          setSelectedVideo(videoBlob);
+          setVideoPreview(URL.createObjectURL(videoBlob));
+        };
+
+        recorder.start();
+        mediaRecorderRef.current = recorder;
+        // ---------------------------------------
+
       } catch (err) {
-        console.error("Camera access denied:", err);
-        alert("Please allow camera and microphone access to record your sweet note! ❤️");
+        alert("Please allow camera and microphone access! ❤️");
         setIsRecordingVideoNote(false);
       }
     };
-
     startCamera();
   }
 
-  // CLEANUP: Turns off the camera lens when the heart closes
   return () => {
-    if (stream) {
-      stream.getTracks().forEach(track => track.stop());
-    }
+    if (stream) stream.getTracks().forEach(track => track.stop());
   };
 }, [isRecordingVideoNote]);
 
@@ -753,15 +768,19 @@ const formatDuration = (seconds: number) => {
         </button>
         
         <button 
-          type="button"
-          className="p-8 bg-pink-500 hover:bg-pink-600 rounded-full text-white shadow-[0_0_30px_rgba(236,72,153,0.5)] animate-pulse"
-          onClick={() => {
-            // Your recording stop logic will go here
-            setIsRecordingVideoNote(false);
-          }}
-        >
-          <Check className="w-10 h-10" />
-        </button>
+  type="button"
+  className="p-8 bg-pink-500 hover:bg-pink-600 rounded-full text-white shadow-[0_0_30px_rgba(236,72,153,0.5)] animate-pulse"
+  onClick={() => {
+    // 1. Stop the recorder (this triggers recorder.onstop above)
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+    }
+    // 2. Close the overlay
+    setIsRecordingVideoNote(false);
+  }}
+>
+  <Check className="w-10 h-10" />
+</button>
       </div>
       
       <p className="text-pink-400 font-bold mt-8 tracking-widest text-xs uppercase">
