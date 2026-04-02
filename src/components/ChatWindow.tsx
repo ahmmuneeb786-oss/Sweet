@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Send, Smile, Paperclip, Phone, Video, Image as ImageIcon, X, Mic, AlertCircle, Check, ArrowLeft } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import LocationPicker from './LocationPicker';
 import { supabase } from '../lib/supabase';
 import { Message } from './Message';
 import { ChatMenu } from './ChatMenu';
@@ -720,35 +721,24 @@ const formatDuration = (seconds: number) => {
   return `${mins}:${secs.toString().padStart(2, '0')}`;
 };
 
+const handleConfirmLocation = (lat: number, lng: number) => {
+  // Use the standard Google Maps link format
+  const mapUrl = `https://www.google.com/maps?q=${lat},${lng}`;
+  const messageText = `📍 My Location: ${mapUrl}`;
+
+  setNewMessage(messageText);
+  
+  // Close picker and send
+  setShowLocationPicker(false);
+  
+  setTimeout(() => {
+    handleSendMessage(new Event('submit') as any);
+  }, 100);
+};
+
+// Update the simple toggle function
 const shareLocation = () => {
-  if (!navigator.geolocation) {
-    alert("Geolocation is not supported by your browser");
-    return;
-  }
-
-  // Optional: Show a loading state here if you want
-  navigator.geolocation.getCurrentPosition(
-    (position) => {
-      const { latitude, longitude } = position.coords;
-      
-      // This creates a clickable Google Maps link
-      const mapUrl = `https://www.google.com/maps?q=${latitude},${longitude}`;
-      
-      // We send this as a specialized object or just a text string
-      // using your existing handleSendMessage logic
-      const locationData = {
-        content: `📍 Shared Location: ${mapUrl}`,
-        type: 'text' // For now, we send as text so it's clickable
-      };
-
-      // Mocking the event object your handleSendMessage likely expects
-      handleSendMessage(new Event('submit') as any, locationData.content);
-    },
-    (error) => {
-      console.error(error);
-      alert("Please allow location access to share your place! 🎀");
-    }
-  );
+  setShowLocationPicker(true); 
 };
 
   return (
@@ -759,6 +749,13 @@ const shareLocation = () => {
         ? 'bg-[#FFE4E1] text-[#4B004B]'
         : 'bg-white text-gray-900'
     }`}>
+
+      {showLocationPicker && (
+  <LocationPicker 
+    onCancel={() => setShowLocationPicker(false)} 
+    onSelect={handleConfirmLocation} 
+  />
+)}
 
       {isRecordingVideoNote && (
   <div className="fixed inset-0 z-[9999] bg-black/95 backdrop-blur-md flex flex-col items-center justify-center animate-in fade-in duration-300">
