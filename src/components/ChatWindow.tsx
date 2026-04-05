@@ -921,16 +921,25 @@ const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
 
       {/* MESSAGES AREA - WITH FULL LOGIC RESTORED */}
       <div 
-      onClick={() => setShowSweetKeyboard(false)}
-        className={`flex-1 overflow-y-auto p-4 md:p-6 space-y-4 transition-colors duration-300 scroll-smooth overscroll-behavior-y-contain ${
-          theme === 'dark' ? 'bg-gray-900' : theme === 'romantic' ? 'bg-[#FFE4E1]/30' : 'bg-gray-50'
-        }`}
-      >
-        {messages.map((message, index) => {
-          const showAvatar = index === 0 || messages[index - 1].sender_id !== message.sender_id;
-          const isOwn = message.sender_id === user?.id;
-          const isFailed = failedMessages.has(message.id);
-          const isSending = sendingMessages.has(message.id);
+  onClick={() => setShowSweetKeyboard(false)}
+  className={`flex-1 overflow-y-auto p-4 md:p-6 space-y-4 transition-colors duration-300 scroll-smooth overscroll-behavior-y-contain ${
+    theme === 'dark' ? 'bg-gray-900' : theme === 'romantic' ? 'bg-[#FFE4E1]/30' : 'bg-gray-50'
+  }`}
+>
+  {messages.map((message, index) => {
+    // 1. Logic for Avatar grouping
+    const showAvatar = index === 0 || messages[index - 1].sender_id !== message.sender_id;
+    
+    // 2. Logic for Date Separator
+    const msgDate = new Date(message.created_at).toDateString();
+    const prevMsgDate = index > 0 
+      ? new Date(messages[index - 1].created_at).toDateString() 
+      : null;
+    const showDateSeparator = msgDate !== prevMsgDate;
+
+    const isOwn = message.sender_id === user?.id;
+    const isFailed = failedMessages.has(message.id);
+    const isSending = sendingMessages.has(message.id);
 
           return (
             <div key={message.id} className="group">
@@ -938,6 +947,7 @@ const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
                 message={message}
                 isOwn={isOwn}
                 showAvatar={showAvatar}
+                showDateSeparator={showDateSeparator}
                 reactions={reactions}
                 theme={theme}
                 onDelete={() => handleDeleteMessage(message.id)}

@@ -21,6 +21,7 @@ interface MessageProps {
   };
   isOwn: boolean;
   showAvatar: boolean;
+  showDateSeparator: boolean;
   reactions: string[];
   theme: 'light' | 'dark' | 'romantic';
   onDelete?: () => void;
@@ -32,7 +33,7 @@ interface Reaction {
   count: number;
 }
 
-export function Message({ message, isOwn, showAvatar, reactions, theme, onDelete }: MessageProps) {
+export function Message({ message, isOwn, showAvatar, reactions, theme, onDelete, showDateSeparator }: MessageProps) {
   const { user } = useAuth();
   const [showMenu, setShowMenu] = useState(false);
   const [menuDirection, setMenuDirection] = useState<'up' | 'down'>('down');
@@ -76,6 +77,19 @@ export function Message({ message, isOwn, showAvatar, reactions, theme, onDelete
     loadReactions();
     subscribeToReactions();
   }, [message.id]);
+
+  function formatStickyDate(dateString: string) {
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffInDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
+
+  if (diffInDays === 0) return 'Today';
+  if (diffInDays === 1) return 'Yesterday';
+  if (diffInDays < 7) {
+    return date.toLocaleDateString('en-US', { weekday: 'long' }); // e.g., "Monday"
+  }
+  return date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+}
 
   async function loadReactions() {
     try {
@@ -253,33 +267,48 @@ async function handleCopy() {
   }
 
   return (
-    <>
-      <div className={`flex gap-2 group ${isOwn ? 'flex-row-reverse' : 'flex-row'}`}>
-        <div className={`flex-shrink-0 ${showAvatar ? 'visible' : 'invisible'}`}>
-          {!isOwn && (
-            message.profiles.avatar_url ? (
-              <img
-                src={message.profiles.avatar_url}
-                alt={message.profiles.display_name}
-                className="w-8 h-8 rounded-full object-cover"
-              />
-            ) : (
-              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-pink-400 to-purple-500 flex items-center justify-center text-white text-sm font-medium">
-                {message.profiles.display_name[0]}
-              </div>
-            )
-          )}
+  <>
+
+   {showDateSeparator && (
+      <div className="flex items-center justify-center my-6 w-full">
+        <div className="flex items-center gap-3 w-full max-w-[200px]">
+          <div className="h-[1px] flex-1 bg-gradient-to-r from-transparent via-pink-300/50 to-transparent" />
+          <span className={`text-[10px] font-black uppercase tracking-[2px] whitespace-nowrap
+            ${theme === 'romantic' ? 'text-[#FF1493] bg-white/50 px-3 py-1 rounded-full backdrop-blur-sm shadow-sm' : 'text-gray-400'}
+          `}>
+            {formatStickyDate(message.created_at)}
+          </span>
+          <div className="h-[1px] flex-1 bg-gradient-to-r from-transparent via-pink-300/50 to-transparent" />
         </div>
+      </div>
+    )}
 
-        <div className={`flex flex-col gap-1 max-w-md ${isOwn ? 'items-end' : 'items-start'}`}>
-          {showAvatar && !isOwn && (
-            <span className="text-xs px-2 text-gray-600 dark:text-gray-400 romantic-theme:text-pink-600">
-              {message.profiles.display_name}
-            </span>
+    {/* Changed to flex-col so avatar is ABOVE the bubble on mobile */}
+    <div className={`flex flex-col group ${isOwn ? 'items-end' : 'items-start'} mb-2`}>
+      
+      {/* 1. Avatar Row (Only shows for the other person) */}
+      {!isOwn && showAvatar && (
+        <div className="flex items-center gap-2 mb-1 ml-2">
+          {message.profiles.avatar_url ? (
+            <img
+              src={message.profiles.avatar_url}
+              alt={message.profiles.display_name}
+              className="w-6 h-6 rounded-full object-cover border border-pink-200"
+            />
+          ) : (
+            <div className="w-6 h-6 rounded-full bg-gradient-to-br from-pink-400 to-purple-500 flex items-center justify-center text-white text-[10px] font-bold">
+              {message.profiles.display_name[0]}
+            </div>
           )}
+          <span className="text-[10px] font-bold text-gray-500 romantic-theme:text-pink-600 uppercase tracking-wider">
+            {message.profiles.display_name}
+          </span>
+        </div>
+      )}
 
-          <div className={`relative max-w-[85%] sm:max-w-md ${isOwn ? 'items-end' : 'items-start'}`}>
-            <div className={`px-5 py-3 shadow-sm transition-all duration-500 hover:scale-[1.01] ${getMessageClasses(isOwn)}`}>
+        <div className={`flex items-end gap-1 max-w-[90%] sm:max-w-md ${isOwn ? 'flex-row-reverse' : 'flex-row'}`}>
+        <div className={`relative ${isOwn ? 'items-end' : 'items-start'}`}>
+          <div className={`px-4 py-2.5 shadow-sm transition-all duration-500 ${getMessageClasses(isOwn)}`}>
               {message.type === 'image' && message.media_url ? (
   <div 
     className="-mx-5 -my-3 overflow-hidden rounded-[28px] relative transition-all duration-300 active:scale-95"
@@ -414,7 +443,7 @@ async function handleCopy() {
     {/* Metadata Row: Positioned relative to the waveform, not the screen edge */}
     <div className="flex justify-between items-center w-full px-0 mt-0.5">
       <span className={`text-[8px] font-black uppercase tracking-widest opacity-70 ${isOwn ? 'text-white' : 'text-[#FF1493]'}`}>
-        {isPlaying ? 'Playing' : 'Voice'}
+        {isPlaying ? 'Listening' : 'Voice Note'}
       </span>
       <span className={`text-[10px] font-mono font-bold ${isOwn ? 'text-white' : 'text-[#8B004B]'}`}>
         {formatAudioTime(isPlaying ? currentTime : duration)}
@@ -460,10 +489,19 @@ async function handleCopy() {
         </div>
 
         <div className={`flex items-center gap-2 px-2 text-xs text-gray-500 dark:text-gray-400 ${isOwn ? 'flex-row-reverse' : 'flex-row'}`}>
-          <span>
-            {formatTime(message.created_at)}
-            {message.is_edited && ' (edited)'}
-          </span>
+          <span className={`
+    ${theme === 'romantic' 
+      ? 'text-[#FF69B4]/80' 
+      : theme === 'dark' 
+        ? 'text-gray-500' 
+        : 'text-gray-400'}
+  `}>
+    {formatTime(message.created_at)}
+    {message.is_edited && ' • Edited'}
+  </span>
+  {theme === 'romantic' && (
+    <Heart className="w-2 h-2 text-[#FF69B4]/40" fill="currentColor" />
+  )}
 
           <div className="relative opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity flex items-center gap-1">
             <button
