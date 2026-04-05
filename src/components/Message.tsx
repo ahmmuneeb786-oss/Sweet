@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { MoreVertical, Reply, Forward, Copy, Star, Trash2, CreditCard as Edit3, Heart, Play, Pause } from 'lucide-react';
+import { MoreVertical, Reply, Forward, Copy, Star, Trash2, CreditCard as Edit3, Heart, Play } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 
@@ -43,6 +43,34 @@ export function Message({ message, isOwn, showAvatar, reactions, theme, onDelete
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const audioRef = useRef<HTMLAudioElement>(null);
+  const [waveform, setWaveform] = useState<number[]>([]);
+  const [isZoomed, setIsZoomed] = useState(false);
+
+  useEffect(() => {
+  if (message.type === 'voice' && message.media_url) {
+    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+    fetch(message.media_url)
+      .then(response => response.arrayBuffer())
+      .then(data => audioContext.decodeAudioData(data))
+      .then(buffer => {
+        const rawData = buffer.getChannelData(0); // Get audio peaks
+        const samples = 20; // Number of vertical lines
+        const blockSize = Math.floor(rawData.length / samples);
+        const filteredData = [];
+        for (let i = 0; i < samples; i++) {
+          let blockStart = blockSize * i;
+          let sum = 0;
+          for (let j = 0; j < blockSize; j++) {
+            sum = sum + Math.abs(rawData[blockStart + j]); // Amplitude
+          }
+          filteredData.push(sum / blockSize); // Average loudness for this section
+        }
+        // Normalize to 0-1 scale
+        const multiplier = Math.pow(Math.max(...filteredData), -1);
+        setWaveform(filteredData.map(n => n * multiplier));
+      });
+  }
+}, [message.media_url]);
 
   useEffect(() => {
     loadReactions();
@@ -185,19 +213,18 @@ async function handleCopy() {
 
   // Function to get proper message bubble classes based on theme and sender
   const getMessageClasses = (own: boolean) => {
-    if (theme === 'romantic') {
-      return own
-        ? 'bg-[#FF69B4] text-white'
-        : 'bg-[#FFC0CB] text-[#4B004B]';
+  // Deeply rounded "Petal" shape. Only the sender's corner is sharp if it's the last message.
+  const shape = "rounded-[32px]";
+
+  if (theme === 'romantic') {
+    return own
+      ? `${shape} bg-gradient-to-br from-[#FF85A1] via-[#FF69B4] to-[#FF1493] text-white shadow-[0_4px_15px_rgba(255,20,147,0.3)] border border-white/20`
+      : `${shape} bg-white/40 backdrop-blur-xl border border-white/40 text-[#8B004B] shadow-[0_4px_10px_rgba(0,0,0,0.05)]`;
     } else if (theme === 'dark') {
-      return own
-        ? 'bg-pink-600 text-white'
-        : 'bg-gray-800 text-white';
+      return own ? `${shape} bg-pink-500 text-white` : `${shape} bg-gray-100 text-gray-900`;
     } else {
       // light
-      return own
-        ? 'bg-pink-500 text-white'
-        : 'bg-gray-100 text-gray-900';
+      return own ? `${shape} bg-pink-500 text-white` : `${shape} bg-gray-100 text-gray-900`;
     }
   };
 
@@ -226,105 +253,220 @@ async function handleCopy() {
   }
 
   return (
-    <div className={`flex gap-2 group ${isOwn ? 'flex-row-reverse' : 'flex-row'}`}>
-      <div className={`flex-shrink-0 ${showAvatar ? 'visible' : 'invisible'}`}>
-        {!isOwn && (
-          message.profiles.avatar_url ? (
-            <img
-              src={message.profiles.avatar_url}
-              alt={message.profiles.display_name}
-              className="w-8 h-8 rounded-full object-cover"
+    <>
+      <div className={`flex gap-2 group ${isOwn ? 'flex-row-reverse' : 'flex-row'}`}>
+        <div className={`flex-shrink-0 ${showAvatar ? 'visible' : 'invisible'}`}>
+          {!isOwn && (
+            message.profiles.avatar_url ? (
+              <img
+                src={message.profiles.avatar_url}
+                alt={message.profiles.display_name}
+                className="w-8 h-8 rounded-full object-cover"
+              />
+            ) : (
+              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-pink-400 to-purple-500 flex items-center justify-center text-white text-sm font-medium">
+                {message.profiles.display_name[0]}
+              </div>
+            )
+          )}
+        </div>
+
+        <div className={`flex flex-col gap-1 max-w-md ${isOwn ? 'items-end' : 'items-start'}`}>
+          {showAvatar && !isOwn && (
+            <span className="text-xs px-2 text-gray-600 dark:text-gray-400 romantic-theme:text-pink-600">
+              {message.profiles.display_name}
+            </span>
+          )}
+
+          <div className={`relative max-w-[85%] sm:max-w-md ${isOwn ? 'items-end' : 'items-start'}`}>
+            <div className={`px-5 py-3 shadow-sm transition-all duration-500 hover:scale-[1.01] ${getMessageClasses(isOwn)}`}>
+              {message.type === 'image' && message.media_url ? (
+  <div 
+    className="-mx-5 -my-3 overflow-hidden rounded-[28px] relative transition-all duration-300 active:scale-95"
+    /* This custom cursor is a cute pink heart with a white border */
+    style={{ 
+      cursor: `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 24 24' fill='%23ff4d94' stroke='white' stroke-width='2'><path d='M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z'/></svg>") 16 16, pointer` 
+    }}
+    onClick={(e) => {
+      e.stopPropagation();
+      setIsZoomed(true);
+    }}
+  >
+    <img 
+      src={message.media_url} 
+      alt="Shared" 
+      className="max-h-80 w-full object-cover transition-transform duration-700 group-hover:scale-110" 
+    />
+    
+    {/* Sweet Overlay Hint */}
+    <div className="absolute inset-0 bg-pink-500/0 group-hover:bg-pink-500/10 transition-colors duration-300 flex items-center justify-center">
+       <span className="opacity-0 group-hover:opacity-100 scale-50 group-hover:scale-100 transition-all duration-500 text-white drop-shadow-md font-bold text-xs uppercase tracking-widest bg-black/20 px-3 py-1 rounded-full backdrop-blur-sm">
+         View Sweetness
+       </span>
+    </div>
+
+    {message.content && (
+      <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent p-4">
+        <p className="text-white text-[14px] leading-relaxed font-medium">
+          {message.content}
+        </p>
+      </div>
+    )}
+  </div>
+) : (message.type === 'file' || message.type === 'doc') ? (
+    /* --- DOC FACE: "Romantic Receipt" --- */
+    <a href={message.media_url || '#'} target="_blank" className="flex items-center gap-4 py-2 min-w-[220px]">
+      <div className="relative">
+        <div className={`p-3 rounded-full ${isOwn ? 'bg-white/30' : 'bg-[#FF69B4]/20'}`}>
+          <Star className={`${isOwn ? 'text-white' : 'text-[#FF69B4]'} w-6 h-6 animate-pulse`} />
+        </div>
+        <div className="absolute -top-1 -right-1 bg-yellow-400 w-3 h-3 rounded-full border-2 border-white" />
+      </div>
+      <div className="flex flex-col text-left">
+        <span className="font-bold text-sm truncate w-32">{message.content || 'Our_Memory.pdf'}</span>
+        <span className="text-[10px] opacity-70">Shared with love • Tap to open</span>
+      </div>
+    </a>
+  ) : (message.type === 'location' || (message.content && message.content.includes('maps?q='))) ? (
+  /* --- FIXED GLASSMORPHISM MAP CARD --- */
+  (() => {
+    const coordsMatch = message.content?.match(/q=([-.\d]+),([-.\d]+)/);
+    const lat = coordsMatch?.[1];
+    const lng = coordsMatch?.[2];
+    
+    const mapPreviewUrl = lat && lng 
+      ? `https://static-maps.yandex.ru/1.x/?lang=en_US&ll=${lng},${lat}&z=14&l=map&size=300,200`
+      : null;
+
+    return (
+      /* Removed extra padding and simplified the background to prevent the "thick border" look */
+      <div className="-mx-5 -my-3 w-[260px] overflow-hidden rounded-[32px] flex flex-col">
+        {/* Map Container */}
+        <div className="h-44 w-full relative overflow-hidden group rounded-t-[32px] border-b border-white/20" 
+         style={{ isolation: 'isolate' }}>
+          {mapPreviewUrl ? (
+            <img 
+              src={mapPreviewUrl} 
+              alt="Location Preview" 
+              className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 opacity-90"
             />
           ) : (
-            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-pink-400 to-purple-500 flex items-center justify-center text-white text-sm font-medium">
-              {message.profiles.display_name[0]}
+            <div className="w-full h-full bg-pink-200/30 flex items-center justify-center">
+               <Heart className="w-10 h-10 text-white/70 animate-pulse" fill="currentColor" />
             </div>
-          )
-        )}
+          )}
+          
+          {/* Floating Label */}
+          <div className="absolute bottom-3 left-3 right-3 bg-white/30 backdrop-blur-md py-1.5 px-3 rounded-2xl text-[9px] text-center font-black text-[#8B004B] border border-white/40 uppercase tracking-widest shadow-lg">
+             {isOwn ? "Sweet Spot 📍" : "Our Special Spot 📍"}
+          </div>
+
+          {/* Bouncing Pin */}
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none">
+             <Heart className="w-8 h-8 text-[#FF1493] animate-bounce drop-shadow-md" fill="currentColor" />
+          </div>
+        </div>
+
+        {/* Action Button Area */}
+        <div className="p-3 bg-white/10 backdrop-blur-sm">
+          <button 
+            onClick={() => {
+              const url = message.content?.match(/https:\/\/www\.google\.com\/maps\?q=[^ ]+/)?.[0];
+              if (url) window.open(url, '_blank');
+            }}
+            className={`
+              w-full py-2.5 rounded-2xl font-black text-[10px] uppercase tracking-[2px] 
+              transition-all duration-300 active:scale-95 shadow-md
+              ${isOwn 
+                ? 'bg-white text-[#FF1493] hover:bg-pink-50' 
+                : 'bg-[#FF1493] text-white hover:bg-[#FF1493]/90'
+              }
+            `}
+          >
+            Open in Maps
+          </button>
+        </div>
       </div>
+    );
+  })()
+) : message.type === 'voice' && message.media_url ? (
+  /* --- SWEET STEADY VOICE PLAYER --- */
+  <div className="flex flex-col gap-3 py-2 min-w-[220px]">
+    <div className="flex items-center gap-4">
+      {/* --- STYLISH MORPHIC BUTTON --- */}
+      <button 
+        onClick={() => isPlaying ? audioRef.current?.pause() : audioRef.current?.play()} 
+        className={`
+          relative w-12 h-12 flex items-center justify-center 
+          transition-all duration-500 ease-out active:scale-90 shadow-lg
+          ${isPlaying 
+            ? 'bg-white text-[#FF1493] rounded-[18px] rotate-90 scale-105 shadow-[0_0_20px_rgba(255,255,255,0.4)]' 
+            : isOwn 
+              ? 'bg-white/20 text-white hover:bg-white/30 rounded-[22px]' 
+              : 'bg-[#FF1493] text-white hover:bg-[#FF1493]/90 rounded-[22px]'
+          }
+        `}
+      >
 
-      <div className={`flex flex-col gap-1 max-w-md ${isOwn ? 'items-end' : 'items-start'}`}>
-        {showAvatar && !isOwn && (
-          <span className="text-xs px-2 text-gray-600 dark:text-gray-400 romantic-theme:text-pink-600">{message.profiles.display_name}</span>
+        {isPlaying ? (
+          /* Custom "Dancing Bars" icon instead of a boring Pause square */
+          <div className="flex gap-1 rotate-[-90deg]">
+             <div className="w-1.5 h-4 bg-current rounded-full animate-[bounce_1s_infinite_0.1s]" />
+             <div className="w-1.5 h-4 bg-current rounded-full animate-[bounce_1s_infinite_0.3s]" />
+          </div>
+        ) : (
+          <Play size={22} className="ml-1 fill-current" />
         )}
 
-        <div className={`relative max-w-[85%] sm:max-w-md ${isOwn ? 'items-end' : 'items-start'}`}>
-  <div className={`px-4 py-2 rounded-2xl shadow-sm break-words overflow-hidden ${getMessageClasses(isOwn)}`}>
-  {message.type === 'image' && message.media_url ? (
-    <div className="space-y-2">
-      <img
-        src={message.media_url}
-        alt="Shared image"
-        className="max-w-full rounded-lg max-h-64"
-      />
-      {message.content && <p className="whitespace-pre-wrap break-words">{message.content}</p>}
-    </div>
-  ) : message.type === 'voice' && message.media_url ? (
-  /* --- SMART RESPONSIVE VOICE PLAYER --- */
-  <div className="flex flex-col gap-1 w-[65vw] min-w-[140px] max-w-[280px] py-1">
-    <div className="flex items-center gap-2 md:gap-3 w-full">
-      {/* Play Button - Scales slightly based on screen */}
-      <button 
-        type="button"
-        onClick={() => {
-          if (isPlaying) { audioRef.current?.pause(); } 
-          else { audioRef.current?.play(); }
-          setIsPlaying(!isPlaying);
-        }}
-        className={`w-9 h-9 md:w-10 md:h-10 rounded-full flex-shrink-0 flex items-center justify-center transition-all active:scale-95 shadow-sm ${
-          isOwn ? 'bg-white/20 hover:bg-white/30' : 'bg-white hover:bg-pink-50'
-        }`}
-      >
-        {isPlaying ? <Pause size={16} fill="currentColor" /> : <Play size={16} className="ml-0.5" fill="currentColor" />}
       </button>
 
-      {/* Waveform - The 'flex-1' makes this the "stretchy" part */}
-      <div className="flex items-center gap-[1px] xs:gap-[2px] sm:gap-[3px] h-8 flex-1 justify-between px-1">
-        {[0.4, 0.7, 0.5, 0.9, 0.6, 0.8, 0.4, 0.9, 0.5, 0.7, 0.4, 0.8].map((height, i, arr) => {
-          const progress = (currentTime / duration) * 100;
-          const barPercent = (i / arr.length) * 100;
-          const isFilled = progress >= barPercent;
-
-          return (
-  <div 
-    key={i} 
-    className={`w-[1.5px] sm:w-[3px] rounded-full transition-all duration-300 
-      ${i > 5 ? 'hidden sm:block' : 'block'} 
-      ${isFilled 
-          ? (isOwn ? 'bg-white scale-y-110' : 'bg-[#FF1493] scale-y-110') 
-          : (isOwn ? 'bg-white/40' : 'bg-[#8B004B]/20') 
-      } ${isPlaying && isFilled ? 'animate-pulse' : ''}`}
-    style={{ height: `${height * 100}%`, animationDelay: `${i * 0.05}s` }} 
-  />
-);
-        })}
+      {/* --- STEADY WAVEFORM (No Pulses) --- */}
+      <div className="flex items-end gap-[3px] h-10 flex-1 px-1">
+        {(waveform.length > 0 ? waveform : Array(20).fill(0.2)).map((loudness, i) => (
+          <div 
+            key={i} 
+            className={`w-[4px] rounded-full transition-opacity duration-300 ${isOwn ? 'bg-white' : 'bg-[#FF1493]'}`}
+            style={{ 
+              height: `${Math.max(loudness * 100, 20)}%`, 
+              maxHeight: '32px',
+              opacity: (currentTime/duration) > (i/20) ? 1 : 0.25
+            }} 
+          />
+        ))}
       </div>
-
-      {/* Timer - Right-aligned and stays put */}
-      <div className={`text-[10px] sm:text-xs font-mono font-bold flex-shrink-0 min-w-[32px] text-right ${
-        isPlaying 
-          ? (isOwn ? 'text-white' : 'text-[#FF1493]') 
-          : (isOwn ? 'text-white/80' : 'text-[#8B004B]/60')
-      }`}>
-        {formatAudioTime(isPlaying ? currentTime : (duration > 0 ? duration : 0))}
-      </div>
-
-      <audio 
-        ref={audioRef}
-        src={message.media_url} 
-        onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
-        onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
-        onEnded={() => { setIsPlaying(false); setCurrentTime(0); }}
-        className="hidden"
-      />
     </div>
+
+    <div className="flex justify-between items-center px-1">
+      <div className="flex items-center gap-1.5">
+        <div className={`w-1.5 h-1.5 rounded-full ${isPlaying ? 'bg-green-400' : 'bg-white/40'}`} />
+        <span className={`text-[10px] font-bold uppercase tracking-widest ${isOwn ? 'text-white/90' : 'text-[#FF1493]'}`}>
+          {isPlaying ? 'Listening...' : 'Voice Note'}
+        </span>
+      </div>
+      <span className={`text-[11px] font-mono font-bold ${isOwn ? 'text-white/80' : 'text-[#8B004B]'}`}>
+        {formatAudioTime(isPlaying ? currentTime : duration)}
+      </span>
+    </div>
+
+    <audio 
+      ref={audioRef} 
+      src={message.media_url} 
+      onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)} 
+      onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)} 
+      onEnded={() => setIsPlaying(false)} 
+      onPlay={() => setIsPlaying(true)}
+      onPause={() => setIsPlaying(false)}
+      className="hidden" 
+    />
   </div>
 ) : (
-    <p className="whitespace-pre-wrap break-words">{message.content}</p>
-  )}
-</div>
+  <p className="whitespace-pre-wrap break-words text-[15px] leading-relaxed">{message.content}</p>
+)}
 
-          {messageReactions.length > 0 && (
+{/* --- THE FIX: This is the div that was incorrectly closed inside the block above --- */}
+</div> 
+
+{messageReactions.length > 0 && (
             <div className={`absolute -bottom-2 flex gap-1 flex-wrap ${isOwn ? 'right-2' : 'left-2'}`}>
               {messageReactions.map((r) => (
                 <button
@@ -463,5 +605,39 @@ async function handleCopy() {
         </div>
       </div>
     </div>
+  {/* --- THIS PART STOPS THE FLASHING --- */}
+      {isZoomed && message.media_url && (
+  <div 
+    className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-black/95 backdrop-blur-xl p-4 touch-none"
+    onClick={(e) => {
+      e.stopPropagation();
+      setIsZoomed(false);
+    }}
+  >
+    {/* Close button for mobile (since there's no hover) */}
+    <button className="absolute top-12 right-6 text-white/70 bg-white/10 p-2 rounded-full">
+       <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+    </button>
+
+    <img 
+      src={message.media_url} 
+      className="max-w-full max-h-[70vh] rounded-2xl shadow-2xl object-contain animate-in zoom-in-95 duration-300"
+      alt="Full view"
+    />
+
+    {message.content && (
+      <div className="mt-6 max-w-xs text-center">
+        <p className="text-white text-base font-medium bg-white/10 px-6 py-3 rounded-2xl backdrop-blur-md border border-white/10">
+          {message.content}
+        </p>
+      </div>
+    )}
+    
+    <p className="mt-8 text-white/30 text-[10px] uppercase tracking-[4px] font-bold animate-pulse">
+      Tap anywhere to close
+    </p>
+  </div>
+)}
+    </>
   );
 }

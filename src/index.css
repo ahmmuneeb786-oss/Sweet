@@ -30,3 +30,8 @@
 .animate-wave {
   animation: wave-pulse 1.2s ease-in-out infinite;
 }
+
+.leaflet-div-icon {
+  background: transparent !important;
+  border: none !important;
+}

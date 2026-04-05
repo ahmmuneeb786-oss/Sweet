@@ -6,9 +6,10 @@ interface SweetKeyboardProps {
   onDelete: () => void;
   onSend: () => void;
   newMessage: string;
+  onDocsClick: () => void;
 }
 
-export const SweetKeyboard = ({ onInput, onDelete, onSend }: SweetKeyboardProps) => {
+export const SweetKeyboard = ({ onInput, onDelete, onSend, onDocsClick }: SweetKeyboardProps) => {
   const [isCaps, setIsCaps] = useState(false);
   const [showSymbols, setShowSymbols] = useState(false);
   const [showMediaBar, setShowMediaBar] = useState(false);
@@ -66,7 +67,17 @@ export const SweetKeyboard = ({ onInput, onDelete, onSend }: SweetKeyboardProps)
   <span className="text-[9px] font-black text-pink-600 uppercase">Place</span>
 </button>
 
-            <button className="flex flex-col items-center gap-1 opacity-50"><div className="p-2 bg-white/80 rounded-full text-pink-500"><FileText className="w-4 h-4" /></div><span className="text-[9px]">DOCS</span></button>
+            <button 
+  type="button" 
+  onClick={onDocsClick} 
+  className="flex flex-col items-center gap-1 active:scale-90 transition-all group"
+>
+  <div className="p-2 bg-white/80 rounded-full text-pink-500 group-active:bg-pink-500 group-active:text-white">
+    <FileText className="w-4 h-4" />
+  </div>
+  <span className="text-[9px] font-black text-pink-600 uppercase">Docs</span>
+</button>
+
           </div>
         ) : (
           <div className="flex gap-4 text-[#8B004B]/40 text-[10px] font-bold tracking-[0.2em]">

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Send, Smile, Paperclip, Phone, Video, Image as ImageIcon, X, Mic, AlertCircle, Check, ArrowLeft } from 'lucide-react';
+import { Send, Smile, Paperclip, Phone, Video, Image as ImageIcon, FileText, X, Mic, AlertCircle, Check, ArrowLeft } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import LocationPicker from './LocationPicker';
 import { supabase } from '../lib/supabase';
@@ -78,6 +78,8 @@ export function ChatWindow({ chatId, theme, onBack }: ChatWindowProps) {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const videoChunksRef = useRef<Blob[]>([]);
   const [showLocationPicker, setShowLocationPicker] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [selectedDoc, setSelectedDoc] = useState<File | null>(null);
 
   useEffect(() => {
   if (chatId && user) {
@@ -382,12 +384,12 @@ async function uploadImage(file: File): Promise<string | null> {
   }
 }
 
-  async function handleSendMessage(e: React.FormEvent | React.KeyboardEvent) {
+  async function handleSendMessage(e: React.FormEvent | React.KeyboardEvent, doc?: File) {
   e.preventDefault();
   
   // 1. New Validation: Allow if there is text OR a selected file
   const messageContent = newMessage.trim();
-  if ((!messageContent && !selectedFile && !audioBlob && !selectedVideo) || !user || !chatInfo) return;
+  if ((!messageContent && !selectedFile && !audioBlob && !selectedVideo&& !selectedDoc) || !user || !chatInfo) return;
   const videoToUpload = selectedVideo; // Grab the video
   const videoUrlPreview = videoPreview;
 
@@ -399,14 +401,16 @@ async function uploadImage(file: File): Promise<string | null> {
 
   const voicePreview = recordedAudioUrl;
 
+  const docToUpload = doc || selectedDoc;
+
   // 2. Create the "Optimistic" message object
   const tempMessage: MessageType = {
     id: tempId,
     chat_id: chatInfo.id,
     sender_id: user.id,
-    content: voiceToUpload ? "Voice Note" : (messageContent || null),
+    content: docToUpload ? docToUpload.name : (voiceToUpload ? "Voice Note" : (messageContent || null)),
     // If we have a file, set type to "image", otherwise "text"
-    type: videoToUpload ? "video" : voiceToUpload ? "voice" : (fileToUpload ? "image" : "text"),
+    type: videoToUpload ? "video" : voiceToUpload ? "voice" : docToUpload ? "file" : (fileToUpload ? "image" : "text"),
     // Use the imagePreview (local blob) so it shows up instantly
     media_url: videoToUpload ? videoUrlPreview : voiceToUpload ? voicePreview : imagePreview, 
     reply_to_id: null,
@@ -431,6 +435,7 @@ async function uploadImage(file: File): Promise<string | null> {
   setSelectedFile(null);
   setVideoPreview(null);
   setSelectedVideo(null);
+  setSelectedDoc(null);
   
   if (textareaRef.current) {
     textareaRef.current.style.height = 'auto';
@@ -439,8 +444,23 @@ async function uploadImage(file: File): Promise<string | null> {
   try {
     let finalMediaUrl = null;
 
+    if (docToUpload) {
+      const fileName = `${user.id}/docs/${Date.now()}_${docToUpload.name}`;
+      const { error: uploadError } = await supabase.storage
+        .from('chat-docs')
+        .upload(fileName, docToUpload);
+
+      if (uploadError) throw uploadError;
+
+      const { data: urlData } = supabase.storage
+        .from('chat-docs')
+        .getPublicUrl(fileName);
+      
+      finalMediaUrl = urlData.publicUrl;
+    }
+
     // 1. If there was a file, upload it now
-    if (fileToUpload) {
+    else if (fileToUpload) {
       finalMediaUrl = await uploadImage(fileToUpload);
       if (!finalMediaUrl) throw new Error("Image upload failed");
     }
@@ -465,8 +485,8 @@ async function uploadImage(file: File): Promise<string | null> {
       id: tempId, 
       chat_id: chatInfo.id,
       sender_id: user.id,
-      content: voiceToUpload ? "Voice Note" : (messageContent || null),
-      type: voiceToUpload ? "voice" : (fileToUpload ? "image" : "text"), 
+      content: messageContent || (docToUpload ? docToUpload.name : (voiceToUpload ? "Voice Note" : null)),
+      type: docToUpload ? "file" : (voiceToUpload ? "voice" : (fileToUpload ? "image" : "text")),
       media_url: finalMediaUrl,
       delivery_status: 'sent'
     });
@@ -741,6 +761,21 @@ const shareLocation = () => {
   setShowLocationPicker(true); 
 };
 
+
+const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const file = event.target.files?.[0];
+  if (!file) return;
+
+  // 1. Set the file state for the pink preview card
+  setSelectedDoc(file);
+
+  // 2. Clear the input value so you can re-select the same file if you delete it
+  event.target.value = '';
+
+  // NOTE: We do NOT call setNewMessage or handleSendMessage here.
+  // This keeps the chat box empty and just shows the preview card above it.
+};
+
   return (
     <div className={`flex-1 flex flex-col h-full overflow-hidden ${
       theme === 'dark'
@@ -969,6 +1004,24 @@ const shareLocation = () => {
         theme === 'dark' ? 'bg-gray-800 border-gray-700' : theme === 'romantic' ? 'bg-[#FFF0F5] border-[#FFB6C1]' : 'bg-white border-gray-200'
       }`}>
 
+        {selectedDoc && (
+  <div className="p-2 mb-2 bg-white/40 backdrop-blur-md rounded-2xl flex items-center gap-3 border border-pink-200 animate-in fade-in slide-in-from-bottom-2">
+    <div className="p-3 bg-pink-500 rounded-xl text-white">
+      <FileText className="w-5 h-5" />
+    </div>
+    <div className="flex-1 overflow-hidden">
+      <p className="text-[11px] font-bold text-pink-700 truncate">{selectedDoc.name}</p>
+      <p className="text-[9px] text-pink-400">{(selectedDoc.size / 1024).toFixed(1)} KB • Ready to send</p>
+    </div>
+    <button 
+      onClick={() => setSelectedDoc(null)}
+      className="p-1 hover:bg-pink-100 rounded-full text-pink-400"
+    >
+      <X className="w-4 h-4" />
+    </button>
+  </div>
+)}
+
        {imagePreview && (
           <div className="relative inline-block mb-3 animate-in zoom-in-95 duration-200">
             <div className="relative rounded-2xl overflow-hidden border-2 border-pink-400 shadow-lg">
@@ -1187,9 +1240,9 @@ const shareLocation = () => {
 
             <button
               type="submit"
-              disabled={(!newMessage.trim() && !selectedFile && !audioBlob) || isRecording}
+              disabled={(!newMessage.trim() && !selectedFile && !audioBlob && !selectedDoc && !selectedVideo) || isRecording}
               className={`p-3 rounded-full transition-all active:scale-95 flex-shrink-0 ${
-                (newMessage.trim() || selectedFile || audioBlob)
+                (newMessage.trim() || selectedFile || audioBlob || selectedDoc || selectedVideo)
                   ? `bg-gradient-to-r from-[#FF69B4] to-[#FF1493] text-white shadow-md`
                   : 'bg-gray-200 text-gray-400'
               }`}
@@ -1202,6 +1255,7 @@ const shareLocation = () => {
     {showSweetKeyboard && (
   <SweetKeyboard 
     newMessage={newMessage}
+    onDocsClick={() => fileInputRef.current?.click()}
     onInput={(input: any) => {
 
       if (input === 'LOCATION_START') {
@@ -1245,6 +1299,15 @@ const shareLocation = () => {
     onSend={() => handleSendMessage(new Event('submit') as any)}
   />
 )}
+
+<input 
+  type="file" 
+  ref={fileInputRef} 
+  onChange={handleFileChange} 
+  className="hidden" 
+  accept=".pdf,.doc,.docx,.txt,.zip,.rar,audio/*" 
+/>
+
     </div> // This is the final closing div of ChatWindow
   );
 }

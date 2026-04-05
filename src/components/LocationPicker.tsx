@@ -4,11 +4,25 @@ import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import { MapPin, X, Loader2 } from 'lucide-react'; // Added Loader2 for a cute spinner
 
-const icon = L.icon({
-  iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-  shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
-  iconSize: [25, 41],
-  iconAnchor: [12, 41]
+const sweetIcon = L.divIcon({
+  className: 'custom-pin',
+  html: `
+    <div class="relative flex items-center justify-center">
+      <div class="absolute w-10 h-10 bg-pink-500/30 rounded-full animate-ping"></div>
+      
+      <div class="relative bg-white p-1 rounded-full shadow-lg border-2 border-pink-500 group">
+        <div class="bg-pink-500 rounded-full p-2 text-white">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/>
+          </svg>
+        </div>
+        
+        <div class="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-pink-500 rotate-45 border-r border-b border-pink-500"></div>
+      </div>
+    </div>
+  `,
+  iconSize: [40, 40],
+  iconAnchor: [20, 40], // Anchors the "tip" of the heart to the coordinates
 });
 
 interface MapPickerProps {
@@ -60,7 +74,7 @@ export default function LocationPicker({ onSelect, onCancel }: MapPickerProps) {
         setPosition([e.latlng.lat, e.latlng.lng]);
       },
     });
-    return position ? <Marker position={position} icon={icon} /> : null;
+    return position ? <Marker position={position} icon={sweetIcon} /> : null;
   }
 
   // 2. SHOW LOADING SCREEN if position is null
