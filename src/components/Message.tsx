@@ -328,27 +328,29 @@ async function handleCopy() {
       </div>
     </a>
   ) : (message.type === 'location' || (message.content && message.content.includes('maps?q='))) ? (
-  /* --- FIXED GLASSMORPHISM MAP CARD --- */
+  /* --- RESPONSIVE MOBILE-FRIENDLY MAP CARD --- */
   (() => {
     const coordsMatch = message.content?.match(/q=([-.\d]+),([-.\d]+)/);
     const lat = coordsMatch?.[1];
     const lng = coordsMatch?.[2];
     
+    // Increased map size slightly for better resolution on mobile
     const mapPreviewUrl = lat && lng 
-      ? `https://static-maps.yandex.ru/1.x/?lang=en_US&ll=${lng},${lat}&z=14&l=map&size=300,200`
+      ? `https://static-maps.yandex.ru/1.x/?lang=en_US&ll=${lng},${lat}&z=14&l=map&size=450,300`
       : null;
 
     return (
-      /* Removed extra padding and simplified the background to prevent the "thick border" look */
-      <div className="-mx-5 -my-3 w-[260px] overflow-hidden rounded-[32px] flex flex-col">
-        {/* Map Container */}
-        <div className="h-44 w-full relative overflow-hidden group rounded-t-[32px] border-b border-white/20" 
-         style={{ isolation: 'isolate' }}>
+      <div className="-mx-5 -my-3 w-full min-w-[220px] xs:min-w-[260px] sm:w-[280px] overflow-hidden rounded-[32px] flex flex-col">
+        {/* Map Container - The 'isolation' fix stops the sharp-corner flash */}
+        <div 
+          className="h-40 sm:h-44 w-full relative overflow-hidden group rounded-t-[32px] border-b border-white/20" 
+          style={{ isolation: 'isolate' }} 
+        >
           {mapPreviewUrl ? (
             <img 
               src={mapPreviewUrl} 
               alt="Location Preview" 
-              className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 opacity-90"
+              className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 active:scale-110 opacity-90 transform-gpu will-change-transform"
             />
           ) : (
             <div className="w-full h-full bg-pink-200/30 flex items-center justify-center">
@@ -356,14 +358,14 @@ async function handleCopy() {
             </div>
           )}
           
-          {/* Floating Label */}
-          <div className="absolute bottom-3 left-3 right-3 bg-white/30 backdrop-blur-md py-1.5 px-3 rounded-2xl text-[9px] text-center font-black text-[#8B004B] border border-white/40 uppercase tracking-widest shadow-lg">
+          {/* Floating Label - Text size adjusted for tiny screens */}
+          <div className="absolute bottom-3 left-3 right-3 bg-white/30 backdrop-blur-md py-1.5 px-3 rounded-2xl text-[8px] sm:text-[9px] text-center font-black text-[#8B004B] border border-white/40 uppercase tracking-widest shadow-lg z-20">
              {isOwn ? "Sweet Spot 📍" : "Our Special Spot 📍"}
           </div>
 
           {/* Bouncing Pin */}
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none">
-             <Heart className="w-8 h-8 text-[#FF1493] animate-bounce drop-shadow-md" fill="currentColor" />
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none z-10">
+             <Heart className="w-7 h-7 sm:w-8 sm:h-8 text-[#FF1493] animate-bounce drop-shadow-md" fill="currentColor" />
           </div>
         </div>
 
@@ -378,8 +380,8 @@ async function handleCopy() {
               w-full py-2.5 rounded-2xl font-black text-[10px] uppercase tracking-[2px] 
               transition-all duration-300 active:scale-95 shadow-md
               ${isOwn 
-                ? 'bg-white text-[#FF1493] hover:bg-pink-50' 
-                : 'bg-[#FF1493] text-white hover:bg-[#FF1493]/90'
+                ? 'bg-white text-[#FF1493] active:bg-pink-50' 
+                : 'bg-[#FF1493] text-white active:bg-[#FF1493]/90'
               }
             `}
           >
@@ -390,45 +392,41 @@ async function handleCopy() {
     );
   })()
 ) : message.type === 'voice' && message.media_url ? (
-  /* --- SWEET STEADY VOICE PLAYER --- */
-  <div className="flex flex-col gap-3 py-2 min-w-[220px]">
-    <div className="flex items-center gap-4">
-      {/* --- STYLISH MORPHIC BUTTON --- */}
+  /* --- MOBILE-OPTIMIZED VOICE PLAYER --- */
+  <div className="flex flex-col gap-2 py-2 w-full min-w-[200px] xs:min-w-[240px]">
+    <div className="flex items-center gap-3">
       <button 
         onClick={() => isPlaying ? audioRef.current?.pause() : audioRef.current?.play()} 
         className={`
-          relative w-12 h-12 flex items-center justify-center 
+          relative flex-shrink-0 w-11 h-11 flex items-center justify-center 
           transition-all duration-500 ease-out active:scale-90 shadow-lg
           ${isPlaying 
-            ? 'bg-white text-[#FF1493] rounded-[18px] rotate-90 scale-105 shadow-[0_0_20px_rgba(255,255,255,0.4)]' 
+            ? 'bg-white text-[#FF1493] rounded-[15px] rotate-90 scale-105' 
             : isOwn 
-              ? 'bg-white/20 text-white hover:bg-white/30 rounded-[22px]' 
-              : 'bg-[#FF1493] text-white hover:bg-[#FF1493]/90 rounded-[22px]'
+              ? 'bg-white/20 text-white rounded-[20px]' 
+              : 'bg-[#FF1493] text-white rounded-[20px]'
           }
         `}
       >
-
         {isPlaying ? (
-          /* Custom "Dancing Bars" icon instead of a boring Pause square */
           <div className="flex gap-1 rotate-[-90deg]">
-             <div className="w-1.5 h-4 bg-current rounded-full animate-[bounce_1s_infinite_0.1s]" />
-             <div className="w-1.5 h-4 bg-current rounded-full animate-[bounce_1s_infinite_0.3s]" />
+             <div className="w-1 h-3.5 bg-current rounded-full animate-[bounce_1s_infinite_0.1s]" />
+             <div className="w-1 h-3.5 bg-current rounded-full animate-[bounce_1s_infinite_0.3s]" />
           </div>
         ) : (
-          <Play size={22} className="ml-1 fill-current" />
+          <Play size={20} className="ml-1 fill-current" />
         )}
-
       </button>
 
-      {/* --- STEADY WAVEFORM (No Pulses) --- */}
-      <div className="flex items-end gap-[3px] h-10 flex-1 px-1">
+      {/* Waveform now uses flex-1 to grow/shrink based on screen width */}
+      <div className="flex items-end gap-[2px] h-8 flex-1 px-1 overflow-hidden">
         {(waveform.length > 0 ? waveform : Array(20).fill(0.2)).map((loudness, i) => (
           <div 
             key={i} 
-            className={`w-[4px] rounded-full transition-opacity duration-300 ${isOwn ? 'bg-white' : 'bg-[#FF1493]'}`}
+            className={`flex-1 min-w-[2px] max-w-[4px] rounded-full transition-opacity duration-300 ${isOwn ? 'bg-white' : 'bg-[#FF1493]'}`}
             style={{ 
               height: `${Math.max(loudness * 100, 20)}%`, 
-              maxHeight: '32px',
+              maxHeight: '100%',
               opacity: (currentTime/duration) > (i/20) ? 1 : 0.25
             }} 
           />
@@ -436,14 +434,11 @@ async function handleCopy() {
       </div>
     </div>
 
-    <div className="flex justify-between items-center px-1">
-      <div className="flex items-center gap-1.5">
-        <div className={`w-1.5 h-1.5 rounded-full ${isPlaying ? 'bg-green-400' : 'bg-white/40'}`} />
-        <span className={`text-[10px] font-bold uppercase tracking-widest ${isOwn ? 'text-white/90' : 'text-[#FF1493]'}`}>
-          {isPlaying ? 'Listening...' : 'Voice Note'}
+    <div className="flex justify-between items-center px-1 mt-1">
+        <span className={`text-[9px] font-bold uppercase tracking-widest ${isOwn ? 'text-white/90' : 'text-[#FF1493]'}`}>
+          {isPlaying ? 'Playing...' : 'Voice Note'}
         </span>
-      </div>
-      <span className={`text-[11px] font-mono font-bold ${isOwn ? 'text-white/80' : 'text-[#8B004B]'}`}>
+      <span className={`text-[10px] font-mono font-bold ${isOwn ? 'text-white/80' : 'text-[#8B004B]'}`}>
         {formatAudioTime(isPlaying ? currentTime : duration)}
       </span>
     </div>
@@ -492,7 +487,7 @@ async function handleCopy() {
             {message.is_edited && ' (edited)'}
           </span>
 
-          <div className="relative opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
+          <div className="relative opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity flex items-center gap-1">
             <button
               onClick={() => setShowReactions(!showReactions)}
               className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full transition-colors"
@@ -543,11 +538,11 @@ async function handleCopy() {
                 <>
                   <div className="fixed inset-0 z-10" onClick={() => setShowMenu(false)} />
                   <div
-                    className={`absolute w-48 rounded-lg shadow-lg border py-1 z-20 transition-all duration-300 ${
-                      theme === 'romantic' ? 'bg-[#FFF0F5] border-[#FFB6C1]' : theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
-                    } ${isOwn ? 'right-0' : 'left-0'} ${
-                      menuDirection === 'up' ? 'bottom-full mb-1 origin-bottom' : 'top-full mt-1 origin-top'
-                    }`}
+                    className={`absolute w-48 max-w-[70vw] rounded-lg shadow-lg border py-1 z-20 transition-all duration-300 ${
+  theme === 'romantic' ? 'bg-[#FFF0F5] border-[#FFB6C1]' : theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+} ${isOwn ? 'right-0' : 'left-0'} ${
+  menuDirection === 'up' ? 'bottom-full mb-1 origin-bottom' : 'top-full mt-1 origin-top'
+}`}
                   >
                     {/* Reusable Style for your buttons */}
                     {[
