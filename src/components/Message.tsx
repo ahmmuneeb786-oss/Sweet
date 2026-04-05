@@ -328,64 +328,41 @@ async function handleCopy() {
       </div>
     </a>
   ) : (message.type === 'location' || (message.content && message.content.includes('maps?q='))) ? (
-  /* --- RESPONSIVE MOBILE-FRIENDLY MAP CARD --- */
+  /* --- FINAL STABLE LOCATION CARD --- */
   (() => {
     const coordsMatch = message.content?.match(/q=([-.\d]+),([-.\d]+)/);
     const lat = coordsMatch?.[1];
     const lng = coordsMatch?.[2];
-    
-    // Increased map size slightly for better resolution on mobile
     const mapPreviewUrl = lat && lng 
       ? `https://static-maps.yandex.ru/1.x/?lang=en_US&ll=${lng},${lat}&z=14&l=map&size=450,300`
       : null;
 
     return (
-      <div className="-mx-5 -my-3 w-full min-w-[220px] xs:min-w-[260px] sm:w-[280px] overflow-hidden rounded-[32px] flex flex-col">
-        {/* Map Container - The 'isolation' fix stops the sharp-corner flash */}
-        <div 
-          className="h-40 sm:h-44 w-full relative overflow-hidden group rounded-t-[32px] border-b border-white/20" 
-          style={{ isolation: 'isolate' }} 
-        >
+      <div className="flex flex-col w-full min-w-[240px] max-w-[280px] -mx-5 -my-3 overflow-hidden rounded-[32px]">
+        <div className="h-40 w-full relative overflow-hidden border-b border-white/20" style={{ isolation: 'isolate' }}>
           {mapPreviewUrl ? (
-            <img 
-              src={mapPreviewUrl} 
-              alt="Location Preview" 
-              className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 active:scale-110 opacity-90 transform-gpu will-change-transform"
-            />
+            <img src={mapPreviewUrl} alt="Map" className="w-full h-full object-cover transform-gpu" />
           ) : (
             <div className="w-full h-full bg-pink-200/30 flex items-center justify-center">
-               <Heart className="w-10 h-10 text-white/70 animate-pulse" fill="currentColor" />
+               <Heart className="w-8 h-8 text-white/70 animate-pulse" fill="currentColor" />
             </div>
           )}
-          
-          {/* Floating Label - Text size adjusted for tiny screens */}
-          <div className="absolute bottom-3 left-3 right-3 bg-white/30 backdrop-blur-md py-1.5 px-3 rounded-2xl text-[8px] sm:text-[9px] text-center font-black text-[#8B004B] border border-white/40 uppercase tracking-widest shadow-lg z-20">
+          <div className="absolute bottom-2 left-2 right-2 bg-white/40 backdrop-blur-md py-1 px-2 rounded-xl text-[9px] text-center font-black text-[#8B004B] uppercase tracking-tighter">
              {isOwn ? "Sweet Spot 📍" : "Our Special Spot 📍"}
           </div>
-
-          {/* Bouncing Pin */}
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none z-10">
-             <Heart className="w-7 h-7 sm:w-8 sm:h-8 text-[#FF1493] animate-bounce drop-shadow-md" fill="currentColor" />
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none">
+             <Heart className="w-6 h-6 text-[#FF1493] animate-bounce" fill="currentColor" />
           </div>
         </div>
-
-        {/* Action Button Area */}
-        <div className="p-3 bg-white/10 backdrop-blur-sm">
+        <div className="p-2 bg-white/5">
           <button 
             onClick={() => {
               const url = message.content?.match(/https:\/\/www\.google\.com\/maps\?q=[^ ]+/)?.[0];
               if (url) window.open(url, '_blank');
             }}
-            className={`
-              w-full py-2.5 rounded-2xl font-black text-[10px] uppercase tracking-[2px] 
-              transition-all duration-300 active:scale-95 shadow-md
-              ${isOwn 
-                ? 'bg-white text-[#FF1493] active:bg-pink-50' 
-                : 'bg-[#FF1493] text-white active:bg-[#FF1493]/90'
-              }
-            `}
+            className={`w-full py-2 rounded-xl font-bold text-[10px] uppercase tracking-widest transition-all active:scale-95 ${isOwn ? 'bg-white text-[#FF1493]' : 'bg-[#FF1493] text-white'}`}
           >
-            Open in Maps
+            Open Maps
           </button>
         </div>
       </div>
@@ -434,11 +411,12 @@ async function handleCopy() {
       </div>
     </div>
 
-    <div className="flex justify-between items-center px-1 mt-1">
-        <span className={`text-[9px] font-bold uppercase tracking-widest ${isOwn ? 'text-white/90' : 'text-[#FF1493]'}`}>
-          {isPlaying ? 'Playing...' : 'Voice Note'}
-        </span>
-      <span className={`text-[10px] font-mono font-bold ${isOwn ? 'text-white/80' : 'text-[#8B004B]'}`}>
+    {/* Metadata Row: Positioned relative to the waveform, not the screen edge */}
+    <div className="flex justify-between items-center w-full px-0 mt-0.5">
+      <span className={`text-[8px] font-black uppercase tracking-widest opacity-70 ${isOwn ? 'text-white' : 'text-[#FF1493]'}`}>
+        {isPlaying ? 'Playing' : 'Voice'}
+      </span>
+      <span className={`text-[10px] font-mono font-bold ${isOwn ? 'text-white' : 'text-[#8B004B]'}`}>
         {formatAudioTime(isPlaying ? currentTime : duration)}
       </span>
     </div>
