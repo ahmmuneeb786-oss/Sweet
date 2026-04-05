@@ -356,42 +356,63 @@ async function handleCopy() {
         <span className="text-[10px] opacity-70">Shared with love • Tap to open</span>
       </div>
     </a>
-  ) : (message.type === 'location' || (message.content && message.content.includes('maps?q='))) ? (
-  /* --- FINAL STABLE LOCATION CARD --- */
+  ) : (message.type === 'location' || (message.content && message.content.includes('maps'))) ? (
+  /* --- STABLE & BUG-FREE LOCATION CARD --- */
   (() => {
-    const coordsMatch = message.content?.match(/q=([-.\d]+),([-.\d]+)/);
+    // Improved Regex: Finds coordinates regardless of what's around them
+    const coordsMatch = message.content?.match(/([-.\d]+),([-.\d]+)/);
     const lat = coordsMatch?.[1];
     const lng = coordsMatch?.[2];
+    
     const mapPreviewUrl = lat && lng 
       ? `https://static-maps.yandex.ru/1.x/?lang=en_US&ll=${lng},${lat}&z=14&l=map&size=450,300`
       : null;
 
     return (
-      <div className="flex flex-col w-full min-w-[240px] max-w-[280px] -mx-5 -my-3 overflow-hidden rounded-[32px]">
-        <div className="h-40 w-full relative overflow-hidden border-b border-white/20" style={{ isolation: 'isolate' }}>
+      <div className="flex flex-col w-full min-w-[220px] max-w-[280px] -mx-4 -my-2 overflow-hidden rounded-[24px] shadow-inner">
+        <div className="h-36 w-full relative overflow-hidden border-b border-white/10" style={{ isolation: 'isolate' }}>
           {mapPreviewUrl ? (
-            <img src={mapPreviewUrl} alt="Map" className="w-full h-full object-cover transform-gpu" />
+            <img 
+              src={mapPreviewUrl} 
+              alt="Map Preview" 
+              className="w-full h-full object-cover transform-gpu hover:scale-110 transition-transform duration-700" 
+            />
           ) : (
             <div className="w-full h-full bg-pink-200/30 flex items-center justify-center">
                <Heart className="w-8 h-8 text-white/70 animate-pulse" fill="currentColor" />
             </div>
           )}
-          <div className="absolute bottom-2 left-2 right-2 bg-white/40 backdrop-blur-md py-1 px-2 rounded-xl text-[9px] text-center font-black text-[#8B004B] uppercase tracking-tighter">
+          
+          {/* Label Overlay */}
+          <div className="absolute bottom-2 left-2 right-2 bg-white/60 backdrop-blur-md py-1.5 px-2 rounded-lg text-[9px] text-center font-black text-[#8B004B] uppercase tracking-wider shadow-sm">
              {isOwn ? "Sweet Spot 📍" : "Our Special Spot 📍"}
           </div>
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none">
+
+          {/* Center Heart Marker */}
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none drop-shadow-md">
              <Heart className="w-6 h-6 text-[#FF1493] animate-bounce" fill="currentColor" />
           </div>
         </div>
-        <div className="p-2 bg-white/5">
+
+        <div className={`p-2 ${isOwn ? 'bg-white/20' : 'bg-[#FF1493]/10'}`}>
           <button 
             onClick={() => {
-              const url = message.content?.match(/https:\/\/www\.google\.com\/maps\?q=[^ ]+/)?.[0];
-              if (url) window.open(url, '_blank');
+              const urlMatch = message.content?.match(/https?:\/\/[^\s]+/);
+              const latLngMatch = message.content?.match(/([-.\d]+),([-.\d]+)/);
+              const finalUrl = urlMatch 
+                ? urlMatch[0] 
+                : latLngMatch 
+                  ? `https://www.google.com/maps?q=${latLngMatch[1]},${latLngMatch[2]}` 
+                  : '#';
+              window.open(finalUrl, '_blank');
             }}
-            className={`w-full py-2 rounded-xl font-bold text-[10px] uppercase tracking-widest transition-all active:scale-95 ${isOwn ? 'bg-white text-[#FF1493]' : 'bg-[#FF1493] text-white'}`}
+            className={`w-full py-2.5 rounded-xl font-black text-[10px] uppercase tracking-[2px] transition-all active:scale-95 shadow-sm
+              ${isOwn 
+                ? 'bg-white text-[#FF1493] hover:bg-pink-50' 
+                : 'bg-[#FF1493] text-white hover:bg-[#D8127C]'
+              }`}
           >
-            Open Maps
+            Open in Maps
           </button>
         </div>
       </div>
