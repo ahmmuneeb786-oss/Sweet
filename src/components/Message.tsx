@@ -284,7 +284,7 @@ async function handleCopy() {
     )}
 
     {/* Changed to flex-col so avatar is ABOVE the bubble on mobile */}
-    <div className={`flex flex-col group ${isOwn ? 'items-end' : 'items-start'} mb-2`}>
+    <div className={`flex flex-col group ${isOwn ? 'items-end' : 'items-start'} mb-4 px-4`}>
       
       {/* 1. Avatar Row (Only shows for the other person) */}
       {!isOwn && showAvatar && (
@@ -306,10 +306,15 @@ async function handleCopy() {
         </div>
       )}
 
-        <div className={`flex items-end gap-1 max-w-[90%] sm:max-w-md ${isOwn ? 'flex-row-reverse' : 'flex-row'}`}>
-        <div className={`relative ${isOwn ? 'items-end' : 'items-start'}`}>
-          <div className={`px-4 py-2.5 shadow-sm transition-all duration-500 ${getMessageClasses(isOwn)}`}>
-              {message.type === 'image' && message.media_url ? (
+        <div className={`flex items-end gap-1 w-full ${isOwn ? 'flex-row-reverse' : 'flex-row'}`}>
+  <div className={`relative flex flex-col ${isOwn ? 'items-end' : 'items-start'} max-w-[85%] md:max-w-[70%]`}>
+    <div className={`
+      px-4 py-2.5 shadow-sm transition-all duration-500 
+      ${getMessageClasses(isOwn)}
+      /* FIX: Prevents "aaaaa" from breaking the window */
+      break-words [word-break:break-word] overflow-hidden
+    `}>
+      {message.type === 'image' && message.media_url ? (
   <div 
     className="-mx-5 -my-3 overflow-hidden rounded-[28px] relative transition-all duration-300 active:scale-95"
     /* This custom cursor is a cute pink heart with a white border */
@@ -357,9 +362,8 @@ async function handleCopy() {
       </div>
     </a>
   ) : (message.type === 'location' || (message.content && message.content.includes('maps'))) ? (
-  /* --- STABLE & BUG-FREE LOCATION CARD --- */
+  /* --- PREMIUM THEMED LOCATION CARD --- */
   (() => {
-    // Improved Regex: Finds coordinates regardless of what's around them
     const coordsMatch = message.content?.match(/([-.\d]+),([-.\d]+)/);
     const lat = coordsMatch?.[1];
     const lng = coordsMatch?.[2];
@@ -369,47 +373,43 @@ async function handleCopy() {
       : null;
 
     return (
-      <div className="flex flex-col w-full min-w-[220px] max-w-[280px] -mx-4 -my-2 overflow-hidden rounded-[24px] shadow-inner">
-        <div className="h-36 w-full relative overflow-hidden border-b border-white/10" style={{ isolation: 'isolate' }}>
+      <div className="flex flex-col w-full min-w-[220px] max-w-[280px] -mx-4 -my-2 overflow-hidden rounded-[24px] shadow-sm">
+        {/* Map Section */}
+        <div className="h-36 w-full relative overflow-hidden border-b border-white/20" style={{ isolation: 'isolate' }}>
           {mapPreviewUrl ? (
             <img 
               src={mapPreviewUrl} 
-              alt="Map Preview" 
-              className="w-full h-full object-cover transform-gpu hover:scale-110 transition-transform duration-700" 
+              alt="Map" 
+              className="w-full h-full object-cover transform-gpu transition-transform duration-700 hover:scale-105" 
             />
           ) : (
-            <div className="w-full h-full bg-pink-200/30 flex items-center justify-center">
-               <Heart className="w-8 h-8 text-white/70 animate-pulse" fill="currentColor" />
+            <div className="w-full h-full bg-pink-100/50 flex items-center justify-center">
+               <Heart className="w-8 h-8 text-pink-300 animate-pulse" fill="currentColor" />
             </div>
           )}
           
-          {/* Label Overlay */}
-          <div className="absolute bottom-2 left-2 right-2 bg-white/60 backdrop-blur-md py-1.5 px-2 rounded-lg text-[9px] text-center font-black text-[#8B004B] uppercase tracking-wider shadow-sm">
-             {isOwn ? "Sweet Spot 📍" : "Our Special Spot 📍"}
+          {/* Floating Glass Tag */}
+          <div className="absolute bottom-2 left-2 right-2 bg-white/70 backdrop-blur-md py-1 px-2 rounded-lg text-[9px] text-center font-black text-[#FF1493] uppercase tracking-widest shadow-sm border border-white/40">
+             {isOwn ? "Sweet Spot 📍" : "Sweet Spot 📍"}
           </div>
 
-          {/* Center Heart Marker */}
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none drop-shadow-md">
-             <Heart className="w-6 h-6 text-[#FF1493] animate-bounce" fill="currentColor" />
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none drop-shadow-lg">
+             <Heart className="w-7 h-7 text-[#FF1493] animate-bounce" fill="currentColor" />
           </div>
         </div>
 
-        <div className={`p-2 ${isOwn ? 'bg-white/20' : 'bg-[#FF1493]/10'}`}>
+        {/* The Action Area - Now fully themed */}
+        <div className={`p-2.5 ${isOwn ? 'bg-white/10' : 'bg-[#FF1493]/5'}`}>
           <button 
             onClick={() => {
               const urlMatch = message.content?.match(/https?:\/\/[^\s]+/);
-              const latLngMatch = message.content?.match(/([-.\d]+),([-.\d]+)/);
-              const finalUrl = urlMatch 
-                ? urlMatch[0] 
-                : latLngMatch 
-                  ? `https://www.google.com/maps?q=${latLngMatch[1]},${latLngMatch[2]}` 
-                  : '#';
+              const finalUrl = urlMatch ? urlMatch[0] : `https://www.google.com/maps?q=${lat},${lng}`;
               window.open(finalUrl, '_blank');
             }}
-            className={`w-full py-2.5 rounded-xl font-black text-[10px] uppercase tracking-[2px] transition-all active:scale-95 shadow-sm
+            className={`w-full py-2.5 rounded-xl font-black text-[10px] uppercase tracking-[2px] transition-all active:scale-95 shadow-md
               ${isOwn 
-                ? 'bg-white text-[#FF1493] hover:bg-pink-50' 
-                : 'bg-[#FF1493] text-white hover:bg-[#D8127C]'
+                ? 'bg-white text-[#FF1493] hover:shadow-lg' 
+                : 'bg-[#FF1493] text-white hover:bg-[#E61283]'
               }`}
           >
             Open in Maps
@@ -509,8 +509,11 @@ async function handleCopy() {
           )}
         </div>
 
-        <div className={`flex items-center gap-2 px-2 text-xs text-gray-500 dark:text-gray-400 ${isOwn ? 'flex-row-reverse' : 'flex-row'}`}>
-          <span className={`
+<div className={`flex items-center gap-1.5 mt-1 px-1 text-[10px] font-bold uppercase tracking-widest
+    ${theme === 'romantic' ? 'text-[#FF69B4]/80' : 'text-gray-400'}
+    ${isOwn ? 'flex-row-reverse' : 'flex-row'}
+  `}>
+              <span className={`
     ${theme === 'romantic' 
       ? 'text-[#FF69B4]/80' 
       : theme === 'dark' 
