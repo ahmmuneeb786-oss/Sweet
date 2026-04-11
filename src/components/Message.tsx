@@ -38,7 +38,7 @@ export function Message({ message, isOwn, showAvatar, reactions, theme, onDelete
   const [showMenu, setShowMenu] = useState(false);
   const [menuDirection, setMenuDirection] = useState<'up' | 'down'>('down');
   const [showReactions, setShowReactions] = useState(false);
-  const [messageReactions, setMessageReactions] = useState<Reaction[]>([]);
+  const [dbReactions, setDbReactions] = useState<Reaction[]>([]);
   const [userReactionMap, setUserReactionMap] = useState<Map<string, string>>(new Map());
   const [isPlaying, setIsPlaying] = useState(false);
   const [duration, setDuration] = useState(0);
@@ -73,10 +73,13 @@ export function Message({ message, isOwn, showAvatar, reactions, theme, onDelete
   }
 }, [message.media_url]);
 
-  useEffect(() => {
-    loadReactions();
-    subscribeToReactions();
-  }, [message.id]);
+useEffect(() => {
+  loadReactions();
+  const unsubscribe = subscribeToReactions(); // Start listening and save the "off" switch
+  return () => {
+    if (unsubscribe) unsubscribe(); // Turn off the listener when message changes
+  };
+}, [message.id]);
 
   function formatStickyDate(dateString: string) {
   const date = new Date(dateString);
@@ -99,22 +102,26 @@ export function Message({ message, isOwn, showAvatar, reactions, theme, onDelete
         const reactionMap = new Map<string, { reaction: string; user_id: string; count: number }>();
         const userMap = new Map<string, string>();
 
-        data.forEach((r) => {
-          userMap.set(r.reaction, r.user_id);
-          const existing = reactionMap.get(r.reaction);
-          if (existing) {
-            existing.count++;
-          } else {
-            reactionMap.set(r.reaction, {
-              reaction: r.reaction,
-              user_id: r.user_id,
-              count: 1,
-            });
-          }
-        });
+data.forEach((r) => {
+  // Only store the ID in the userMap if it matches the current logged-in user
+  if (r.user_id === user?.id) {
+    userMap.set(r.reaction, r.user_id);
+  }
+  
+  const existing = reactionMap.get(r.reaction);
+  if (existing) {
+    existing.count++;
+  } else {
+    reactionMap.set(r.reaction, {
+      reaction: r.reaction,
+      user_id: r.user_id, // This doesn't matter much for the count
+      count: 1,
+    });
+  }
+});
 
         setUserReactionMap(userMap);
-        setMessageReactions(Array.from(reactionMap.values()));
+        setDbReactions(Array.from(reactionMap.values()));
       }
     } catch (error) {
       console.error('Error loading reactions:', error);
@@ -143,40 +150,52 @@ export function Message({ message, isOwn, showAvatar, reactions, theme, onDelete
     };
   }
 
-  async function handleReaction(emoji: string) {
-    if (!user) return;
+async function handleReaction(emoji: string) {
+  if (!user) return;
 
-    try {
-      const existingReaction = await supabase
+  try {
+    // 1. Check for ANY existing reaction from YOU on THIS message
+    const { data: existing } = await supabase
+      .from('message_reactions')
+      .select('*')
+      .eq('message_id', message.id)
+      .eq('user_id', user.id);
+
+    // We look at the first one found
+    const prev = existing?.[0];
+
+    if (prev) {
+      // 2. If you already have a reaction, we delete it (Clean Slate)
+      await supabase
         .from('message_reactions')
-        .select('*')
-        .eq('message_id', message.id)
-        .eq('user_id', user.id)
-        .eq('reaction', emoji)
-        .maybeSingle();
+        .delete()
+        .eq('id', prev.id);
 
-      if (existingReaction.data) {
-        await supabase
-          .from('message_reactions')
-          .delete()
-          .eq('message_id', message.id)
-          .eq('user_id', user.id)
-          .eq('reaction', emoji);
-      } else {
-        await supabase
-          .from('message_reactions')
-          .insert({
-            message_id: message.id,
-            user_id: user.id,
-            reaction: emoji,
-          });
+      // 3. If the emoji you just clicked is DIFFERENT than your old one, 
+      // we insert the new one. (If it's the SAME, it stays deleted, acting as a toggle).
+      if (prev.reaction !== emoji) {
+        await supabase.from('message_reactions').insert({
+          message_id: message.id,
+          user_id: user.id,
+          reaction: emoji,
+        });
       }
-
-      setShowReactions(false);
-    } catch (error) {
-      console.error('Error handling reaction:', error);
+    } else {
+      // 4. If you had no reaction at all, just insert the new one normally
+      await supabase.from('message_reactions').insert({
+        message_id: message.id,
+        user_id: user.id,
+        reaction: emoji,
+      });
     }
+
+    // Close picker and refresh UI
+    setShowReactions(false);
+    loadReactions(); 
+  } catch (error) {
+    console.error('Error handling reaction:', error);
   }
+}
 
   async function handleDelete() {
     try {
@@ -284,7 +303,7 @@ async function handleCopy() {
     )}
 
     {/* Changed to flex-col so avatar is ABOVE the bubble on mobile */}
-    <div className={`flex flex-col group ${isOwn ? 'items-end' : 'items-start'} mb-4 px-4`}>
+    <div className={`flex flex-col group ${isOwn ? 'items-end' : 'items-start'} mb-4 px-0 w-full`}>
       
       {/* 1. Avatar Row (Only shows for the other person) */}
       {!isOwn && showAvatar && (
@@ -306,7 +325,7 @@ async function handleCopy() {
         </div>
       )}
 
-<div className={`flex items-end ${isOwn ? 'flex-row-reverse' : 'flex-row'} w-full`}>
+<div className={`flex items-end ${isOwn ? 'justify-end' : 'justify-start'} w-full px-0`}>
   <div className={`relative flex flex-col ${isOwn ? 'items-end' : 'items-start'} max-w-[85%] md:max-w-[70%] w-fit`}>
   <div
     className={`
@@ -489,26 +508,32 @@ async function handleCopy() {
 
 {/* --- THE FIX: This is the div that was incorrectly closed inside the block above --- */}
 </div> 
-</div>
 
-{messageReactions.length > 0 && (
+{dbReactions.length > 0 && (
             <div className={`absolute -bottom-2 flex gap-1 flex-wrap ${isOwn ? 'right-2' : 'left-2'}`}>
-              {messageReactions.map((r) => (
+              {dbReactions.map((r) => (
                 <button
                   key={r.reaction}
                   onClick={() => handleReaction(r.reaction)}
-                  className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium transition-all ${
+                  className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold transition-all shadow-sm border ${
                     userReactionMap.get(r.reaction) === user?.id
                       ? (theme === 'romantic' ? 'bg-[#FF69B4] text-white border-[#FF1493]' : 'bg-pink-100 dark:bg-pink-900/30 border border-pink-300 dark:border-pink-700')
                       : (theme === 'romantic' ? 'bg-[#FFF0F5] border-[#FFB6C1] text-[#8B004B]' : 'bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700')
                   }`}
                 >
                   <span>{r.reaction}</span>
-                  {r.count > 1 && <span className="text-gray-600 dark:text-gray-400">{r.count}</span>}
+                  {r.count > 1 && (
+  <span className={`ml-1 font-bold ${
+    theme === 'romantic' ? 'text-white' : 'text-gray-500'
+  }`}>
+    {r.count}
+  </span>
+)}
                 </button>
               ))}
             </div>
           )}
+        </div>
         </div>
         </div>
 
