@@ -306,14 +306,15 @@ async function handleCopy() {
         </div>
       )}
 
-        <div className={`flex items-end gap-1 w-full ${isOwn ? 'flex-row-reverse' : 'flex-row'}`}>
-  <div className={`relative flex flex-col ${isOwn ? 'items-end' : 'items-start'} max-w-[85%] md:max-w-[70%]`}>
-    <div className={`
-      px-4 py-2.5 shadow-sm transition-all duration-500 
+<div className={`flex items-end ${isOwn ? 'flex-row-reverse' : 'flex-row'} w-full`}>
+  <div className={`relative flex flex-col ${isOwn ? 'items-end' : 'items-start'} max-w-[85%] md:max-w-[70%] w-fit`}>
+  <div
+    className={`
+      px-4 py-2.5 shadow-sm transition-all
       ${getMessageClasses(isOwn)}
-      /* FIX: Prevents "aaaaa" from breaking the window */
       break-words [word-break:break-word] overflow-hidden
-    `}>
+    `}
+  >
       {message.type === 'image' && message.media_url ? (
   <div 
     className="-mx-5 -my-3 overflow-hidden rounded-[28px] relative transition-all duration-300 active:scale-95"
@@ -488,6 +489,7 @@ async function handleCopy() {
 
 {/* --- THE FIX: This is the div that was incorrectly closed inside the block above --- */}
 </div> 
+</div>
 
 {messageReactions.length > 0 && (
             <div className={`absolute -bottom-2 flex gap-1 flex-wrap ${isOwn ? 'right-2' : 'left-2'}`}>
@@ -508,24 +510,19 @@ async function handleCopy() {
             </div>
           )}
         </div>
+        </div>
 
-<div className={`flex items-center gap-1.5 mt-1 px-1 text-[10px] font-bold uppercase tracking-widest
+<div
+  className={`
+    flex items-center gap-1 mt-1 w-full
+    ${isOwn ? 'ml-auto flex-row-reverse' : 'mr-auto flex-row'}
     ${theme === 'romantic' ? 'text-[#FF69B4]/80' : 'text-gray-400'}
-    ${isOwn ? 'flex-row-reverse' : 'flex-row'}
-  `}>
-              <span className={`
-    ${theme === 'romantic' 
-      ? 'text-[#FF69B4]/80' 
-      : theme === 'dark' 
-        ? 'text-gray-500' 
-        : 'text-gray-400'}
-  `}>
+  `}
+>
+  <span className="text-[10px] font-bold">
     {formatTime(message.created_at)}
     {message.is_edited && ' • Edited'}
   </span>
-  {theme === 'romantic' && (
-    <Heart className="w-2 h-2 text-[#FF69B4]/40" fill="currentColor" />
-  )}
 
           <div className="relative opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity flex items-center gap-1">
             <button
@@ -638,8 +635,6 @@ async function handleCopy() {
             </div>
           </div>
         </div>
-      </div>
-    </div>
   {/* --- THIS PART STOPS THE FLASHING --- */}
       {isZoomed && message.media_url && (
   <div 
