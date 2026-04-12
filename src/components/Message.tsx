@@ -46,14 +46,17 @@ export function Message({ message, isOwn, showAvatar, reactions, theme, onDelete
   const audioRef = useRef<HTMLAudioElement>(null);
   const [waveform, setWaveform] = useState<number[]>([]);
   const [isZoomed, setIsZoomed] = useState(false);
+  const lastActionTime = useRef<number>(0);
 
   useEffect(() => {
+    let isMounted = true;
   if (message.type === 'voice' && message.media_url) {
     const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
     fetch(message.media_url)
       .then(response => response.arrayBuffer())
       .then(data => audioContext.decodeAudioData(data))
       .then(buffer => {
+        if (!isMounted) return;
         const rawData = buffer.getChannelData(0); // Get audio peaks
         const samples = 20; // Number of vertical lines
         const blockSize = Math.floor(rawData.length / samples);
@@ -79,7 +82,7 @@ useEffect(() => {
   return () => {
     if (unsubscribe) unsubscribe(); // Turn off the listener when message changes
   };
-}, [message.id]);
+}, [message.id, user?.id]);
 
   function formatStickyDate(dateString: string) {
   const date = new Date(dateString);
@@ -152,28 +155,70 @@ data.forEach((r) => {
 
 async function handleReaction(emoji: string) {
   if (!user) return;
+  
+  // Set the lock
+  lastActionTime.current = Date.now();
+
+  const previousReactions = [...dbReactions];
+  const previousMap = new Map(userReactionMap);
+
+  let newReactions = [...dbReactions];
+  const hadThisReaction = userReactionMap.get(emoji) === user.id;
+
+  // --- OPTIMISTIC UI LOGIC ---
+  if (hadThisReaction) {
+    const existingIndex = newReactions.findIndex(r => r.reaction === emoji);
+    if (existingIndex !== -1) {
+      if (newReactions[existingIndex].count > 1) {
+        newReactions[existingIndex] = { ...newReactions[existingIndex], count: newReactions[existingIndex].count - 1 };
+      } else {
+        newReactions = newReactions.filter(r => r.reaction !== emoji);
+      }
+    }
+    userReactionMap.delete(emoji);
+  } else {
+    // Clear old user reactions
+    userReactionMap.forEach((_, emo) => {
+      const idx = newReactions.findIndex(r => r.reaction === emo);
+      if (idx !== -1) {
+        if (newReactions[idx].count > 1) {
+          newReactions[idx] = { ...newReactions[idx], count: newReactions[idx].count - 1 };
+        } else {
+          newReactions = newReactions.filter(r => r.reaction !== emo);
+        }
+      }
+    });
+    // Add new one
+    const newIdx = newReactions.findIndex(r => r.reaction === emoji);
+    if (newIdx !== -1) {
+      newReactions[newIdx] = { ...newReactions[newIdx], count: newReactions[newIdx].count + 1 };
+    } else {
+      newReactions.push({ reaction: emoji, user_id: user.id, count: 1 });
+    }
+    userReactionMap.clear();
+    userReactionMap.set(emoji, user.id);
+  }
+
+  setDbReactions(newReactions);
+  setUserReactionMap(new Map(userReactionMap));
+  setShowReactions(false);
 
   try {
-    // 1. Check for ANY existing reaction from YOU on THIS message
+    // Fetch specifically to find the ID to delete
     const { data: existing } = await supabase
       .from('message_reactions')
-      .select('*')
+      .select('id, reaction')
       .eq('message_id', message.id)
       .eq('user_id', user.id);
 
-    // We look at the first one found
-    const prev = existing?.[0];
-
-    if (prev) {
-      // 2. If you already have a reaction, we delete it (Clean Slate)
-      await supabase
-        .from('message_reactions')
-        .delete()
-        .eq('id', prev.id);
-
-      // 3. If the emoji you just clicked is DIFFERENT than your old one, 
-      // we insert the new one. (If it's the SAME, it stays deleted, acting as a toggle).
-      if (prev.reaction !== emoji) {
+    if (existing && existing.length > 0) {
+      // Use Promise.all to ensure all previous reactions are cleared
+      await Promise.all(existing.map(r => 
+        supabase.from('message_reactions').delete().eq('id', r.id)
+      ));
+      
+      // Only insert if the emoji is different from what we just deleted
+      if (existing[0].reaction !== emoji) {
         await supabase.from('message_reactions').insert({
           message_id: message.id,
           user_id: user.id,
@@ -181,19 +226,16 @@ async function handleReaction(emoji: string) {
         });
       }
     } else {
-      // 4. If you had no reaction at all, just insert the new one normally
       await supabase.from('message_reactions').insert({
         message_id: message.id,
         user_id: user.id,
         reaction: emoji,
       });
     }
-
-    // Close picker and refresh UI
-    setShowReactions(false);
-    loadReactions(); 
   } catch (error) {
-    console.error('Error handling reaction:', error);
+    console.error('Error:', error);
+    setDbReactions(previousReactions);
+    setUserReactionMap(previousMap);
   }
 }
 
@@ -509,30 +551,34 @@ async function handleCopy() {
 {/* --- THE FIX: This is the div that was incorrectly closed inside the block above --- */}
 </div> 
 
+{/* Around Line 206 in your JSX */}
 {dbReactions.length > 0 && (
-            <div className={`absolute -bottom-2 flex gap-1 flex-wrap ${isOwn ? 'right-2' : 'left-2'}`}>
-              {dbReactions.map((r) => (
-                <button
-                  key={r.reaction}
-                  onClick={() => handleReaction(r.reaction)}
-                  className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold transition-all shadow-sm border ${
-                    userReactionMap.get(r.reaction) === user?.id
-                      ? (theme === 'romantic' ? 'bg-[#FF69B4] text-white border-[#FF1493]' : 'bg-pink-100 dark:bg-pink-900/30 border border-pink-300 dark:border-pink-700')
-                      : (theme === 'romantic' ? 'bg-[#FFF0F5] border-[#FFB6C1] text-[#8B004B]' : 'bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700')
-                  }`}
-                >
-                  <span>{r.reaction}</span>
-                  {r.count > 1 && (
-  <span className={`ml-1 font-bold ${
-    theme === 'romantic' ? 'text-white' : 'text-gray-500'
-  }`}>
-    {r.count}
-  </span>
+  <div className={`
+    absolute -bottom-4 flex flex-row flex-nowrap gap-1 z-20 
+    ${isOwn ? 'right-2' : 'left-2'}
+    /* Sweet Entry Animation */
+    animate-in fade-in zoom-in-50 duration-500 ease-out
+  `}>
+    {dbReactions.map((r) => (
+      <button
+        key={r.reaction}
+        onClick={() => handleReaction(r.reaction)}
+        className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-bold transition-all shadow-md border whitespace-nowrap ${
+          userReactionMap.get(r.reaction) === user?.id
+            ? (theme === 'romantic' ? 'bg-[#FF69B4] text-white border-[#FF1493] scale-105' : 'bg-pink-100 dark:bg-pink-900/30 border-pink-300')
+            : (theme === 'romantic' ? 'bg-white border-[#FFB6C1] text-[#8B004B]' : 'bg-white dark:bg-gray-800 border-gray-200')
+        }`}
+      >
+        <span>{r.reaction}</span>
+        {r.count > 1 && (
+          <span className={`font-black ${theme === 'romantic' ? 'text-white/90' : 'text-gray-500'}`}>
+            {r.count}
+          </span>
+        )}
+      </button>
+    ))}
+  </div>
 )}
-                </button>
-              ))}
-            </div>
-          )}
         </div>
         </div>
         </div>
@@ -550,12 +596,16 @@ async function handleCopy() {
   </span>
 
           <div className="relative opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity flex items-center gap-1">
-            <button
-              onClick={() => setShowReactions(!showReactions)}
-              className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full transition-colors"
-            >
-              <Heart className="w-4 h-4 text-gray-600 dark:text-gray-400" />
-            </button>
+<button
+  onClick={() => setShowReactions(!showReactions)}
+  className={`p-1.5 rounded-full border-2 transition-all duration-300 ${
+    theme === 'romantic' 
+      ? 'border-[#FFB6C1] text-[#FF69B4] hover:bg-pink-50 hover:scale-110' 
+      : 'border-gray-200 text-gray-600 dark:border-gray-700 dark:text-gray-400 hover:bg-gray-100'
+  }`}
+>
+  <Heart className="w-3.5 h-3.5" />
+</button>
 
             {showReactions && (
               <>
@@ -579,22 +629,25 @@ async function handleCopy() {
             )}
 
             <div className="relative">
-              <button
-                onClick={(e) => {
-                  const rect = e.currentTarget.getBoundingClientRect();
-                  const windowHeight = window.innerHeight;
-                  // If less than 250px space below, flip it UP
-                  if (windowHeight - rect.bottom < 250) {
-                    setMenuDirection('up');
-                  } else {
-                    setMenuDirection('down');
-                  }
-                  setShowMenu(!showMenu);
-                }}
-                className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full transition-colors"
-              >
-                <MoreVertical className="w-4 h-4 text-gray-600 dark:text-gray-400" />
-              </button>
+<button
+  onClick={(e) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const windowHeight = window.innerHeight;
+    if (windowHeight - rect.bottom < 250) {
+      setMenuDirection('up');
+    } else {
+      setMenuDirection('down');
+    }
+    setShowMenu(!showMenu);
+  }}
+  className={`p-1.5 rounded-full border-2 transition-all duration-300 ${
+    theme === 'romantic' 
+      ? 'border-[#FFB6C1] text-[#FF69B4] hover:bg-pink-50 hover:scale-110' 
+      : 'border-gray-200 text-gray-600 dark:border-gray-700 dark:text-gray-400 hover:bg-gray-100'
+  }`}
+>
+  <MoreVertical className="w-3.5 h-3.5" />
+</button>
 
               {showMenu && (
                 <>
