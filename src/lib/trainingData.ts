@@ -1,6 +1,22 @@
+// 1. Manual "Gold Standard" phrases. 
+// These will always have high priority in your predictions.
+export const ROMANTIC_GOLD_STANDARD = [
+  "i love you so much",
+  "you are my favorite person",
+  "thinking of you always",
+  "can't wait to see you",
+  "you make me so happy",
+  "good morning beautiful",
+  "sweet dreams my love",
+  "i miss you",
+  "you are amazing",
+  "have a wonderful day"
+];
+
+// 2. The function to fetch the "Big Brain" data from the web
 export const fetchOriginalData = async () => {
   try {
-    // We add a CORS proxy prefix to bypass the browser block
+    // Using a proxy to avoid the CORS errors you saw in the console earlier
     const proxyUrl = "https://corsproxy.io/?";
     const targetUrl = "https://www.gutenberg.org/cache/epub/1342/pg1342.txt";
     
@@ -10,50 +26,13 @@ export const fetchOriginalData = async () => {
     
     const text = await response.text();
     
-    // Clean and split the text into words
+    // Clean the text: lowercase, remove punctuation, split into words
     return text.toLowerCase()
-      .replace(/[^\w\s]/g, "") 
+      .replace(/[^\w\s]|_/g, "") 
       .split(/\s+/)
       .filter(word => word.length > 2); 
   } catch (error) {
     console.error("Failed to fetch professional web data:", error);
     return [];
   }
-};
-
-export const ROMANTIC_GOLD_STANDARD = [
-  "I love you so much",
-  "You are my everything",
-  "Can't wait to see you",
-  "You look beautiful today",
-  "I am thinking about you",
-  "Good morning sunshine",
-  "Sweet dreams my love",
-  "You make me so happy",
-  "I miss your smile",
-  "Forever and always",
-  "You are the best thing that ever happened to me"
-];
-
-export const COMMON_TYPOS: Record<string, string> = {
-  // Common Slang/Shortcuts
-  "u": "you",
-  "r": "are",
-  "n": "and",
-  "y": "why",
-  "k": "okay",
-  "omw": "on my way",
-  
-  // Common Romantic Typos
-  "lov": "love",
-  "lvoe": "love",
-  "beautifull": "beautiful",
-  "tomm": "tomorrow",
-  "tmr": "tomorrow",
-  "mornin": "morning",
-  "nigh": "night",
-  "realy": "really",
-  "hapy": "happy",
-  "missu": "miss you",
-  "ily": "i love you"
 };

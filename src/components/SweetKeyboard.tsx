@@ -1,6 +1,5 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import { Paperclip, Delete, Heart, ImageIcon, MapPin, FileText, ArrowUpCircle, Clipboard, Video } from 'lucide-react';
-import { COMMON_TYPOS, fetchOriginalData } from '../lib/trainingData';
 
 interface SweetKeyboardProps {
   onInput: (char: string | File | Blob) => void;
@@ -8,20 +7,13 @@ interface SweetKeyboardProps {
   onSend: () => void;
   newMessage: string;
   onDocsClick: () => void;
-  romanticFeatures: PredictionMap;
-  onLearn: (newFeatures: PredictionMap) => void;
 }
 
-interface PredictionMap {
-  [key: string]: { [nextWord: string]: number };
-}
-
-export const SweetKeyboard = ({ onInput, onDelete, onSend, newMessage, onDocsClick, romanticFeatures, onLearn }: SweetKeyboardProps) => {
+export const SweetKeyboard = ({ onInput, onDelete, onSend, onDocsClick }: SweetKeyboardProps) => {
   const [isCaps, setIsCaps] = useState(false);
   const [showSymbols, setShowSymbols] = useState(false);
   const [showMediaBar, setShowMediaBar] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [predictions, setPredictions] = useState<string[]>([]);
 
   const handleKey = (key: string) => {
     onInput(isCaps ? key.toUpperCase() : key.toLowerCase());
@@ -43,75 +35,6 @@ export const SweetKeyboard = ({ onInput, onDelete, onSend, newMessage, onDocsCli
   const rows = showSymbols 
     ? [['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'], ['-', '/', ':', ';', '(', ')', '$', '&', '@', '"'], ['.', ',', '?', '!', "'"]]
     : [['Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P'], ['A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L'], ['Z', 'X', 'C', 'V', 'B', 'N', 'M']];
-
-    const cleanWord = (word: string): string => {
-  return word
-    .toLowerCase()               // Standardize to lowercase
-    .trim()                      // Remove surrounding spaces
-    .replace(/[^\w\s]|_/g, "")   // Remove punctuation (keep only letters/numbers)
-    .replace(/\s+/g, " ");       // Collapse multiple spaces into one
-};
-
-useEffect(() => {
-  const initProfessionalBrain = async () => {
-    // Only fetch if the brain is practically empty
-    if (Object.keys(romanticFeatures).length < 5) {
-      const webWords = await fetchOriginalData();
-      
-      if (webWords.length > 0) {
-        const newFeatures = { ...romanticFeatures };
-
-        for (let i = 0; i < webWords.length - 1; i++) {
-  const current = webWords[i];
-  const next = webWords[i + 1];
-  
-  if (!newFeatures[current]) newFeatures[current] = {};
-  
-  // Give online data a baseline weight (e.g., 2) 
-  // so it's stronger than a single accidental typo
-  newFeatures[current][next] = (newFeatures[current][next] || 0) + 2; 
-}
-        
-        // IMPORTANT: Tell the parent (ChatWindow) to save the new brain
-        if (onLearn) onLearn(newFeatures);
-      }
-    }
-  };
-  initProfessionalBrain();
-}, []);
-
-  // Add this effect to handle the "Learning/Matching" logic
-useEffect(() => {
-  const words = newMessage.trim().split(/\s+/);
-  if (words.length < 1 || newMessage === "") {
-    setPredictions([]);
-    return;
-  }
-
-  const lastWord = cleanWord(words[words.length - 1]);
-  const secondToLastWord = words.length > 1 ? cleanWord(words[words.length - 2]) : null;
-
-  // If we have a previous word, look up smart predictions from our Feature Map
-  if (secondToLastWord && romanticFeatures[secondToLastWord]) {
-    const suggestions = Object.keys(romanticFeatures[secondToLastWord])
-      .sort((a, b) => romanticFeatures[secondToLastWord][b] - romanticFeatures[secondToLastWord][a])
-      .slice(0, 3);
-    
-    setPredictions(suggestions.map(s => s.toUpperCase()));
-  } else {
-    // Fallback to our Step 1/2 typo and default logic
-    if (COMMON_TYPOS[lastWord]) {
-      setPredictions([COMMON_TYPOS[lastWord].toUpperCase(), "❤️", "✨"]);
-    } else {
-      setPredictions(["LOVE", "YOU", "SWEET"]);
-    }
-  }
-}, [newMessage, romanticFeatures]);
-
-const handlePredictionClick = (word: string) => {
-  // This sends the selected word back to the main chat input
-  onInput('SELECT_PREDICTION:' + word);
-};
 
   return (
     <div className="w-full bg-[#FFE4E1]/90 backdrop-blur-2xl border-t border-[#FFB6C1] p-2 pb-6 select-none">
@@ -157,30 +80,10 @@ const handlePredictionClick = (word: string) => {
 
           </div>
         ) : (
-          <div className="flex items-center justify-center w-full h-full">
-      {/* CONDITION: 
-          If newMessage has text AND we have predictions, show buttons.
-          Otherwise, show the default SWEET MESSAGES text.
-      */}
-      {newMessage.length > 0 && predictions.length > 0 ? (
-        <div className="flex gap-2 w-full justify-around items-center animate-in fade-in zoom-in-95 duration-300">
-          {predictions.map((word, i) => (
-            <button
-              key={i}
-              onClick={() => handlePredictionClick(word)}
-              className="px-4 py-1.5 bg-white/60 rounded-lg text-[#8B004B] text-[11px] font-bold shadow-sm active:scale-95 transition-all border border-pink-200/50"
-            >
-              {word.toUpperCase()}
-            </button>
-          ))}
-        </div>
-      ) : (
-        <div className="flex gap-4 text-[#8B004B]/40 text-[10px] font-bold tracking-[0.2em] animate-in fade-in duration-500">
+          <div className="flex gap-4 text-[#8B004B]/40 text-[10px] font-bold tracking-[0.2em]">
           <span>SWEET</span>
           <Heart className="w-3 h-3 fill-current opacity-30" />
           <span>MESSAGES</span>
-        </div>
-      )}
     </div>
   )}
 </div>

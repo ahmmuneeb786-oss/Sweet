@@ -13,10 +13,6 @@ interface ChatWindowProps {
   onBack?: () => void;
 }
 
-interface PredictionMap {
-  [key: string]: { [nextWord: string]: number };
-}
-
 interface MessageType {
   id: string;
   chat_id: string;
@@ -84,20 +80,6 @@ export function ChatWindow({ chatId, theme, onBack }: ChatWindowProps) {
   const [showLocationPicker, setShowLocationPicker] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedDoc, setSelectedDoc] = useState<File | null>(null);
-
-const [romanticFeatures, setRomanticFeatures] = useState<PredictionMap>(() => {
-  const saved = localStorage.getItem(`romance_brain_${user?.id}`);
-  return saved ? JSON.parse(saved) : {
-    "i": { "love": 10, "miss": 5 },
-    "good": { "morning": 8, "night": 7 }
-  };
-});
-
-useEffect(() => {
-  if (romanticFeatures && Object.keys(romanticFeatures).length > 3) {
-    localStorage.setItem(`romance_brain_${user?.id}`, JSON.stringify(romanticFeatures));
-  }
-}, [romanticFeatures, user?.id]);
 
   useEffect(() => {
   if (chatId && user) {
@@ -404,18 +386,6 @@ async function uploadImage(file: File): Promise<string | null> {
 
   async function handleSendMessage(e: React.FormEvent | React.KeyboardEvent, doc?: File) {
   e.preventDefault();
-
-  if (newMessage.trim()) {
-    const words = newMessage.toLowerCase().split(/\s+/).filter(w => w.length > 0);
-    const updatedFeatures = { ...romanticFeatures };
-    for (let i = 0; i < words.length - 1; i++) {
-      const current = words[i];
-      const next = words[i + 1];
-      if (!updatedFeatures[current]) updatedFeatures[current] = {};
-      updatedFeatures[current][next] = (updatedFeatures[current][next] || 0) + 1;
-    }
-    setRomanticFeatures(updatedFeatures);
-  }
   
   // 1. New Validation: Allow if there is text OR a selected file
   const messageContent = newMessage.trim();
@@ -1297,8 +1267,6 @@ const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     {showSweetKeyboard && (
   <SweetKeyboard 
     newMessage={newMessage}
-    romanticFeatures={romanticFeatures}
-    onLearn={(updatedBrain) => setRomanticFeatures(updatedBrain)}
     onDocsClick={() => fileInputRef.current?.click()}
     onInput={(input: any) => {
 
