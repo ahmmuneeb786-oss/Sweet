@@ -6,6 +6,7 @@ import { supabase } from '../lib/supabase';
 import { Message } from './Message';
 import { ChatMenu } from './ChatMenu';
 import { SweetKeyboard } from './SweetKeyboard';
+import { learnFromMessage } from '../predictionService';
 
 interface ChatWindowProps {
   chatId: string;
@@ -60,7 +61,6 @@ export function ChatWindow({ chatId, theme, onBack }: ChatWindowProps) {
   const [sendingMessages, setSendingMessages] = useState<Set<string>>(new Set());
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const [isOtherUserOnline, setIsOtherUserOnline] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -92,6 +92,42 @@ export function ChatWindow({ chatId, theme, onBack }: ChatWindowProps) {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+useEffect(() => {
+  if (!chatInfo?.otherUser?.id) return;
+
+  // Listen for changes specifically to the other user's profile row
+  const profileSubscription = supabase
+    .channel(`header-status-${chatInfo.otherUser.id}`)
+    .on(
+      'postgres_changes',
+      {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'profiles',
+        filter: `id=eq.${chatInfo.otherUser.id}`,
+      },
+      (payload) => {
+        // When the database changes, update our local chatInfo state
+        setChatInfo((prev) => {
+          if (!prev || !prev.otherUser) return prev;
+          return {
+            ...prev,
+            otherUser: {
+              ...prev.otherUser,
+              is_online: payload.new.is_online,
+              last_seen: payload.new.last_seen,
+            },
+          };
+        });
+      }
+    )
+    .subscribe();
+
+  return () => {
+    supabase.removeChannel(profileSubscription);
+  };
+}, [chatInfo?.otherUser?.id]);
 
 // Inside ChatWindow.tsx
 useEffect(() => {
@@ -389,6 +425,9 @@ async function uploadImage(file: File): Promise<string | null> {
   
   // 1. New Validation: Allow if there is text OR a selected file
   const messageContent = newMessage.trim();
+  if (messageContent) {
+    learnFromMessage(messageContent);
+  }
   if ((!messageContent && !selectedFile && !audioBlob && !selectedVideo&& !selectedDoc) || !user || !chatInfo) return;
   const videoToUpload = selectedVideo; // Grab the video
   const videoUrlPreview = videoPreview;
@@ -507,51 +546,9 @@ async function uploadImage(file: File): Promise<string | null> {
   }
 }
 
-function subscribeToOnlineStatus() {
-  if (!chatInfo?.otherUser?.id || !user) return;
-
-  const otherUserId = chatInfo.otherUser.id;
-  
-  // We use a specific channel name for this chat room
-  const channel = supabase.channel(`presence:${chatInfo.id}`, {
-    config: {
-      presence: {
-        key: user.id,
-      },
-    },
-  });
-
-  channel
-    .on('presence', { event: 'sync' }, () => {
-      const state = channel.presenceState();
-      
-      // Check if the other user's ID exists anywhere in the presence state
-      const userIsPresent = Object.values(state)
-        .flat()
-        .some((presence: any) => presence.user_id === otherUserId);
-      
-      console.log("Is other user here?", userIsPresent);
-      setIsOtherUserOnline(userIsPresent);
-    })
-    .subscribe(async (status) => {
-      if (status === 'SUBSCRIBED') {
-        // You MUST track yourself for the channel to stay active/synced
-        await channel.track({
-          user_id: user.id,
-          online_at: new Date().toISOString(),
-        });
-      }
-    });
-
-  return () => {
-    supabase.removeChannel(channel);
-  };
-}
-
 useEffect(() => {
   let messageUnsubscribe: (() => void) | undefined;
   let typingUnsubscribe: (() => void) | undefined;
-  let onlineStatusUnsubscribe: (() => void) | undefined;
 
   if (chatInfo?.id) {
     loadMessages();
@@ -559,13 +556,11 @@ useEffect(() => {
     
     messageUnsubscribe = subscribeToMessages();
     typingUnsubscribe = subscribeToTyping();
-    onlineStatusUnsubscribe = subscribeToOnlineStatus();
   }
 
   return () => {
     if (messageUnsubscribe) messageUnsubscribe();
     if (typingUnsubscribe) typingUnsubscribe();
-    if (onlineStatusUnsubscribe) onlineStatusUnsubscribe();
   };
 }, [chatInfo?.id, chatInfo?.otherUser?.id]);
 
@@ -629,19 +624,6 @@ useEffect(() => {
     payload: { userId: user.id },
   });
 }
-
-useEffect(() => {
-  const handleVisibilityChange = () => {
-    if (document.visibilityState === 'visible') {
-      // When user comes back to the tab, we re-sync presence
-      // This forces the "Last seen" to update immediately
-      supabase.getChannels().forEach(ch => ch.track({ updated_at: Date.now() }));
-    }
-  };
-
-  document.addEventListener('visibilitychange', handleVisibilityChange);
-  return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-}, []);
 
   function scrollToBottom() { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }
 
@@ -881,7 +863,7 @@ const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
                       {chatInfo.otherUser.display_name[0]}
                     </div>
                   )}
-                  {isOtherUserOnline && (
+                  {chatInfo.otherUser?.is_online && (
                     <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white rounded-full" />
                   )}
                 </div>
@@ -890,7 +872,7 @@ const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
                     {chatInfo.otherUser.display_name}
                   </h2>
                   <p className="text-[10px] md:text-xs text-white/80 font-medium">
-                    {isOtherUserOnline
+                    {chatInfo.otherUser?.is_online
                       ? 'Online'
                       : `Last seen ${formatLastSeen(chatInfo.otherUser?.last_seen || new Date().toISOString())}`}
                   </p>
@@ -1269,16 +1251,18 @@ const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     newMessage={newMessage}
     onDocsClick={() => fileInputRef.current?.click()}
     onInput={(input: any) => {
-
-      if (typeof input === 'string' && input.startsWith('SELECT_PREDICTION:')) {
-    const word = input.split(':')[1];
-    const words = newMessage.trim().split(/\s+/);
     
-    // Replace the last partial word with the clean prediction
-    words[words.length - 1] = word.toLowerCase();
-    setNewMessage(words.join(' ') + ' '); // Join back and add a space
-    return;
-  }
+      if (typeof input === 'string' && input.startsWith('REPLACE_WORD:')) {
+      const suggestedWord = input.split(':')[1];
+      
+      setNewMessage((prev) => {
+        // Split text into words, remove the unfinished one, add the smart one
+        const words = prev.endsWith(' ') ? prev.split(' ') : prev.trim().split(' ');
+        words.pop(); 
+        return [...words, suggestedWord].join(' ') + ' ';
+      });
+      return; // Stop here so it doesn't try to run the code below
+    }
 
       if (input === 'LOCATION_START') {
         shareLocation();
@@ -1312,6 +1296,7 @@ const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 150)}px`;
       }
     }}
+    
     onDelete={() => {
       setNewMessage(prev => prev.slice(0, -1));
       if (newMessage.length <= 1 && textareaRef.current) {

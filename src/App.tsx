@@ -2,12 +2,18 @@ import { useState, useEffect } from 'react'; // final build attempt 1
 import { useAuth, AuthProvider } from './contexts/AuthContext';
 import { Auth } from './pages/Auth';
 import { Dashboard } from './pages/Dashboard';
+import { initializeDictionary } from './predictionService';
 
 function AppContent() {
   const { user, loading } = useAuth();
 
   // Theme state: 'light', 'dark', or 'romantic'
   const [theme, setTheme] = useState<'light' | 'dark' | 'romantic'>('light');
+
+  useEffect(() => {
+    // This wakes up the dictionary when the app first loads
+    initializeDictionary();
+  }, []);
 
   // Load saved theme from localStorage on mount
   useEffect(() => {

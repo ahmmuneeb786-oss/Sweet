@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Search, MoreVertical, MessageSquarePlus, Users, User as UserIcon, Settings, Lock, LogOut, Heart } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
+import { useOnlineUsers } from '../hooks/useUserPresence';
 
 interface Chat {
   id: string;
@@ -14,6 +15,7 @@ interface Chat {
     created_at: string;
   };
   otherUser?: {
+    id: string;
     display_name: string;
     avatar_url: string | null;
     is_online: boolean;
@@ -36,6 +38,7 @@ export function ChatList({ selectedChatId, onSelectChat, onShowProfile, onShowFr
   const [searchQuery, setSearchQuery] = useState('');
   const [showMenu, setShowMenu] = useState(false);
   const [loading, setLoading] = useState(true);
+  const onlineUserIds = useOnlineUsers();
 
   useEffect(() => {
     if (user) {
@@ -44,97 +47,132 @@ export function ChatList({ selectedChatId, onSelectChat, onShowProfile, onShowFr
     }
   }, [user]);
 
-  async function loadChats() {
-    if (!user) return;
-
-    try {
-      const { data: participants } = await supabase
-        .from('chat_participants')
-        .select(`
-          chat_id,
-          chats (
-            id,
-            type,
-            name,
-            avatar_url,
-            theme,
-            created_at
-          )
-        `)
-        .eq('user_id', user.id)
-        .is('left_at', null);
-
-      if (!participants) return;
-
-      const chatIds = participants.map(p => p.chat_id);
-
-      const { data: messages } = await supabase
-        .from('messages')
-        .select('chat_id, content, created_at')
-        .in('chat_id', chatIds)
-        .order('created_at', { ascending: false });
-
-      const chatMap = new Map();
-      participants.forEach(p => {
-        const chat = (p as any).chats;
-        if (chat) {
-          chatMap.set(chat.id, {
-            ...chat,
-            lastMessage: messages?.find(m => m.chat_id === chat.id)
-          });
-        }
-      });
-
-      for (const [chatId, chat] of chatMap.entries()) {
-        if (chat.type === 'direct') {
-          const { data: otherParticipant } = await supabase
-            .from('chat_participants')
-            .select(`
-              user_id,
-              profiles (
-                display_name,
-                avatar_url,
-                is_online
-              )
-            `)
-            .eq('chat_id', chatId)
-            .neq('user_id', user.id)
-            .maybeSingle();
-
-          if (otherParticipant) {
-            chat.otherUser = (otherParticipant as any).profiles;
-          }
-        }
-      }
-
-      setChats(Array.from(chatMap.values()));
-    } catch (error) {
-      console.error('Error loading chats:', error);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  function subscribeToChats() {
+  useEffect(() => {
     const channel = supabase
-      .channel('chats-changes')
+      .channel('sidebar-sync')
       .on(
         'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'messages'
-        },
-        () => {
-          loadChats();
-        }
+        { event: 'INSERT', schema: 'public', table: 'messages' },
+        () => loadChats()
       )
       .subscribe();
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    return () => { supabase.removeChannel(channel); };
+  }, []);
+
+async function loadChats() {
+  if (!user) return;
+
+  try {
+    setLoading(true);
+    // 1. Fetch participants and the associated chat data
+    const { data: participants, error: pError } = await supabase
+      .from('chat_participants')
+      .select(`
+        chat_id,
+        chats:chat_id (
+          id,
+          type,
+          name,
+          avatar_url,
+          theme,
+          created_at
+        )
+      `)
+      .eq('user_id', user.id)
+      .is('left_at', null);
+
+    if (pError) {
+      console.error('Supabase Error:', pError.message);
+      return;
+    }
+
+    if (!participants || participants.length === 0) {
+      setChats([]);
+      return;
+    }
+
+    const chatIds = participants.map(p => p.chat_id);
+
+    // 2. Get latest messages for these chats
+    const { data: messages } = await supabase
+      .from('messages')
+      .select('chat_id, content, created_at')
+      .in('chat_id', chatIds)
+      .order('created_at', { ascending: false });
+
+    const chatMap = new Map();
+    
+    participants.forEach(p => {
+      // Use the 'chats' property from the join
+      const chatData = Array.isArray(p.chats) ? p.chats[0] : p.chats;
+      
+      if (chatData) {
+        chatMap.set(p.chat_id, {
+          ...chatData,
+          lastMessage: messages?.find(m => m.chat_id === p.chat_id)
+        });
+      }
+    });
+
+    // 3. Fetch profiles for Direct Messages
+    for (const [chatId, chat] of chatMap.entries()) {
+      if (chat.type === 'direct') {
+        const { data: otherParticipant } = await supabase
+          .from('chat_participants')
+          .select(`
+            profiles:user_id (
+              id,
+              display_name,
+              avatar_url,
+              is_online
+            )
+          `)
+          .eq('chat_id', chatId)
+          .neq('user_id', user.id)
+          .maybeSingle();
+
+        if (otherParticipant && otherParticipant.profiles) {
+          chat.otherUser = Array.isArray(otherParticipant.profiles) 
+            ? otherParticipant.profiles[0] 
+            : otherParticipant.profiles;
+        }
+      }
+    }
+
+    setChats(Array.from(chatMap.values()));
+  } catch (error) {
+    console.error('Logic Error loading chats:', error);
+  } finally {
+    setLoading(false);
   }
+}
+
+function subscribeToChats() {
+  const channel = supabase
+    .channel('sidebar-global-v2')
+    .on(
+      'postgres_changes',
+      { event: 'INSERT', schema: 'public', table: 'messages' },
+      () => {
+        console.log("New message! Updating sidebar...");
+        loadChats(); // Triggers instant preview update
+      }
+    )
+    .on(
+      'postgres_changes',
+      { event: 'UPDATE', schema: 'public', table: 'profiles' },
+      () => {
+        console.log("Profile changed! Updating online dots...");
+        loadChats(); // Triggers instant online/offline dot change
+      }
+    )
+    .subscribe();
+
+  return () => {
+    supabase.removeChannel(channel);
+  };
+}
 
   const filteredChats = chats.filter(chat => {
     const chatName = chat.type === 'direct'
@@ -170,13 +208,7 @@ export function ChatList({ selectedChatId, onSelectChat, onShowProfile, onShowFr
   }
 
   return (
-    <div className={`w-full md:w-96 h-full flex flex-col transition-colors duration-300 md:border-r ${
-  theme === 'dark' 
-    ? 'bg-gray-900 border-gray-700' 
-    : theme === 'romantic' 
-    ? 'bg-[#FFF0F5] border-[#FFB6C1]' 
-    : 'bg-white border-gray-200'
-}`}>
+    <div className={`p-4 border-b sticky top-0 z-10 ${theme === 'romantic' ? 'bg-[#FFF0F5] border-[#FFB6C1]' : 'bg-white dark:bg-gray-900 border-gray-200'}`}>
       <div className={`p-4 border-b ${theme === 'romantic' ? 'border-[#FFB6C1]' : 'border-gray-200 dark:border-gray-700'}`}>
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
@@ -269,20 +301,20 @@ export function ChatList({ selectedChatId, onSelectChat, onShowProfile, onShowFr
           </div>
         </div>
 
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Search chats..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className={`w-full pl-10 pr-4 py-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-pink-500 transition-colors ${
-  theme === 'romantic'
-    ? 'bg-white border-[#FFB6C1] text-[#4B004B] placeholder:text-[#8B004B]/50'
-    : 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white dark:placeholder-gray-400'
-}`}
-          />
-        </div>
+<div className="relative">
+  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+  <input
+    type="text"
+    placeholder="Search chats..."
+    value={searchQuery}
+    onChange={(e) => setSearchQuery(e.target.value)}
+    className={`w-full pl-10 pr-4 py-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-pink-500 transition-colors border ${
+      theme === 'romantic'
+        ? 'bg-white border-[#FFB6C1] text-[#4B004B] placeholder:text-[#8B004B]/50'
+        : 'bg-gray-100 dark:bg-gray-700 border-transparent text-gray-900 dark:text-white dark:placeholder-gray-400'
+    }`}
+  />
+</div>
 
         <div className="flex gap-2 mt-3">
           <button
@@ -321,7 +353,11 @@ export function ChatList({ selectedChatId, onSelectChat, onShowProfile, onShowFr
           </div>
         ) : (
           <div>
-            {filteredChats.map((chat) => (
+            {filteredChats.map((chat) => {
+              const isLiveOnline = chat.type === 'direct' && chat.otherUser 
+        ? onlineUserIds.has(chat.otherUser.id) // check the Set
+        : false;
+        return (
               <button
                 key={chat.id}
                 onClick={() => onSelectChat(chat.id)}
@@ -345,8 +381,8 @@ export function ChatList({ selectedChatId, onSelectChat, onShowProfile, onShowFr
                           {chat.otherUser.display_name[0]}
                         </div>
                       )}
-                      {chat.otherUser.is_online && (
-                        <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white rounded-full" />
+                      {(isLiveOnline || chat.otherUser.is_online) && (
+                       <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white rounded-full" />
                       )}
                     </>
                   ) : (
@@ -369,12 +405,13 @@ export function ChatList({ selectedChatId, onSelectChat, onShowProfile, onShowFr
                   </div>
                   {chat.lastMessage && (
                     <p className="text-sm text-gray-600 dark:text-gray-400 truncate">
-                      {chat.lastMessage.content}
-                    </p>
+                     {chat.lastMessage ? chat.lastMessage.content : "No messages yet... 👋"}
+                  </p>
                   )}
                 </div>
               </button>
-            ))}
+            );
+          })}
           </div>
         )}
       </div>
