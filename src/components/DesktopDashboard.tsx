@@ -8,11 +8,12 @@ import { CreateChat } from '../components/CreateChat';
 import { Settings } from '../pages/Settings';
 
 interface DashboardProps {
+  onOpenGifPanel: () => void;
   theme: 'light' | 'dark' | 'romantic';
   setTheme: React.Dispatch<React.SetStateAction<'light' | 'dark' | 'romantic'>>;
 }
 
-export function DesktopDashboard({ theme, setTheme }: DashboardProps) {
+export function DesktopDashboard({ theme, setTheme, onOpenGifPanel }: DashboardProps) {
   const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
   const [showProfile, setShowProfile] = useState(false);
   const [showFriends, setShowFriends] = useState(false);
@@ -62,7 +63,7 @@ export function DesktopDashboard({ theme, setTheme }: DashboardProps) {
 
       {/* Main chat window */}
       {selectedChatId ? (
-        <ChatWindow chatId={selectedChatId} theme={theme} />
+        <ChatWindow chatId={selectedChatId} theme={theme} onOpenGifPanel={onOpenGifPanel}/>
       ) : (
         <div
           className={`flex-1 flex items-center justify-center ${

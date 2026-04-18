@@ -7,13 +7,14 @@ interface SweetKeyboardProps {
   onDelete: () => void;
   onSend: () => void;
   newMessage: string;
+  onOpenGifPanel: () => void;
   onDocsClick: () => void;
 }
 
 type KeyboardMode = 'abc' | 'emoji' | 'gif';
 const EMOJIS = ['❤️', '✨', '🔥', '😂', '🥰', '😊', '😭', '💀', '🥺', '🙌', '👍', '🍦', '🌸', '🎀', '🍭', '🧸', '⚡', '💯', '👋', '🦄'];
 
-export const SweetKeyboard = ({ onInput, onDelete, onDocsClick, newMessage }: SweetKeyboardProps) => {
+export const SweetKeyboard = ({ onInput, onDelete, onDocsClick, newMessage, onOpenGifPanel }: SweetKeyboardProps) => {
   const [isCaps, setIsCaps] = useState(false);
   const [showSymbols, setShowSymbols] = useState(false);
   const [showMediaBar, setShowMediaBar] = useState(false);
@@ -227,11 +228,17 @@ export const SweetKeyboard = ({ onInput, onDelete, onDocsClick, newMessage }: Sw
         </button>
 
         <button 
-          onClick={() => setMode(mode === 'emoji' ? 'gif' : 'emoji')}
+          onClick={() => {
+          if (mode === 'emoji') {
+           onOpenGifPanel(); // Open the big professional panel
+         } else {
+           setMode('emoji'); // Standard emoji view
+         }
+         }}
           className="w-14 h-12 bg-gradient-to-tr from-pink-400 to-rose-500 rounded-2xl flex flex-col items-center justify-center text-white shadow-lg active:scale-95"
-        >
-          {mode === 'emoji' ? <span className="text-[10px] font-black">GIF</span> : <Smile className="w-6 h-6" />}
-        </button>
+       >
+  {mode === 'emoji' ? <span className="text-[10px] font-black">GIF</span> : <Smile className="w-6 h-6" />}
+</button>
       </div>
     </div>
   );

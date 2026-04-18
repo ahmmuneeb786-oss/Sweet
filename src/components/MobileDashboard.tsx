@@ -8,11 +8,12 @@ import { CreateChat } from './CreateChat';
 import { Settings } from '../pages/Settings';
 
 interface MobileDashboardProps {
+  onOpenGifPanel: () => void;
   theme: 'light' | 'dark' | 'romantic';
   setTheme: React.Dispatch<React.SetStateAction<'light' | 'dark' | 'romantic'>>;
 }
 
-export function MobileDashboard({ theme, setTheme }: MobileDashboardProps) {
+export function MobileDashboard({ theme, setTheme, onOpenGifPanel }: MobileDashboardProps) {
   const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
   const [showProfile, setShowProfile] = useState(false);
   const [showFriends, setShowFriends] = useState(false);
@@ -63,7 +64,7 @@ export function MobileDashboard({ theme, setTheme }: MobileDashboardProps) {
       {selectedChatId ? (
         <div className="flex flex-col h-full w-full animate-in slide-in-from-right duration-300">
           <div className="flex-1 overflow-hidden">
-            <ChatWindow chatId={selectedChatId} theme={theme} onBack={() => setSelectedChatId(null)}/>
+            <ChatWindow chatId={selectedChatId} theme={theme} onBack={() => setSelectedChatId(null)} onOpenGifPanel={onOpenGifPanel}/>
           </div>
         </div>
       ) : (

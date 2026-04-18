@@ -9,6 +9,7 @@ import { SweetKeyboard } from './SweetKeyboard';
 import { learnFromMessage } from '../predictionService';
 
 interface ChatWindowProps {
+  onOpenGifPanel: () => void;
   chatId: string;
   theme: 'light' | 'dark' | 'romantic';
   onBack?: () => void;
@@ -49,7 +50,7 @@ interface ChatInfo {
 
 const reactions = ['💖', '🥰', '😍', '💋', '😂'];
 
-export function ChatWindow({ chatId, theme, onBack }: ChatWindowProps) {
+export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel }: ChatWindowProps) {
   const { user } = useAuth();
   const [messages, setMessages] = useState<MessageType[]>([]);
   const [chatInfo, setChatInfo] = useState<ChatInfo | null>(null);
@@ -1249,6 +1250,7 @@ const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     {showSweetKeyboard && (
   <SweetKeyboard 
     newMessage={newMessage}
+    onOpenGifPanel={onOpenGifPanel}
     onDocsClick={() => fileInputRef.current?.click()}
     onInput={(input: any) => {
     
