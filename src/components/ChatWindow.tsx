@@ -7,9 +7,12 @@ import { Message } from './Message';
 import { ChatMenu } from './ChatMenu';
 import { SweetKeyboard } from './SweetKeyboard';
 import { learnFromMessage } from '../predictionService';
+import { GifItem } from '../App';
 
 interface ChatWindowProps {
   onOpenGifPanel: () => void;
+  myGifs: GifItem[];
+  setMyGifs: React.Dispatch<React.SetStateAction<GifItem[]>>;
   chatId: string;
   theme: 'light' | 'dark' | 'romantic';
   onBack?: () => void;
@@ -50,7 +53,7 @@ interface ChatInfo {
 
 const reactions = ['💖', '🥰', '😍', '💋', '😂'];
 
-export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel }: ChatWindowProps) {
+export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setMyGifs }: ChatWindowProps) {
   const { user } = useAuth();
   const [messages, setMessages] = useState<MessageType[]>([]);
   const [chatInfo, setChatInfo] = useState<ChatInfo | null>(null);
@@ -1250,6 +1253,8 @@ const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     {showSweetKeyboard && (
   <SweetKeyboard 
     newMessage={newMessage}
+    myGifs={myGifs}
+    setMyGifs={setMyGifs}
     onOpenGifPanel={onOpenGifPanel}
     onDocsClick={() => fileInputRef.current?.click()}
     onInput={(input: any) => {

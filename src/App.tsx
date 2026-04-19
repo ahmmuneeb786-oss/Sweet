@@ -3,47 +3,99 @@ import { useAuth, AuthProvider } from './contexts/AuthContext';
 import { Auth } from './pages/Auth';
 import { Dashboard } from './pages/Dashboard';
 import { initializeDictionary } from './predictionService';
-import { Heart, Paperclip, X } from 'lucide-react'; // Added X for the close button
+import { Heart, Paperclip, X, Search } from 'lucide-react'; 
+
+// Define the interface for our GIF objects
+export interface GifItem {
+  url: string;
+  packName: string;
+}
 
 function AppContent() {
   const { user, loading } = useAuth();
   
-  // --- THE BIG THREE STATES ---
+  // --- STATES ---
   const [showGifPanel, setShowGifPanel] = useState(false);
   const [gifSearch, setGifSearch] = useState('');
-  const [myGifs, setMyGifs] = useState<string[]>([]);
-
   const [theme, setTheme] = useState<'light' | 'dark' | 'romantic'>('light');
+  
+  // Updated storage to handle objects instead of just strings
+  const [myGifs, setMyGifs] = useState<GifItem[]>(() => {
+    const saved = localStorage.getItem('sweet_user_gifs');
+    if (!saved) return [];
+    const parsed = JSON.parse(saved);
+    // Migration logic: If old data was just strings, convert them to "Recent" objects
+    return parsed.map((item: any) => 
+      typeof item === 'string' ? { url: item, packName: 'Recent' } : item
+    );
+  });
 
+  const [previewGifs, setPreviewGifs] = useState<any[]>([]);
+  const [lastSearchQuery, setLastSearchQuery] = useState('');
+
+  // --- INITIALIZATION ---
   useEffect(() => {
     initializeDictionary();
-  }, []);
-
-  useEffect(() => {
     const savedTheme = localStorage.getItem('theme') as 'light' | 'dark' | 'romantic';
     if (savedTheme) setTheme(savedTheme);
   }, []);
+
+  // Persistence
+  useEffect(() => {
+    localStorage.setItem('sweet_user_gifs', JSON.stringify(myGifs));
+  }, [myGifs]);
 
   useEffect(() => {
     localStorage.setItem('theme', theme);
   }, [theme]);
 
-  const handleAddExternalPack = async (input: string) => {
-    if (!input) return;
-    if (input.startsWith('http')) {
-      try {
-        const response = await fetch(input);
-        const urls = await response.json(); 
-        setMyGifs((prev) => [...urls, ...prev]);
-      } catch (err) {
-        console.error("Failed to fetch pack link", err);
-      }
-    } else {
-      setGifSearch(input); 
-    }
+  // --- GIF LOGIC ---
+  
+  const handleAddFullPack = () => {
+    if (previewGifs.length === 0) return;
+
+    // Use the last search term or "Imported Pack" as the heading
+    const packName = lastSearchQuery || "Imported Pack";
+
+    const newGifs: GifItem[] = previewGifs.map(gif => ({
+      url: gif.images?.fixed_height?.url || gif,
+      packName: packName
+    }));
+
+    setMyGifs(prev => {
+      const existingUrls = prev.map(g => g.url);
+      const uniqueNewGifs = newGifs.filter(g => !existingUrls.includes(g.url));
+      return [...uniqueNewGifs, ...prev];
+    });
+
+    alert(`Added "${packName}" pack to your library!`);
   };
 
-  // 1. Loading State
+const handleGifAction = async (input: string) => {
+  if (!input.trim()) return;
+
+  const isUrl = input.match(/\.(jpeg|jpg|gif|png|webp)$/i) || input.includes('giphy.com/media');
+
+  if (isUrl) {
+    // For direct links, "Recent" is fine as a default
+    setMyGifs(prev => [{ url: input, packName: 'Recent' }, ...prev]);
+    setGifSearch('');
+  } else {
+    const API_KEY = 'JX6l9HNPFvbDyvn5Uazj0xboLaLtd2ev';
+    const url = `https://api.giphy.com/v1/gifs/search?api_key=${API_KEY}&q=${encodeURIComponent(input)}&limit=20&rating=g`;
+    
+    try {
+      const res = await fetch(url);
+      const { data } = await res.json();
+      setPreviewGifs(data || []);
+      // STICKY FIX: Save the search term so handleAddFullPack can use it!
+      setLastSearchQuery(input); 
+    } catch (err) {
+      console.error("Fetch failed", err);
+    }
+  }
+};
+
   if (loading) {
     return (
       <div className={theme === 'dark' ? 'dark' : ''}>
@@ -51,7 +103,7 @@ function AppContent() {
           theme === 'romantic' ? 'bg-[#FFE4E1]' : 'bg-gradient-to-br from-pink-50 via-purple-50 to-blue-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-700'
         }`}>
           <div className="text-center space-y-4">
-            <div className={`w-16 h-16 border-4 border-pink-500 border-t-transparent rounded-full animate-spin mx-auto`} />
+            <div className="w-16 h-16 border-4 border-pink-500 border-t-transparent rounded-full animate-spin mx-auto" />
             <p className="font-medium text-gray-600">Loading Sweet...</p>
           </div>
         </div>
@@ -59,7 +111,6 @@ function AppContent() {
     );
   }
 
-  // 2. Auth State
   if (!user) {
     return (
       <div className={theme === 'dark' ? 'dark' : ''}>
@@ -70,27 +121,24 @@ function AppContent() {
     );
   }
 
-  // 3. Main App State
   return (
     <div className={theme === 'dark' ? 'dark' : theme === 'romantic' ? 'romantic-theme' : ''}>
       <div className={`min-h-screen transition-colors duration-300 ${
         theme === 'dark' ? 'bg-gray-900 text-white' : theme === 'romantic' ? 'bg-[#FFE4E1] text-[#4B004B]' : 'bg-gray-50 text-gray-900'
       }`}>
         
-        {/* Pass the set function to Dashboard so it can open the panel */}
         <Dashboard 
           theme={theme} 
           setTheme={setTheme} 
-          onOpenGifPanel={() => setShowGifPanel(true)} 
+          onOpenGifPanel={() => setShowGifPanel(true)}
+          myGifs={myGifs}
+          setMyGifs={setMyGifs}
         />
 
-        {/* --- GIF STUDIO PANEL (Moved inside the return) --- */}
+        {/* --- GIF STUDIO MODAL --- */}
         {showGifPanel && (
           <div className="fixed inset-0 z-[100] flex items-end md:items-center justify-center p-0 md:p-4 animate-in fade-in duration-300">
-            <div 
-              className="absolute inset-0 bg-pink-900/20 backdrop-blur-md"
-              onClick={() => setShowGifPanel(false)}
-            />
+            <div className="absolute inset-0 bg-pink-900/20 backdrop-blur-md" onClick={() => setShowGifPanel(false)} />
 
             <div className="relative w-full max-w-lg h-[80vh] bg-white/95 backdrop-blur-2xl rounded-t-[32px] md:rounded-[32px] shadow-2xl border border-white/50 flex flex-col overflow-hidden animate-in slide-in-from-bottom-10 duration-500">
               
@@ -99,12 +147,25 @@ function AppContent() {
                   <h3 className="text-pink-600 font-black text-xs tracking-widest uppercase">GIF Studio</h3>
                   <span className="text-[10px] text-pink-400 font-bold">Search or add your pack</span>
                 </div>
-                <button 
-                  onClick={() => setShowGifPanel(false)}
-                  className="w-8 h-8 flex items-center justify-center bg-pink-50 text-pink-500 rounded-full hover:bg-pink-500 hover:text-white transition-all"
-                >
-                  <X className="w-4 h-4" />
-                </button>
+                
+                <div className="flex items-center gap-2">
+                  {previewGifs.length > 0 && (
+                    <button 
+                      onClick={handleAddFullPack}
+                      className="px-3 py-1.5 bg-pink-500 text-white text-[10px] font-black uppercase rounded-full hover:bg-pink-600 shadow-sm transition-all flex items-center gap-1"
+                    >
+                      <Heart className="w-3 h-3 fill-current" />
+                      Save Pack
+                    </button>
+                  )}
+
+                  <button 
+                    onClick={() => setShowGifPanel(false)}
+                    className="w-8 h-8 flex items-center justify-center bg-pink-50 text-pink-500 rounded-full hover:bg-pink-500 hover:text-white transition-all"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
 
               <div className="flex-1 flex flex-col overflow-hidden">
@@ -116,32 +177,44 @@ function AppContent() {
                       value={gifSearch}
                       className="w-full p-4 pr-12 rounded-2xl bg-pink-50 border-none outline-none text-pink-900 placeholder:text-pink-300 font-bold text-sm shadow-inner"
                       onChange={(e) => setGifSearch(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleGifAction(gifSearch)}
                     />
-                    <button 
-                      onClick={() => handleAddExternalPack(gifSearch)}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 text-pink-400 hover:text-pink-600 active:scale-90 transition-transform"
-                    >
-                      <Paperclip className="w-5 h-5" />
+                    <button onClick={() => handleGifAction(gifSearch)} className="absolute right-4 top-1/2 -translate-y-1/2 text-pink-400 hover:text-pink-600 active:scale-90 transition-transform">
+                      {gifSearch.startsWith('http') ? <Paperclip className="w-5 h-5" /> : <Search className="w-5 h-5" />}
                     </button>
                   </div>
-                  <p className="text-[10px] text-center text-pink-300 font-black uppercase tracking-widest">
-                    Paste a GIF pack URL to import instantly
-                  </p>
                 </div>
 
-                <div className="flex-1 overflow-y-auto px-4 pb-6">
-                  {myGifs.length === 0 ? (
+                <div className="flex-1 overflow-y-auto px-4 pb-6 scrollbar-hide">
+                  {previewGifs.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-20 opacity-30">
                       <div className="w-20 h-20 bg-pink-100 rounded-full flex items-center justify-center mb-4">
                         <Heart className="w-10 h-10 text-pink-500 fill-current" />
                       </div>
-                      <p className="font-black text-xs text-pink-900 uppercase tracking-tighter">Search for a pack to see previews</p>
+                      <p className="font-black text-xs text-pink-900 uppercase tracking-tighter">Search to preview a pack</p>
                     </div>
                   ) : (
-                    <div className="columns-2 gap-3 space-y-3">
-                       {myGifs.map((url, i) => (
-                         <img key={i} src={url} className="w-full rounded-xl border-2 border-white shadow-sm" alt="Gif" />
-                       ))}
+                    <div className="columns-2 gap-3 space-y-3 pt-2">
+                       {previewGifs.map((gif, index) => {
+                         const gifUrl = gif.images?.fixed_height?.url || gif;
+                         return (
+                           <div key={gif.id || index} className="relative group overflow-hidden rounded-xl border-2 border-white shadow-sm">
+                             <img src={gifUrl} className="w-full h-auto block" alt="Gif" />
+                             <button 
+                               onClick={() => {
+                                 setMyGifs(prev => {
+                                   if (prev.some(g => g.url === gifUrl)) return prev;
+                                   return [{ url: gifUrl, packName: lastSearchQuery || 'Recent' }, ...prev];
+                                 });
+                                 alert("Added to Library!");
+                               }}
+                               className="absolute inset-0 bg-pink-500/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+                             >
+                               <Heart className="text-white fill-current w-6 h-6" />
+                             </button>
+                           </div>
+                         );
+                       })}
                     </div>
                   )}
                 </div>

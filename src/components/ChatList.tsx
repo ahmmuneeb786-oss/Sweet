@@ -208,7 +208,7 @@ function subscribeToChats() {
   }
 
   return (
-    <div className={`w-full md:w-96 p-4 border-b sticky top-0 z-10 bg-[#FFE4E1]/90 backdrop-blur-md flex-shrink-0 ${theme === 'romantic' ? 'bg-[#FFF0F5] border-[#FFB6C1]' : 'bg-white dark:bg-gray-900 border-gray-200'}`}>
+    <div className={`w-full md:w-96 h-full p-4 border-b sticky top-0 z-10 bg-[#FFE4E1]/90 backdrop-blur-md flex-shrink-0 ${theme === 'romantic' ? 'bg-[#FFF0F5] border-[#FFB6C1]' : 'bg-white dark:bg-gray-900 border-gray-200'}`}>
       <div className={`p-4 border-b ${theme === 'romantic' ? 'border-[#FFB6C1]' : 'border-gray-200 dark:border-gray-700'}`}>
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">

@@ -9,11 +9,13 @@ import { Settings } from '../pages/Settings';
 
 interface DashboardProps {
   onOpenGifPanel: () => void;
+  myGifs: string[];
+  setMyGifs: React.Dispatch<React.SetStateAction<string[]>>;
   theme: 'light' | 'dark' | 'romantic';
   setTheme: React.Dispatch<React.SetStateAction<'light' | 'dark' | 'romantic'>>;
 }
 
-export function DesktopDashboard({ theme, setTheme, onOpenGifPanel }: DashboardProps) {
+export function DesktopDashboard({ theme, setTheme, onOpenGifPanel, myGifs, setMyGifs }: DashboardProps) {
   const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
   const [showProfile, setShowProfile] = useState(false);
   const [showFriends, setShowFriends] = useState(false);
@@ -63,7 +65,7 @@ export function DesktopDashboard({ theme, setTheme, onOpenGifPanel }: DashboardP
 
       {/* Main chat window */}
       {selectedChatId ? (
-        <ChatWindow chatId={selectedChatId} theme={theme} onOpenGifPanel={onOpenGifPanel}/>
+        <ChatWindow chatId={selectedChatId} theme={theme} onOpenGifPanel={onOpenGifPanel} myGifs={myGifs} setMyGifs={setMyGifs} />
       ) : (
         <div
           className={`flex-1 flex items-center justify-center ${
