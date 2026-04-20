@@ -165,35 +165,41 @@ export function Auth() {
 
       <div className="w-full max-w-md mx-4 relative z-10">
         <div className="bg-white/90 backdrop-blur-sm rounded-3xl shadow-2xl p-8 space-y-6">
-{/* Header Section: Minimalist, Layered Logo */}
-          <div className="text-center space-y-3 pb-4">
-            <div className="flex justify-center mb-6 relative group">
-              {/* Glassmorphic Layered Ring - Creates Depth (Stylish) */}
-              <div className="absolute inset-0 bg-pink-100/50 rounded-full blur-xl scale-125 opacity-70 animate-pulse group-hover:opacity-100 transition-opacity"></div>
-              
-              {/* Main Icon Container - Solid & Premium (Professional) */}
-              <div className="relative z-10 bg-white p-5 rounded-[30px] shadow-lg shadow-pink-100/60 border border-pink-50 transition-transform duration-500 group-hover:scale-105 group-hover:-rotate-3">
-                {/* The "Double Heart" Icon - Playful & Modern (Sweet) */}
-                <div className="relative">
-                  {/* Subtle Background Heart shadow/glow */}
-                  <Heart className="w-12 h-12 text-pink-200 fill-pink-100 absolute -top-1 -right-1 opacity-80" />
-                  {/* The main solid heart */}
-                  <Heart className="relative w-12 h-12 text-pink-500 fill-pink-500 drop-shadow-[0_4px_6px_rgba(219,39,119,0.3)] animate-[bounce_1.8s_infinite_ease-in-out]" />
+{/* Header Section: Minimalist Luxury Design */}
+          <div className="text-center pb-2 group">
+            <div className="flex justify-center mb-8">
+              <div className="relative">
+                {/* The "Glow" - Extremely subtle, soft pink aura */}
+                <div className="absolute inset-0 bg-pink-200 rounded-full blur-3xl opacity-30 group-hover:opacity-50 transition-opacity duration-700"></div>
+                
+                {/* The Icon Container - Simple, clean white circle with a thin border */}
+                <div className="relative z-10 w-24 h-24 bg-white rounded-[2rem] shadow-[0_10px_40px_-10px_rgba(244,114,182,0.2)] border border-pink-50/50 flex items-center justify-center transition-all duration-500 group-hover:shadow-pink-200/50">
+                  <Heart 
+                    className="w-10 h-10 text-pink-500 fill-pink-500 transition-transform duration-500 group-hover:scale-110" 
+                    strokeWidth={1.5}
+                  />
                 </div>
               </div>
             </div>
 
-            {/* Title: The "Sweet" Text - Clean but bold (Professional) */}
-            <h1 className="text-4xl font-extrabold tracking-tighter bg-gradient-to-br from-pink-500 via-rose-500 to-purple-600 bg-clip-text text-transparent">
-              Sweet
+            {/* Title: Ultra-clean Typography */}
+            <h1 className="text-5xl font-black text-slate-800 tracking-tight mb-1">
+              Sweet<span className="text-pink-500">.</span>
             </h1>
 
-            {/* Subtitle: Spread Love - Balanced and clear */}
-            <p className="text-pink-900/60 text-xs font-semibold uppercase tracking-[0.25em] flex items-center justify-center gap-1.5 opacity-70 group-hover:opacity-100 transition-opacity duration-300">
-              <span className="h-0.5 w-6 bg-pink-100"></span>
-              Spread Love
-              <span className="h-0.5 w-6 bg-pink-100"></span>
-            </p>
+            {/* Subtitle: High-end "Tagline" style */}
+            <div className="flex flex-col items-center">
+              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-[0.4em] mb-3">
+                Messaging App
+              </p>
+              <div className="flex items-center gap-2">
+                <div className="h-[1px] w-4 bg-pink-200"></div>
+                <p className="text-pink-600/60 text-xs font-medium italic">
+                  Spread Love by SWEET
+                </p>
+                <div className="h-[1px] w-4 bg-pink-200"></div>
+              </div>
+            </div>
           </div>
 
           <div className="flex gap-2 p-1 bg-gray-100 rounded-full">
