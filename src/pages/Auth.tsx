@@ -175,8 +175,10 @@ export function Auth() {
               <div className="relative z-10 bg-white p-5 rounded-[30px] shadow-lg shadow-pink-100/60 border border-pink-50 transition-transform duration-500 group-hover:scale-105 group-hover:-rotate-3">
                 {/* The "Double Heart" Icon - Playful & Modern (Sweet) */}
                 <div className="relative">
+
+                  <Heart className="w-12 h-12 text-pink-100 fill-pink-50 absolute -top-2 -right-2 opacity-40 animate-[bounce_1.8s_infinite_ease-in-out]" style={{ animationDelay: '0.4s' }} />
                   {/* Subtle Background Heart shadow/glow */}
-                  <Heart className="w-12 h-12 text-pink-200 fill-pink-100 absolute -top-1 -right-1 opacity-60 animate-[bounce_1.8s_infinite_ease-in-out]" style={{ animationDelay: '0.2s' }} />
+                  <Heart className="w-12 h-12 text-pink-200 fill-pink-100 absolute -top-1 -right-1 opacity-60 animate-[bounce_1.8s_infinite_ease-in-out]" style={{ animationDelay: '0.3s' }} />
                   {/* The main solid heart */}
                   <Heart className="relative z-10 w-12 h-12 text-pink-500 fill-pink-500 drop-shadow-[0_4px_6px_rgba(219,39,119,0.3)] animate-[bounce_1.8s_infinite_ease-in-out]" />
                 </div>
