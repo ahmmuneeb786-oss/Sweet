@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Paperclip, Delete, Heart, ImageIcon, MapPin, FileText, ArrowUpCircle, Clipboard, Video, Smile, Keyboard, Search, ArrowLeft, Plus } from 'lucide-react';
+import { Paperclip, Delete, Heart, ImageIcon, MapPin, FileText, ArrowUpCircle, Clipboard, Video, Smile, Keyboard, Search, ArrowLeft, Plus, Trash2, X } from 'lucide-react';
 import { getSuggestions } from '../predictionService';
 
 // Updated Interface: myGifs is now an array of objects to support grouping
@@ -33,24 +33,36 @@ export const SweetKeyboard = ({ onInput, onDelete, onDocsClick, newMessage, onOp
   const [gifSearch, setGifSearch] = useState('');
   const [gifSubTab, setGifSubTab] = useState<'library' | 'discover'>('library');
 
-  // Logic to group GIFs by their packName
- const groupedGifs = myGifs.reduce((acc, gif) => {
-   const name = gif.packName || 'Recent';
-   if (!acc[name]) acc[name] = [];
-   acc[name].push(gif.url);
-   return acc;
- }, {} as Record<string, string[]>);
+  // Logic for professional deletion
+  const [longPressedUrl, setLongPressedUrl] = useState<string | null>(null);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
 
- {Object.entries(groupedGifs).map(([packName, urls]) => (
-  <div key={packName}>
-    <h4 className="text-[10px] font-bold uppercase p-2 text-pink-400">{packName}</h4>
-    <div className="grid grid-cols-2 gap-2">
-      {urls.map(url => (
-        <img key={url} src={url} onClick={() => onInput(url)} />
-      ))}
-    </div>
-  </div>
-))}
+  // Logic to group GIFs by their packName
+  const groupedGifs = myGifs.reduce((acc, gif) => {
+    const name = gif.packName || 'Recent';
+    if (!acc[name]) acc[name] = [];
+    acc[name].push(gif.url);
+    return acc;
+  }, {} as Record<string, string[]>);
+
+  // Deletion helper
+  const handleRemoveGif = (urlToRemove: string) => {
+    setMyGifs(prev => prev.filter(gif => gif.url !== urlToRemove));
+    setLongPressedUrl(null);
+    if (typeof window !== 'undefined' && navigator.vibrate) navigator.vibrate([30, 50]);
+  };
+
+  const startPress = (url: string) => {
+    if (gifSubTab !== 'library') return;
+    timerRef.current = setTimeout(() => {
+      setLongPressedUrl(url);
+      if (typeof window !== 'undefined' && navigator.vibrate) navigator.vibrate(50);
+    }, 600);
+  };
+
+  const endPress = () => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+  };
 
   const fetchGifs = async (query: string) => {
     const API_KEY = 'JX6l9HNPFvbDyvn5Uazj0xboLaLtd2ev';
@@ -74,6 +86,7 @@ export const SweetKeyboard = ({ onInput, onDelete, onDocsClick, newMessage, onOp
   }, [mode, gifSearch, gifSubTab]);
 
   const handleGifSend = (url: string) => {
+    if (longPressedUrl) return; // Don't send if we are in delete mode
     onInput(url);
     // When a GIF is sent, it moves to the "Recent" pack
     setMyGifs(prev => {
@@ -175,7 +188,7 @@ export const SweetKeyboard = ({ onInput, onDelete, onDocsClick, newMessage, onOp
       </div>
 
       {/* --- CONTENT AREA --- */}
-      <div className={`transition-all duration-300 ${mode === 'abc' ? 'h-[160px]' : 'h-[250px]'}`}>
+<div className={`transition-all duration-300 ${mode === 'abc' ? 'h-[160px]' : 'h-[250px]'}`}>
         <style>{`.scrollbar-hide::-webkit-scrollbar { display: none; } .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }`}</style>
         
         {mode === 'abc' ? (
@@ -211,19 +224,43 @@ export const SweetKeyboard = ({ onInput, onDelete, onDocsClick, newMessage, onOp
                   ) : (
                     Object.entries(groupedGifs).map(([packName, urls]) => (
                       <div key={packName} className="animate-in fade-in slide-in-from-left-2">
-                        {/* Group Heading */}
                         <div className="flex items-center gap-2 mb-3 px-1">
                           <h4 className="text-[10px] font-black uppercase p-2 pt-4 text-pink-500 border-b border-pink-50 mb-2 tracking-widest">
                             {packName}
                           </h4>
                           <div className="h-[1px] flex-1 bg-pink-200/50"></div>
                         </div>
-                        {/* Group Grid */}
                         <div className="columns-2 gap-2">
                           {urls.map((url, i) => (
-                            <button key={i} onClick={() => handleGifSend(url)} className="mb-2 w-full rounded-xl overflow-hidden border-2 border-white shadow-sm active:scale-95 transition-transform">
-                              <img src={url} className="w-full h-auto block" alt="saved" />
-                            </button>
+                            <div key={i} className="relative mb-2 group">
+                              <button 
+                                onMouseDown={() => startPress(url)}
+                                onMouseUp={endPress}
+                                onTouchStart={() => startPress(url)}
+                                onTouchEnd={endPress}
+                                onClick={() => handleGifSend(url)} 
+                                className={`w-full rounded-xl overflow-hidden border-2 transition-all ${longPressedUrl === url ? 'border-pink-500 scale-95' : 'border-white shadow-sm active:scale-95'}`}
+                              >
+                                <img src={url} className="w-full h-auto block" alt="saved" />
+                                
+                                {longPressedUrl === url && (
+                                  <div className="absolute inset-0 bg-pink-500/40 backdrop-blur-[2px] flex items-center justify-center animate-in zoom-in-50">
+                                    <button 
+                                      onClick={(e) => { e.stopPropagation(); handleRemoveGif(url); }}
+                                      className="bg-white p-2 rounded-full text-pink-600 shadow-xl scale-110 active:scale-90"
+                                    >
+                                      <Trash2 className="w-5 h-5" />
+                                    </button>
+                                    <button 
+                                      onClick={(e) => { e.stopPropagation(); setLongPressedUrl(null); }}
+                                      className="absolute top-1 right-1 bg-white/80 p-1 rounded-full text-gray-500"
+                                    >
+                                      <X className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                )}
+                              </button>
+                            </div>
                           ))}
                         </div>
                       </div>
@@ -233,14 +270,31 @@ export const SweetKeyboard = ({ onInput, onDelete, onDocsClick, newMessage, onOp
               ) : (
                 <div className="flex flex-col h-full">
                   <div className="relative mb-2">
-                    <input type="text" placeholder="Search Giphy..." value={gifSearch} onChange={(e) => setGifSearch(e.target.value)} className="w-full p-2.5 pr-10 rounded-xl bg-white/60 border-none outline-none text-[#4B004B] font-bold text-xs placeholder:text-pink-300" />
+                    <input 
+                      type="text" 
+                      placeholder="Search Giphy..." 
+                      value={gifSearch} 
+                      onChange={(e) => setGifSearch(e.target.value)} 
+                      className="w-full p-2.5 pr-10 rounded-xl bg-white/60 border-none outline-none text-[#4B004B] font-bold text-xs placeholder:text-pink-300" 
+                    />
                     <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-pink-300" />
                   </div>
                   <div className="columns-2 gap-2">
                     {giphyGifs.map((gif) => (
                       <div key={gif.id} className="relative group mb-2"> 
-                        <button onClick={() => handleGifSend(gif.images.fixed_height.url)} className="w-full rounded-xl overflow-hidden border-2 border-transparent active:border-pink-300"><img src={gif.images.fixed_height.url} className="w-full h-auto block" /></button>
-                        <button onClick={(e) => { e.stopPropagation(); setMyGifs(prev => [{url: gif.images.fixed_height.url, packName: 'Recent'}, ...prev]); }} className="absolute top-1 right-1 p-1 bg-white/80 rounded-full text-pink-500 shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"><Heart className="w-3 h-3 fill-current" /></button>
+                        <button onClick={() => handleGifSend(gif.images.fixed_height.url)} className="w-full rounded-xl overflow-hidden border-2 border-transparent active:border-pink-300">
+                          <img src={gif.images.fixed_height.url} className="w-full h-auto block" alt="giphy" />
+                        </button>
+                        <button 
+                          onClick={(e) => { 
+                            e.stopPropagation(); 
+                            setMyGifs(prev => [{url: gif.images.fixed_height.url, packName: 'Recent'}, ...prev]); 
+                            if (typeof window !== 'undefined' && navigator.vibrate) navigator.vibrate(10);
+                          }} 
+                          className="absolute top-1 right-1 p-1.5 bg-white/90 rounded-full text-pink-500 shadow-sm opacity-0 group-hover:opacity-100 transition-opacity active:scale-90"
+                        >
+                          <Heart className="w-3 h-3 fill-current" />
+                        </button>
                       </div>
                     ))}
                   </div>

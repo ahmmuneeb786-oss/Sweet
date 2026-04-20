@@ -96,20 +96,32 @@ const handleGifAction = async (input: string) => {
   }
 };
 
-  if (loading) {
-    return (
-      <div className={theme === 'dark' ? 'dark' : ''}>
-        <div className={`min-h-screen flex items-center justify-center transition-colors duration-300 ${
-          theme === 'romantic' ? 'bg-[#FFE4E1]' : 'bg-gradient-to-br from-pink-50 via-purple-50 to-blue-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-700'
-        }`}>
-          <div className="text-center space-y-4">
-            <div className="w-16 h-16 border-4 border-pink-500 border-t-transparent rounded-full animate-spin mx-auto" />
-            <p className="font-medium text-gray-600">Loading Sweet...</p>
-          </div>
+if (loading) {
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center bg-[#FFF0F3] overflow-hidden">
+      <div className="relative flex items-center justify-center">
+        {/* Central Logo */}
+        <div className="z-10 bg-white p-8 rounded-[40px] shadow-2xl shadow-pink-200/50 transform rotate-3">
+          <Heart className="w-16 h-16 text-[#FF69B4] fill-[#FF69B4] animate-pulse" />
         </div>
+
+        {/* Orbiting small hearts */}
+        <Heart className="absolute -top-10 -right-10 w-6 h-6 text-pink-300 animate-bounce delay-75" />
+        <Heart className="absolute top-20 -left-12 w-4 h-4 text-rose-300 animate-pulse delay-300" />
+        <Heart className="absolute -bottom-8 right-12 w-5 h-5 text-pink-200 animate-bounce delay-500" />
       </div>
-    );
-  }
+
+      <div className="mt-12 space-y-2 text-center">
+        <p className="text-[#FF1493] font-bold text-lg tracking-widest animate-pulse">
+          SWEET CHAT
+        </p>
+        <p className="text-pink-400/60 text-xs font-medium italic">
+          Preparing your inbox...
+        </p>
+      </div>
+    </div>
+  );
+}
 
   if (!user) {
     return (

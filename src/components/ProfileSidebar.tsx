@@ -97,7 +97,7 @@ export function ProfileSidebar({ onClose, theme }: ProfileSidebarProps) {
         onChange={handleImageUpload} 
       />
 
-      <div className={`fixed right-0 top-0 h-full w-96 shadow-2xl z-50 flex flex-col transition-all duration-300 ${
+      <div className={`fixed right-0 top-0 h-full w-full md:w-96 shadow-2xl z-50 flex flex-col transition-all duration-300 ${
   theme === 'dark' 
     ? 'bg-gray-900 text-white' 
     : theme === 'romantic' 

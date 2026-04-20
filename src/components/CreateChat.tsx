@@ -116,7 +116,7 @@ export function CreateChat({ theme, onClose, onChatCreated }: CreateChatProps) {
   return (
     <>
       <div className="fixed inset-0 bg-black/50 z-40" onClick={onClose} />
-      <div className={`fixed right-0 top-0 h-full w-96 shadow-2xl z-50 flex flex-col transition-colors duration-300 ${
+      <div className={`fixed right-0 top-0 h-full w-full md:w-96 shadow-2xl z-50 flex flex-col transition-colors duration-300 ${
   theme === 'romantic' 
     ? 'bg-[#FFF0F5] border-l border-[#FFB6C1]' 
     : 'bg-white dark:bg-gray-900'

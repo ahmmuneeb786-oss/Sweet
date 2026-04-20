@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Send, Smile, Paperclip, Phone, Video, Image as ImageIcon, FileText, X, Mic, AlertCircle, Check, ArrowLeft } from 'lucide-react';
+import { Send, Phone, Video, FileText, X, Mic, AlertCircle, Check, ArrowLeft } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import LocationPicker from './LocationPicker';
 import { supabase } from '../lib/supabase';
@@ -60,7 +60,6 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
   const [newMessage, setNewMessage] = useState('');
   const [isOtherTyping, setIsOtherTyping] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [showEmojiPanel, setShowEmojiPanel] = useState(false);
   const [failedMessages, setFailedMessages] = useState<Set<string>>(new Set());
   const [sendingMessages, setSendingMessages] = useState<Set<string>>(new Set());
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -692,7 +691,7 @@ const startRecording = async () => {
     setIsRecording(true);
   } catch (err) {
     console.error("Mic Error:", err);
-    alert("Microphone access denied.");
+    alert("Microphone access denied. Please allow us Microphone access from settings to send your sweet voice notes! ❤️");
   }
 };
 
@@ -1090,60 +1089,8 @@ const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
             }}
           />
 
-          <div className="flex items-center mb-1">
-            <button
-              type="button"
-              onClick={() => document.getElementById('imageInput')?.click()}
-              className="p-2 hover:bg-black/5 rounded-full transition-all active:scale-90"
-            >
-              <ImageIcon className="w-5 h-5 text-gray-500" />
-            </button>
-            
-            <button type="button" className="p-2 hover:bg-black/5 rounded-full hidden sm:block">
-              <Paperclip className="w-5 h-5 text-gray-500" />
-            </button>
-            
+          <div className="flex items-center mb-1">            
             <div className="relative">
-              <button
-                type="button"
-                onClick={() => setShowEmojiPanel(!showEmojiPanel)}
-                className="p-2 hover:bg-black/5 rounded-full"
-              >
-                <Smile className="w-5 h-5 text-gray-500" />
-              </button>
-              {showEmojiPanel && (
-                <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4">
-                  <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowEmojiPanel(false)} />
-                  <div className={`relative w-full max-w-[320px] rounded-2xl shadow-2xl border flex flex-col z-[60] animate-in slide-in-from-bottom-4 duration-200 ${
-                    theme === 'romantic' ? 'bg-[#FFE4E1] border-[#FFB6C1]' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700'
-                  }`}>
-      
-      <div className="flex items-center justify-between p-3 border-b border-black/5">
-                      <span className="text-xs font-bold uppercase tracking-wider opacity-60">Select Emoji</span>
-                      <button 
-                        onClick={() => setShowEmojiPanel(false)}
-                        className="p-1.5 hover:bg-black/5 rounded-full transition-colors"
-                      >
-                        <X className="w-5 h-5" />
-                      </button>
-                    </div>
-                    <div className="p-4 grid grid-cols-6 gap-2">
-                      {['💖','🥰','😍','💋','❤️','😘','💘','🌹','💞','😂','😭','😢','🔥','👍','🎉','✨','🦋','🧸'].map((emoji) => (
-                        <button
-                          key={emoji}
-                          type="button"
-                          onClick={() => { 
-                            setNewMessage(prev => prev + emoji); 
-                          }}
-                          className="text-2xl hover:scale-125 transition-transform active:scale-90 p-1"
-                        >
-                          {emoji}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
             </div>
           </div>
 
