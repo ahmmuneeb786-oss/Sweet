@@ -165,40 +165,41 @@ export function Auth() {
 
       <div className="w-full max-w-md mx-4 relative z-10">
         <div className="bg-white/90 backdrop-blur-sm rounded-3xl shadow-2xl p-8 space-y-6">
-{/* Header Section: Minimalist Luxury Design */}
-          <div className="text-center pb-2 group">
-            <div className="flex justify-center mb-8">
-              <div className="relative">
-                {/* The "Glow" - Extremely subtle, soft pink aura */}
-                <div className="absolute inset-0 bg-pink-200 rounded-full blur-3xl opacity-30 group-hover:opacity-50 transition-opacity duration-700"></div>
+{/* Header Section: Sweet & Synchronized Motion */}
+          <div className="text-center space-y-3 pb-4 group">
+            
+            {/* The Bouncing Container - Everything inside here moves together */}
+            <div className="flex justify-center mb-6 relative animate-[bounce_2s_infinite_ease-in-out]">
+              
+              {/* Glassmorphic Layered Ring - Now moves with the heart */}
+              <div className="absolute inset-0 bg-pink-200/40 rounded-full blur-2xl scale-150 opacity-60"></div>
+              
+              {/* Main Icon Container */}
+              <div className="relative z-10 bg-white/90 backdrop-blur-sm p-5 rounded-[35px] shadow-[0_15px_30px_-5px_rgba(244,114,182,0.3)] border border-pink-50 transition-transform duration-500 group-hover:scale-110">
                 
-                {/* The Icon Container - Simple, clean white circle with a thin border */}
-                <div className="relative z-10 w-24 h-24 bg-white rounded-[2rem] shadow-[0_10px_40px_-10px_rgba(244,114,182,0.2)] border border-pink-50/50 flex items-center justify-center transition-all duration-500 group-hover:shadow-pink-200/50">
-                  <Heart 
-                    className="w-10 h-10 text-pink-500 fill-pink-500 transition-transform duration-500 group-hover:scale-110" 
-                    strokeWidth={1.5}
-                  />
+                {/* The Double Heart Icon */}
+                <div className="relative">
+                  {/* Background "Echo" Heart */}
+                  <Heart className="w-12 h-12 text-pink-200 fill-pink-100 absolute -top-1.5 -right-1.5 opacity-70 rotate-12" />
+                  
+                  {/* Main Solid Heart */}
+                  <Heart className="relative w-12 h-12 text-pink-500 fill-pink-500 drop-shadow-[0_5px_8px_rgba(219,39,119,0.4)]" />
                 </div>
               </div>
             </div>
 
-            {/* Title: Ultra-clean Typography */}
-            <h1 className="text-5xl font-black text-slate-800 tracking-tight mb-1">
-              Sweet<span className="text-pink-500">.</span>
+            {/* Title: The "Sweet" Text with a soft shimmer */}
+            <h1 className="text-5xl font-[900] tracking-tighter bg-gradient-to-r from-pink-500 via-rose-400 to-pink-600 bg-clip-text text-transparent animate-gradient-x">
+              Sweet<span className="text-pink-400">.</span>
             </h1>
 
-            {/* Subtitle: High-end "Tagline" style */}
-            <div className="flex flex-col items-center">
-              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-[0.4em] mb-3">
-                Messaging App
+            {/* Subtitle: Spread Love with Floating Dots */}
+            <div className="flex items-center justify-center gap-3">
+              <span className="w-1.5 h-1.5 bg-pink-200 rounded-full animate-ping"></span>
+              <p className="text-pink-900/40 text-[10px] font-bold uppercase tracking-[0.4em]">
+                Spread Love
               </p>
-              <div className="flex items-center gap-2">
-                <div className="h-[1px] w-4 bg-pink-200"></div>
-                <p className="text-pink-600/60 text-xs font-medium italic">
-                  Spread Love by SWEET
-                </p>
-                <div className="h-[1px] w-4 bg-pink-200"></div>
-              </div>
+              <span className="w-1.5 h-1.5 bg-pink-200 rounded-full animate-ping [animation-delay:0.5s]"></span>
             </div>
           </div>
 
