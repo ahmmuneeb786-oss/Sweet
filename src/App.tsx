@@ -98,27 +98,61 @@ const handleGifAction = async (input: string) => {
 
 if (loading) {
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-[#FFF0F3] overflow-hidden">
-      <div className="relative flex items-center justify-center">
-        {/* Central Logo */}
-        <div className="z-10 bg-white p-8 rounded-[40px] shadow-2xl shadow-pink-200/50 transform rotate-3">
-          <Heart className="w-16 h-16 text-[#FF69B4] fill-[#FF69B4] animate-pulse" />
+    <div className="min-h-screen flex flex-col items-center justify-center bg-[#FFF0F3] overflow-hidden relative">
+      
+      {/* ADDITION: Background Floating Particles (Sweet & Subtle) */}
+      <div className="absolute inset-0 pointer-events-none">
+        <Heart className="absolute top-[15%] left-[10%] w-8 h-8 text-pink-200/40 animate-pulse" />
+        <Heart className="absolute top-[20%] right-[15%] w-6 h-6 text-pink-200/30 animate-bounce [animation-duration:3s]" />
+        <Heart className="absolute bottom-[25%] left-[20%] w-10 h-10 text-pink-200/20 animate-pulse [animation-duration:4s]" />
+        <Heart className="absolute bottom-[10%] right-[12%] w-5 h-5 text-pink-200/50 animate-bounce [animation-duration:5s]" />
+      </div>
+
+      <div className="relative flex flex-col items-center">
+        
+        {/* Your Orbiting Hearts (Kept exactly as is) */}
+        <div className="absolute inset-0 flex items-center justify-center animate-[spin_8s_linear_infinite]">
+          <Heart className="w-4 h-4 text-pink-300 absolute -top-14 opacity-60" />
+          <Heart className="w-4 h-4 text-pink-300 absolute -bottom-14 opacity-60" />
+          <Heart className="w-4 h-4 text-pink-300 absolute -left-14 opacity-60" />
+          <Heart className="w-4 h-4 text-pink-300 absolute -right-14 opacity-60" />
         </div>
 
-        {/* Orbiting small hearts */}
-        <Heart className="absolute -top-10 -right-10 w-6 h-6 text-pink-300 animate-bounce delay-75" />
-        <Heart className="absolute top-20 -left-12 w-4 h-4 text-rose-300 animate-pulse delay-300" />
-        <Heart className="absolute -bottom-8 right-12 w-5 h-5 text-pink-200 animate-bounce delay-500" />
+        {/* Your Main White Squircle Container (Kept exactly as is) */}
+        <div className="relative z-10 w-32 h-32 bg-white rounded-[40px] shadow-2xl shadow-pink-200/50 flex items-center justify-center mb-8 border border-white transition-transform duration-500 hover:scale-105">
+          <div className="relative">
+            {/* The Wave Effect (Your favorite part!) */}
+            <Heart 
+              className="w-16 h-16 text-pink-200 fill-pink-100 absolute -top-1 -right-1 opacity-60 animate-[bounce_1.8s_infinite_ease-in-out]" 
+              style={{ animationDelay: '0.15s' }} 
+            />
+            <Heart className="relative z-10 w-16 h-16 text-[#FF69B4] fill-[#FF69B4] drop-shadow-xl animate-[bounce_1.8s_infinite_ease-in-out]" />
+          </div>
+        </div>
+
+        {/* Text Branding Section */}
+        <div className="text-center space-y-2 mt-4">
+          <h1 className="text-2xl font-black tracking-[0.4em] text-[#FF1493] uppercase">
+            Sweet Chat
+          </h1>
+          <div className="flex flex-col items-center gap-1">
+            <p className="text-pink-400/80 text-xs font-medium italic animate-pulse">
+              Preparing your inbox...
+            </p>
+            {/* Minimalist Progress Loader */}
+            <div className="w-12 h-[2px] bg-pink-100 rounded-full overflow-hidden">
+              <div className="h-full bg-pink-400 w-1/2 rounded-full animate-[loading_1.5s_infinite_ease-in-out]"></div>
+            </div>
+          </div>
+        </div>
       </div>
 
-      <div className="mt-12 space-y-2 text-center">
-        <p className="text-[#FF1493] font-bold text-lg tracking-widest animate-pulse">
-          SWEET CHAT
-        </p>
-        <p className="text-pink-400/60 text-xs font-medium italic">
-          Preparing your inbox...
-        </p>
-      </div>
+      <style>{`
+        @keyframes loading {
+          0% { transform: translateX(-100%); }
+          100% { transform: translateX(200%); }
+        }
+      `}</style>
     </div>
   );
 }
