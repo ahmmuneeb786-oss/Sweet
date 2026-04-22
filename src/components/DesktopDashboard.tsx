@@ -6,11 +6,13 @@ import { ProfileSidebar } from '../components/ProfileSidebar';
 import { FriendList } from '../components/FriendList';
 import { CreateChat } from '../components/CreateChat';
 import { Settings } from '../pages/Settings';
+import { GifItem } from '../App';
+
 
 interface DashboardProps {
   onOpenGifPanel: () => void;
-  myGifs: string[];
-  setMyGifs: React.Dispatch<React.SetStateAction<string[]>>;
+  myGifs: GifItem[];
+  setMyGifs: React.Dispatch<React.SetStateAction<GifItem[]>>;
   theme: 'light' | 'dark' | 'romantic';
   setTheme: React.Dispatch<React.SetStateAction<'light' | 'dark' | 'romantic'>>;
 }

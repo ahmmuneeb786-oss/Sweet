@@ -178,7 +178,7 @@ export function Auth() {
 
                   <Heart className="w-12 h-12 text-pink-100 fill-pink-50 absolute -top-2 -right-2 opacity-40 animate-[bounce_1.8s_infinite_ease-in-out]" style={{ animationDelay: '0.4s' }} />
                   {/* Subtle Background Heart shadow/glow */}
-                  <Heart className="w-12 h-12 text-pink-200 fill-pink-100 absolute -top-1 -right-1 opacity-60 animate-[bounce_1.8s_infinite_ease-in-out]" style={{ animationDelay: '0.3s' }} />
+                  <Heart className="w-12 h-12 text-pink-200 fill-pink-200 absolute -top-1 -right-1 opacity-60 animate-[bounce_1.8s_infinite_ease-in-out]" style={{ animationDelay: '0.3s' }} />
                   {/* The main solid heart */}
                   <Heart className="relative z-10 w-12 h-12 text-pink-500 fill-pink-500 drop-shadow-[0_4px_6px_rgba(219,39,119,0.3)] animate-[bounce_1.8s_infinite_ease-in-out]" />
                 </div>
@@ -193,7 +193,7 @@ export function Auth() {
             {/* Subtitle: Spread Love - Balanced and clear */}
             <p className="text-pink-900/60 text-xs font-semibold uppercase tracking-[0.25em] flex items-center justify-center gap-1.5 opacity-70 group-hover:opacity-100 transition-opacity duration-300">
               <span className="h-0.5 w-6 bg-pink-100"></span>
-              Spread Love
+              Spread Love By SWEET
               <span className="h-0.5 w-6 bg-pink-100"></span>
             </p>
           </div>
