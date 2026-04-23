@@ -3,7 +3,8 @@ import { useAuth, AuthProvider } from './contexts/AuthContext';
 import { Auth } from './pages/Auth';
 import { Dashboard } from './pages/Dashboard';
 import { initializeDictionary } from './predictionService';
-import { Heart, Paperclip, X, Search } from 'lucide-react'; 
+import { Heart, Paperclip, X, Search } from 'lucide-react';
+import { FloatingHearts } from './components/FloatingHearts';
 
 // Define the interface for our GIF objects
 export interface GifItem {
@@ -32,6 +33,16 @@ function AppContent() {
 
   const [previewGifs, setPreviewGifs] = useState<any[]>([]);
   const [lastSearchQuery, setLastSearchQuery] = useState('');
+  const [showLetter, setShowLetter] = useState(false);
+  const [hasOpened, setHasOpened] = useState(false);
+  const [mailStage, setMailStage] = useState<'box-arrival' | 'box-idle' | 'envelope-reveal' | 'letter-unfold'>('box-arrival');
+
+
+  useEffect(() => {
+  if (!loading && user && !hasOpened) {
+    setShowLetter(true);
+  }
+}, [loading, user]);
 
   // --- INITIALIZATION ---
   useEffect(() => {
@@ -139,6 +150,136 @@ if (loading) {
           0% { transform: translateX(-100%); }
           100% { transform: translateX(250%); }
         }
+      `}</style>
+    </div>
+  );
+}
+
+  if (showLetter) {
+  return (
+    <div className="min-h-screen bg-[#FFF0F3] flex items-center justify-center p-4 relative overflow-hidden">
+      
+      {/* Background Hearts - Kept behind everything */}
+      <div className="absolute inset-0 z-0 pointer-events-none opacity-40">
+        <FloatingHearts />
+      </div>
+
+      <div className="relative z-10 w-full max-w-lg flex flex-col items-center justify-center">
+        
+        {/* STAGE 1 & 2: THE 3D MAILBOX (The animation you liked) */}
+        {(mailStage === 'box-arrival' || mailStage === 'box-idle') && (
+          <div 
+            onAnimationEnd={() => mailStage === 'box-arrival' && setMailStage('box-idle')}
+            onClick={() => setMailStage('envelope-reveal')}
+            className={`group cursor-pointer flex flex-col items-center
+              ${mailStage === 'box-arrival' ? 'animate-[slideIn3D_1.5s_ease-out_forwards]' : 'animate-[float_3s_infinite_ease-in-out]'}`}
+          >
+            <div className="relative w-40 h-32 bg-rose-500 rounded-t-full shadow-[20px_20px_60px_rgba(0,0,0,0.1)] border-b-[12px] border-rose-700">
+              <div className="absolute inset-2 border-2 border-rose-400/30 rounded-t-full flex items-center justify-center">
+                 <div className="w-2 h-8 bg-rose-800/20 rounded-full" />
+              </div>
+              <div className="absolute -right-4 top-10 w-2 h-12 bg-red-600 rounded-full origin-bottom rotate-[30deg] group-hover:rotate-0 transition-transform duration-500" />
+            </div>
+            <div className="mt-8 text-center space-y-2">
+              <p className="text-rose-600 font-black tracking-[0.2em] uppercase text-xs">You have got a special message</p>
+              <p className="text-rose-400/60 text-[10px] font-bold uppercase tracking-widest animate-pulse">tap mailbox to see message</p>
+            </div>
+          </div>
+        )}
+
+        {/* STAGE 3: THE ENVELOPE */}
+        {mailStage === 'envelope-reveal' && (
+          <div 
+            onClick={() => setMailStage('letter-unfold')}
+            className="relative w-72 aspect-[4/3] bg-white rounded-xl shadow-2xl border-2 border-pink-50 flex flex-col items-center justify-center cursor-pointer animate-[envelopePop_0.8s_ease-out_forwards]"
+          >
+            <div className="absolute top-0 left-0 w-full h-1/2 border-t-[40px] border-t-pink-50 border-x-[144px] border-x-transparent" />
+            <div className="z-10 text-center px-6">
+              <p className="text-pink-400 font-serif italic text-xl border-b border-pink-100 pb-2">To My Beautiful Love</p>
+              <Heart className="w-8 h-8 text-pink-500 fill-pink-500 mx-auto mt-4 animate-bounce" />
+            </div>
+          </div>
+        )}
+
+        {/* STAGE 4: THE LETTER + FIXED CONFETTI */}
+        {mailStage === 'letter-unfold' && (
+          <div className="w-full relative animate-[letterExpand_0.8s_ease-out_forwards] origin-top">
+            
+            {/* FIXED CONFETTI POP */}
+            <div className="absolute inset-0 pointer-events-none z-50 overflow-visible">
+              {[...Array(16)].map((_, i) => (
+                <div 
+                  key={i}
+                  className="absolute left-1/2 top-1/2 w-3 h-3 rounded-sm animate-[confettiPop_1s_ease-out_forwards]"
+                  style={{ 
+                    backgroundColor: i % 2 === 0 ? '#f472b6' : '#fb7185',
+                    '--tx': `${(Math.random() - 0.5) * 400}px`,
+                    '--ty': `${(Math.random() - 0.5) * 400}px`,
+                    '--rot': `${Math.random() * 360}deg`
+                  } as any}
+                />
+              ))}
+            </div>
+
+            <div className="bg-white/95 backdrop-blur-md rounded-[40px] shadow-[0_30px_100px_rgba(255,182,193,0.5)] p-8 md:p-10 border border-white flex flex-col max-h-[80vh] mx-auto">
+              <div className="flex-shrink-0 flex justify-center mb-6">
+                 <div className="bg-gradient-to-tr from-pink-500 to-rose-400 p-4 rounded-3xl shadow-lg transform -rotate-3">
+                    <Heart className="text-white fill-current w-6 h-6" />
+                 </div>
+              </div>
+
+              {/* Scrollable Letter Body */}
+              <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar text-center space-y-6">
+                <h2 className="text-pink-600 font-black tracking-tight text-3xl">Welcome My Love</h2>
+                <div className="text-pink-500/80 leading-relaxed font-medium italic text-lg space-y-6">
+                  <p>It has been more than 7 months since we last directly communicated, but not a day went by where I didn't think of you.</p>
+                  <p>I built this app as a sanctuary—a place where the world can't reach us, and where we will share love with each other.</p>
+                  <p>Believe it or not, you are the only one I want to spend my each moment with 💕.</p>
+                  <p>To talk with me you have to add me from search section in Friends list, My username is "Ahmad"</p>
+                  <p className="not-italic font-bold text-pink-600">I've missed you more than words can say.</p>
+                  <p className="not-italic font-bold text-pink-750">I LOVE YOU SO MUCH!</p>
+                </div>
+              </div>
+
+              <div className="flex-shrink-0 pt-8 flex flex-col items-center">
+                <button 
+                  onClick={() => { setShowLetter(false); setHasOpened(true); }}
+                  className="group relative active:scale-95 transition-all w-full max-w-xs"
+                >
+                  <div className="absolute inset-0 bg-pink-400 rounded-full blur-xl opacity-20" />
+                  <div className="relative bg-pink-500 hover:bg-pink-600 text-white py-4 rounded-full font-black uppercase tracking-widest text-xs shadow-xl transition-colors">
+                  Enter App
+                  </div>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <style>{`
+        @keyframes confettiPop {
+          0% { transform: translate(-50%, -50%) scale(0) rotate(0deg); opacity: 1; }
+          100% { transform: translate(var(--tx), var(--ty)) scale(1) rotate(var(--rot)); opacity: 0; }
+        }
+        @keyframes slideIn3D {
+          0% { transform: translateX(-200%) rotateY(-45deg) scale(0.5); opacity: 0; }
+          100% { transform: translateX(0) rotateY(0) scale(1); opacity: 1; }
+        }
+        @keyframes float {
+          0%, 100% { transform: translateY(0px); }
+          50% { transform: translateY(-20px); }
+        }
+        @keyframes envelopePop {
+          0% { transform: scale(0) translateY(100px); opacity: 0; }
+          100% { transform: scale(1) translateY(0); opacity: 1; }
+        }
+        @keyframes letterExpand {
+          0% { transform: scaleY(0); opacity: 0; }
+          100% { transform: scaleY(1); opacity: 1; }
+        }
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #fbcfe8; border-radius: 10px; }
       `}</style>
     </div>
   );
