@@ -12,8 +12,8 @@ interface MobileDashboardProps {
   onOpenGifPanel: () => void;
   myGifs: GifItem[];
   setMyGifs: React.Dispatch<React.SetStateAction<GifItem[]>>;
-  theme: 'light' | 'dark' | 'romantic';
-  setTheme: React.Dispatch<React.SetStateAction<'light' | 'dark' | 'romantic'>>;
+  theme: 'light' | 'dark' | 'sweet';
+  setTheme: React.Dispatch<React.SetStateAction<'light' | 'dark' | 'sweet'>>;
 }
 
 export function MobileDashboard({ theme, setTheme, onOpenGifPanel, myGifs, setMyGifs}: MobileDashboardProps) {
@@ -23,10 +23,14 @@ export function MobileDashboard({ theme, setTheme, onOpenGifPanel, myGifs, setMy
   const [showSettings, setShowSettings] = useState(false);
   const [showCreateChat, setShowCreateChat] = useState(false);
 
+  const [faceLockEnabled, setFaceLockEnabled] = useState(() => {
+  return localStorage.getItem('face_lock_enabled') === 'true';
+  });
+
   // Helper for background colors based on theme
   const bgClass = 
     theme === 'dark' ? 'bg-gray-900 text-white' : 
-    theme === 'romantic' ? 'bg-[#FFE4E1] text-[#4B004B]' : 
+    theme === 'sweet' ? 'bg-[#FFE4E1] text-[#4B004B]' : 
     'bg-gray-50 text-gray-900';
 
   return (
@@ -35,7 +39,7 @@ export function MobileDashboard({ theme, setTheme, onOpenGifPanel, myGifs, setMy
        even when the mobile browser address bar pops up.
     */
     <div className={`h-[100dvh] w-full max-w-full overflow-x-hidden overflow-y-hidden flex flex-col relative ${bgClass}`}>
-      {theme === 'romantic' && <FloatingHearts />}
+      {theme === 'sweet' && <FloatingHearts />}
 
       {/* 1. LAYER ONE: Sidebars */}
       {/* CHANGE 3: Added 'fixed inset-0' wrapper to ensure sidebars 
@@ -52,7 +56,14 @@ export function MobileDashboard({ theme, setTheme, onOpenGifPanel, myGifs, setMy
               setActiveChatId={setSelectedChatId} 
             />
           )}
-          {showSettings && <Settings onClose={() => setShowSettings(false)} theme={theme} setTheme={setTheme} />}
+          {showSettings && 
+          <Settings onClose={() => 
+          setShowSettings(false)} 
+          theme={theme} 
+          setTheme={setTheme} 
+          faceLockEnabled={faceLockEnabled}
+          setFaceLockEnabled={setFaceLockEnabled}
+          />}
           {showCreateChat && (
             <CreateChat
               theme={theme}

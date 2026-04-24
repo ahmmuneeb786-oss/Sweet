@@ -66,7 +66,7 @@ The Sweet messaging app has been fully built and tested. All core features are i
 - Account Settings (edit profile, username, bio)
 - Privacy Settings (visibility controls)
 - Notification Settings (toggle notifications)
-- Theme Settings (Light/Dark/Romantic modes)
+- Theme Settings (Light/Dark/sweet modes)
 - Chat theme selection (Love/Best Friend/Friend/Default)
 - Storage management
 - Locked chats view (placeholder)
@@ -190,7 +190,7 @@ src/
 - Chat themes
 
 ### UI/UX ✅
-- Romantic color palette
+- sweet color palette
 - Smooth animations
 - Responsive design
 - Gradient effects
@@ -249,7 +249,7 @@ The app is production-ready for:
 ## Customization Options
 
 Users can customize:
-- App theme (Light/Dark/Romantic)
+- App theme (Light/Dark/sweet)
 - Chat themes (Love/Best Friend/Friend/Default)
 - Profile avatar
 - Display name & bio
@@ -313,7 +313,7 @@ For issues, check:
 ✅ All core features implemented
 ✅ Real-time messaging works
 ✅ Database is secure with RLS
-✅ UI is polished and romantic
+✅ UI is polished and sweet
 ✅ Authentication is secure
 ✅ Friends system is complete
 ✅ Chat features are advanced
@@ -324,6 +324,6 @@ For issues, check:
 
 ## Conclusion
 
-The Sweet messaging app is a complete, production-ready real-time messaging application with a beautiful romantic UI, comprehensive feature set, and secure architecture. All specified features have been implemented and tested.
+The Sweet messaging app is a complete, production-ready real-time messaging application with a beautiful sweet UI, comprehensive feature set, and secure architecture. All specified features have been implemented and tested.
 
 Ready to deploy and serve users!

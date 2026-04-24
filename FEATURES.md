@@ -1,7 +1,7 @@
 # Sweet Messaging App - Complete Feature List
 
 ## Overview
-Sweet is a modern, real-time messaging application with a romantic UI built with React, TypeScript, Tailwind CSS, and Supabase.
+Sweet is a modern, real-time messaging application with a sweet UI built with React, TypeScript, Tailwind CSS, and Supabase.
 
 ## Implemented Features
 
@@ -65,7 +65,7 @@ Sweet is a modern, real-time messaging application with a romantic UI built with
 - Message deletion (self only)
 - Delete for self functionality
 - Edited message indicators
-- Emoji picker panel (12+ romantic and standard emojis)
+- Emoji picker panel (12+ sweet and standard emojis)
 - Emoji button support
 - Copy message text
 - Star/favorite messages (UI ready)
@@ -116,7 +116,7 @@ Sweet is a modern, real-time messaging application with a romantic UI built with
   - Call notifications
   - Mute all toggle
 - Theme Settings
-  - App theme (Light/Dark/Romantic)
+  - App theme (Light/Dark/sweet)
   - Chat theme selection (Love/Best Friend/Friend/Default)
 - Storage & Media
   - Storage usage display
@@ -133,7 +133,7 @@ Sweet is a modern, real-time messaging application with a romantic UI built with
 
 ### 12. UI/UX Elements
 - Floating heart background animations
-- Romantic color palette (Pink #FF6B9A, Lavender, Blush)
+- sweet color palette (Pink #FF6B9A, Lavender, Blush)
 - Rounded input boxes and buttons
 - Smooth page transitions
 - Loading spinners
@@ -271,7 +271,7 @@ src/
 
 1. **Real-Time Chat**: Instant message delivery with WebSocket subscriptions
 2. **Friend System**: Complete friend management with requests and blocking
-3. **Rich UI**: Romantic theme with animations and gradients
+3. **Rich UI**: sweet theme with animations and gradients
 4. **Security**: Full RLS implementation for data privacy
 5. **Settings**: Comprehensive user settings and preferences
 6. **Message Reactions**: Instant emoji reactions with counts

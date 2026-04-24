@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 
 interface FriendListProps {
-  theme: 'light' | 'dark' | 'romantic';
+  theme: 'light' | 'dark' | 'sweet';
   onClose: () => void;
   onSelectUser: (user: any) => void;
   setActiveChatId: (id: string) => void;
@@ -260,7 +260,7 @@ async function handleStartChat(friendId: string) {
       .insert({ 
         id: consistentRoomId, // Use our ID, not a random one!
         type: 'direct', 
-        theme: 'romantic' 
+        theme: 'sweet' 
       });
 
     if (chatError) throw chatError;
@@ -286,13 +286,13 @@ async function handleStartChat(friendId: string) {
         onClick={onClose}
       />
       <div className={`fixed right-0 top-0 h-full w-full md:w-96 shadow-2xl z-50 flex flex-col transition-colors duration-300 ${
-  theme === 'romantic' 
+  theme === 'sweet' 
     ? 'bg-[#FFF0F5] border-l border-[#FFB6C1]' 
     : 'bg-white dark:bg-gray-900'
 }`}>
         <div className="p-6 border-b border-gray-200">
           <div className="flex items-center justify-between mb-4">
-            <h2 className={`text-xl font-bold ${theme === 'romantic' ? 'text-[#4B004B]' : 'text-gray-900 dark:text-white'}`}>Friends</h2>
+            <h2 className={`text-xl font-bold ${theme === 'sweet' ? 'text-[#4B004B]' : 'text-gray-900 dark:text-white'}`}>Friends</h2>
             <button
               onClick={onClose}
               className="p-2 hover:bg-gray-100 rounded-full transition-colors"
@@ -301,13 +301,13 @@ async function handleStartChat(friendId: string) {
             </button>
           </div>
 
-          <div className={`flex gap-2 p-1 rounded-xl ${theme === 'romantic' ? 'bg-[#FFC0CB]/40' : 'bg-gray-100 dark:bg-gray-800'}`}>
+          <div className={`flex gap-2 p-1 rounded-xl ${theme === 'sweet' ? 'bg-[#FFC0CB]/40' : 'bg-gray-100 dark:bg-gray-800'}`}>
             <button
               onClick={() => setActiveTab('friends')}
               className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-all ${
                 activeTab === 'friends'
-                  ? (theme === 'romantic' ? 'bg-[#FFF0F5] text-[#8B004B] shadow-sm' : 'bg-white text-pink-600 shadow-sm')
-                  : (theme === 'romantic' ? 'text-[#8B004B]/60 hover:text-[#8B004B]' : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white')
+                  ? (theme === 'sweet' ? 'bg-[#FFF0F5] text-[#8B004B] shadow-sm' : 'bg-white text-pink-600 shadow-sm')
+                  : (theme === 'sweet' ? 'text-[#8B004B]/60 hover:text-[#8B004B]' : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white')
               }`}
             >
               Friends ({friends.length})
@@ -316,8 +316,8 @@ async function handleStartChat(friendId: string) {
               onClick={() => setActiveTab('requests')}
               className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-all relative ${
                 activeTab === 'requests'
-                  ? (theme === 'romantic' ? 'bg-[#FFF0F5] text-[#8B004B] shadow-sm' : 'bg-white text-pink-600 shadow-sm')
-                  : (theme === 'romantic' ? 'text-[#8B004B]/60 hover:text-[#8B004B]' : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white')
+                  ? (theme === 'sweet' ? 'bg-[#FFF0F5] text-[#8B004B] shadow-sm' : 'bg-white text-pink-600 shadow-sm')
+                  : (theme === 'sweet' ? 'text-[#8B004B]/60 hover:text-[#8B004B]' : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white')
               }`}
             >
               Requests
@@ -331,8 +331,8 @@ async function handleStartChat(friendId: string) {
               onClick={() => setActiveTab('search')}
               className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-all ${
                 activeTab === 'search'
-                  ? (theme === 'romantic' ? 'bg-[#FFF0F5] text-[#8B004B] shadow-sm' : 'bg-white text-pink-600 shadow-sm')
-                  : (theme === 'romantic' ? 'text-[#8B004B]/60 hover:text-[#8B004B]' : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white')
+                  ? (theme === 'sweet' ? 'bg-[#FFF0F5] text-[#8B004B] shadow-sm' : 'bg-white text-pink-600 shadow-sm')
+                  : (theme === 'sweet' ? 'text-[#8B004B]/60 hover:text-[#8B004B]' : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white')
               }`}
             >
               Search
@@ -360,7 +360,7 @@ async function handleStartChat(friendId: string) {
     {user && (
       <div
         className={`p-4 border-b cursor-pointer transition-colors flex items-center gap-3 ${
-          theme === 'romantic' 
+          theme === 'sweet' 
             ? 'border-[#FFB6C1]/20 hover:bg-[#FFC0CB]/20' 
             : 'border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50'
         }`}
@@ -391,7 +391,7 @@ async function handleStartChat(friendId: string) {
         </div>
         <div className="flex-1">
           <div className="flex justify-between items-center">
-            <h3 className={`font-bold ${theme === 'romantic' ? 'text-[#4B004B]' : 'text-gray-900 dark:text-white'}`}>
+            <h3 className={`font-bold ${theme === 'sweet' ? 'text-[#4B004B]' : 'text-gray-900 dark:text-white'}`}>
               Saved Messages
             </h3>
             <span className="text-[10px] bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400 px-1.5 py-0.5 rounded uppercase font-bold">
@@ -415,7 +415,7 @@ async function handleStartChat(friendId: string) {
         <div
           key={friend.id}
           className={`p-4 border-b transition-colors ${
-            theme === 'romantic' 
+            theme === 'sweet' 
               ? 'border-[#FFB6C1]/20 hover:bg-[#FFC0CB]/20' 
               : 'border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50'
           }`}
@@ -435,7 +435,7 @@ async function handleStartChat(friendId: string) {
             </div>
 
             <div className="flex-1 min-w-0">
-              <h3 className={`font-semibold truncate ${theme === 'romantic' ? 'text-[#4B004B]' : 'text-gray-900 dark:text-white'}`}>
+              <h3 className={`font-semibold truncate ${theme === 'sweet' ? 'text-[#4B004B]' : 'text-gray-900 dark:text-white'}`}>
                 {friend.display_name}
               </h3>
               <p className="text-sm text-gray-500 truncate">@{friend.username}</p>
@@ -449,7 +449,7 @@ async function handleStartChat(friendId: string) {
     onClose();
   }}
   className={`p-2 rounded-full transition-colors ${
-    theme === 'romantic' 
+    theme === 'sweet' 
       ? 'bg-[#FFB6C1] text-white hover:bg-[#FF69B4]' 
       : 'bg-pink-100 text-pink-600 hover:bg-pink-200'
   }`}
@@ -501,7 +501,7 @@ async function handleStartChat(friendId: string) {
                       </div>
 
                       <div className="flex-1 min-w-0">
-                        <h3 className={`font-semibold truncate ${theme === 'romantic' ? 'text-[#4B004B]' : 'text-gray-900 dark:text-white'}`}>
+                        <h3 className={`font-semibold truncate ${theme === 'sweet' ? 'text-[#4B004B]' : 'text-gray-900 dark:text-white'}`}>
                           {request.profiles.display_name}
                         </h3>
                         <p className="text-sm text-gray-500 truncate">
@@ -567,7 +567,7 @@ async function handleStartChat(friendId: string) {
                       </div>
 
                       <div className="flex-1 min-w-0">
-                        <h3 className={`font-semibold truncate ${theme === 'romantic' ? 'text-[#4B004B]' : 'text-gray-900 dark:text-white'}`}>
+                        <h3 className={`font-semibold truncate ${theme === 'sweet' ? 'text-[#4B004B]' : 'text-gray-900 dark:text-white'}`}>
                           {result.display_name}
                         </h3>
                         <p className="text-sm text-gray-500 truncate">

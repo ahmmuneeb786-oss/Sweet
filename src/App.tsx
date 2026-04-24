@@ -5,6 +5,7 @@ import { Dashboard } from './pages/Dashboard';
 import { initializeDictionary } from './predictionService';
 import { Heart, Paperclip, X, Search } from 'lucide-react';
 import { FloatingHearts } from './components/FloatingHearts';
+import { StrictLock } from './components/StrictLock';
 
 // Define the interface for our GIF objects
 export interface GifItem {
@@ -12,14 +13,18 @@ export interface GifItem {
   packName: string;
 }
 
-function AppContent() {
-  const { user, loading } = useAuth();
-  
+function AppContent() { const { user, loading } = useAuth();
   // --- STATES ---
   const [showGifPanel, setShowGifPanel] = useState(false);
   const [gifSearch, setGifSearch] = useState('');
-  const [theme, setTheme] = useState<'light' | 'dark' | 'romantic'>('light');
-  
+  const [theme, setTheme] = useState<'light' | 'dark' | 'sweet'>('sweet');
+  const [previewGifs, setPreviewGifs] = useState<any[]>([]);
+  const [lastSearchQuery, setLastSearchQuery] = useState('');
+  const [showLetter, setShowLetter] = useState(false);
+  const [hasOpened, setHasOpened] = useState(false);
+  const [mailStage, setMailStage] = useState<'box-arrival' | 'box-idle' | 'envelope-reveal' | 'letter-unfold'>('box-arrival');
+  const [isLocked, setIsLocked] = useState(true);
+  const [faceLockEnabled, setFaceLockEnabled] = useState(false);
   // Updated storage to handle objects instead of just strings
   const [myGifs, setMyGifs] = useState<GifItem[]>(() => {
     const saved = localStorage.getItem('sweet_user_gifs');
@@ -31,23 +36,23 @@ function AppContent() {
     );
   });
 
-  const [previewGifs, setPreviewGifs] = useState<any[]>([]);
-  const [lastSearchQuery, setLastSearchQuery] = useState('');
-  const [showLetter, setShowLetter] = useState(false);
-  const [hasOpened, setHasOpened] = useState(false);
-  const [mailStage, setMailStage] = useState<'box-arrival' | 'box-idle' | 'envelope-reveal' | 'letter-unfold'>('box-arrival');
-
+  useEffect(() => {
+   const savedLockSetting = localStorage.getItem('face_lock_enabled');
+   if (savedLockSetting !== null) {
+     setFaceLockEnabled(savedLockSetting === 'true');
+   }
+  }, []);
 
   useEffect(() => {
-  if (!loading && user && !hasOpened) {
-    setShowLetter(true);
-  }
-}, [loading, user]);
+   if (!loading && user && !hasOpened) {
+     setShowLetter(true);
+   }
+  }, [loading, user]);
 
   // --- INITIALIZATION ---
   useEffect(() => {
     initializeDictionary();
-    const savedTheme = localStorage.getItem('theme') as 'light' | 'dark' | 'romantic';
+    const savedTheme = localStorage.getItem('theme') as 'light' | 'dark' | 'sweet';
     if (savedTheme) setTheme(savedTheme);
   }, []);
 
@@ -296,9 +301,13 @@ if (loading) {
   }
 
   return (
-    <div className={theme === 'dark' ? 'dark' : theme === 'romantic' ? 'romantic-theme' : ''}>
+    <div className={theme === 'dark' ? 'dark' : theme === 'sweet' ? 'sweet-theme' : ''}>
+      {user && !showLetter && faceLockEnabled && isLocked && (
+        <StrictLock onUnlock={() => setIsLocked(false)} />
+      )}
+
       <div className={`min-h-screen transition-colors duration-300 ${
-        theme === 'dark' ? 'bg-gray-900 text-white' : theme === 'romantic' ? 'bg-[#FFE4E1] text-[#4B004B]' : 'bg-gray-50 text-gray-900'
+        theme === 'dark' ? 'bg-gray-900 text-white' : theme === 'sweet' ? 'bg-[#FFF0F5] text-[#FF69B4]' : 'bg-gray-50 text-gray-900'
       }`}>
         
         <Dashboard 

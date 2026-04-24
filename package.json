@@ -13,6 +13,7 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.57.4",
     "@vercel/speed-insights": "^2.0.0",
+    "face-api.js": "^0.22.2",
     "idb": "^8.0.3",
     "leaflet": "^1.9.4",
     "lucide-react": "^0.344.0",

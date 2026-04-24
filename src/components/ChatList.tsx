@@ -29,7 +29,7 @@ interface ChatListProps {
   onShowFriends: () => void;
   onShowSettings: () => void;
   onShowCreateChat: () => void;
-  theme: 'light' | 'dark' | 'romantic';
+  theme: 'light' | 'dark' | 'sweet';
 }
 
 export function ChatList({ selectedChatId, onSelectChat, onShowProfile, onShowFriends, onShowSettings, onShowCreateChat, theme }: ChatListProps) {
@@ -208,8 +208,8 @@ function subscribeToChats() {
   }
 
   return (
-    <div className={`w-full md:w-96 h-full p-4 border-b sticky top-0 z-10 bg-[#FFE4E1]/90 backdrop-blur-md flex-shrink-0 ${theme === 'romantic' ? 'bg-[#FFF0F5] border-[#FFB6C1]' : 'bg-white dark:bg-gray-900 border-gray-200'}`}>
-      <div className={`p-4 border-b ${theme === 'romantic' ? 'border-[#FFB6C1]' : 'border-gray-200 dark:border-gray-700'}`}>
+    <div className={`w-full md:w-96 h-full p-4 border-b sticky top-0 z-10 bg-[#FFE4E1]/90 backdrop-blur-md flex-shrink-0 ${theme === 'sweet' ? 'bg-[#FFF0F5] border-[#FFB6C1]' : 'bg-white dark:bg-gray-900 border-gray-200'}`}>
+      <div className={`p-4 border-b ${theme === 'sweet' ? 'border-[#FFB6C1]' : 'border-gray-200 dark:border-gray-700'}`}>
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
             <div className="relative">
@@ -252,7 +252,7 @@ function subscribeToChats() {
                   onClick={() => setShowMenu(false)}
                 />
                   <div className={`absolute right-0 top-full mt-2 w-64 rounded-xl shadow-lg py-2 z-20 border ${
-                    theme === 'romantic' 
+                    theme === 'sweet' 
                      ? 'bg-[#FFE4E1] border-[#FFB6C1]' 
                       : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700'
                    }`}>                  <button
@@ -309,7 +309,7 @@ function subscribeToChats() {
     value={searchQuery}
     onChange={(e) => setSearchQuery(e.target.value)}
     className={`w-full pl-10 pr-4 py-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-pink-500 transition-colors border ${
-      theme === 'romantic'
+      theme === 'sweet'
         ? 'bg-white border-[#FFB6C1] text-[#4B004B] placeholder:text-[#8B004B]/50'
         : 'bg-gray-100 dark:bg-gray-700 border-transparent text-gray-900 dark:text-white dark:placeholder-gray-400'
     }`}
@@ -327,7 +327,7 @@ function subscribeToChats() {
           <button
   onClick={onShowCreateChat}
   className={`flex items-center justify-center gap-2 px-3 py-2 rounded-xl transition-all border ${
-    theme === 'romantic'
+    theme === 'sweet'
       ? 'bg-white border-[#FFB6C1] text-[#FF69B4] hover:bg-[#FFE4E1]' 
       /* Uses your --border-color and --primary-color */
       : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-transparent hover:bg-gray-200'
@@ -363,8 +363,8 @@ function subscribeToChats() {
                 onClick={() => onSelectChat(chat.id)}
                 className={`w-full p-4 flex items-start gap-3 transition-all active:scale-[0.98] ${
   selectedChatId === chat.id 
-    ? theme === 'romantic' ? 'bg-[#FFC0CB]/40' : 'bg-pink-50 dark:bg-pink-900/30' 
-    : theme === 'romantic' ? 'hover:bg-[#FFC0CB]/20' : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'
+    ? theme === 'sweet' ? 'bg-[#FFC0CB]/40' : 'bg-pink-50 dark:bg-pink-900/30' 
+    : theme === 'sweet' ? 'hover:bg-[#FFC0CB]/20' : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'
 } ${getThemeColor(chat.theme)}`}
               >
                 <div className="relative flex-shrink-0">

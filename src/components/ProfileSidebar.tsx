@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabase';
 
 interface ProfileSidebarProps {
   onClose: () => void;
-  theme: 'light' | 'dark' | 'romantic'; // Add this line!
+  theme: 'light' | 'dark' | 'sweet'; // Add this line!
 }
 
 export function ProfileSidebar({ onClose, theme }: ProfileSidebarProps) {
@@ -100,15 +100,15 @@ export function ProfileSidebar({ onClose, theme }: ProfileSidebarProps) {
       <div className={`fixed right-0 top-0 h-full w-full md:w-96 shadow-2xl z-50 flex flex-col transition-all duration-300 ${
   theme === 'dark' 
     ? 'bg-gray-900 text-white' 
-    : theme === 'romantic' 
+    : theme === 'sweet' 
     ? 'bg-[#FFE4E1] text-[#4B004B]' 
     : 'bg-white text-gray-900'
 }`}>
         <div className={`p-6 border-b flex items-center justify-between ${
-  theme === 'romantic' ? 'border-[#FFB6C1]/50' : 'border-gray-200 dark:border-gray-800'
+  theme === 'sweet' ? 'border-[#FFB6C1]/50' : 'border-gray-200 dark:border-gray-800'
 }`}>
   <h2 className={`text-xl font-bold ${
-  theme === 'romantic' 
+  theme === 'sweet' 
     ? 'text-[#4B004B]' 
     : theme === 'dark' 
     ? 'text-white' 
@@ -119,10 +119,10 @@ export function ProfileSidebar({ onClose, theme }: ProfileSidebarProps) {
   <button
     onClick={onClose}
     className={`p-2 rounded-full transition-colors ${
-      theme === 'romantic' ? 'hover:bg-[#FFC0CB]/50' : 'hover:bg-gray-100 dark:hover:bg-gray-800'
+      theme === 'sweet' ? 'hover:bg-[#FFC0CB]/50' : 'hover:bg-gray-100 dark:hover:bg-gray-800'
     }`}
   >
-    <X className={`w-5 h-5 ${theme === 'romantic' ? 'text-[#8B004B]' : 'text-gray-600 dark:text-gray-400'}`} />
+    <X className={`w-5 h-5 ${theme === 'sweet' ? 'text-[#8B004B]' : 'text-gray-600 dark:text-gray-400'}`} />
   </button>
 </div>
 
@@ -169,7 +169,7 @@ export function ProfileSidebar({ onClose, theme }: ProfileSidebarProps) {
               <button
                 onClick={() => setIsEditing(true)}
                 className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-medium transition-all shadow-sm ${
-                  theme === 'romantic' ? 'bg-[#FF69B4] text-white hover:bg-[#FF1493]' : 
+                  theme === 'sweet' ? 'bg-[#FF69B4] text-white hover:bg-[#FF1493]' : 
                   theme === 'dark' ? 'bg-gray-800 text-gray-200 border border-gray-700 hover:bg-gray-700' : 
                   'bg-[#FF4D6D] text-white hover:bg-[#FF758F]'
                 }`}
@@ -183,7 +183,7 @@ export function ProfileSidebar({ onClose, theme }: ProfileSidebarProps) {
           <div className="space-y-4">
             <div>
               <label className={`block text-sm font-medium mb-2 ${
-  theme === 'romantic' 
+  theme === 'sweet' 
     ? 'text-[#8B004B]' 
     : theme === 'dark'
     ? 'text-gray-400' // This makes it visible (silver/grey) in Dark Mode
@@ -196,7 +196,7 @@ export function ProfileSidebar({ onClose, theme }: ProfileSidebarProps) {
                 value={profile?.username || ''}
                 disabled
                 className={`w-full px-4 py-2 rounded-xl border cursor-not-allowed transition-colors ${
-  theme === 'romantic' 
+  theme === 'sweet' 
     ? 'bg-[#FFC0CB]/30 border-[#FFB6C1] text-[#8B004B]' 
     : theme === 'dark'
     ? 'bg-gray-800 border-gray-700 text-gray-400' 
@@ -210,7 +210,7 @@ export function ProfileSidebar({ onClose, theme }: ProfileSidebarProps) {
 
             <div>
               <label className={`block text-sm font-medium mb-2 ${
-  theme === 'romantic' 
+  theme === 'sweet' 
     ? 'text-[#8B004B]' 
     : theme === 'dark'
     ? 'text-gray-400' // This makes it visible (silver/grey) in Dark Mode
@@ -224,19 +224,19 @@ export function ProfileSidebar({ onClose, theme }: ProfileSidebarProps) {
                 onChange={(e) => setDisplayName(e.target.value)}
                 disabled={!isEditing}
                 className={`w-full px-4 py-2 border rounded-xl outline-none transition-all focus:ring-2 focus:ring-pink-500 focus:border-transparent ${
-  theme === 'romantic' 
+  theme === 'sweet' 
     ? 'border-[#FFB6C1] text-[#4B004B]' 
     : theme === 'dark'
     ? 'border-gray-700 text-white' 
     : 'border-gray-300 text-black' // Forced Light to Black
 } ${
   !isEditing 
-    ? theme === 'romantic'
+    ? theme === 'sweet'
       ? 'bg-[#FFC0CB]/30 text-[#8B004B] cursor-allowed'
       : theme === 'dark'
       ? 'bg-gray-800 text-gray-400 cursor-allowed' // Original Dark colors
       : 'bg-gray-100 text-black cursor-allowed'    // Forced Light to Black
-    : theme === 'romantic'
+    : theme === 'sweet'
       ? 'bg-white'
       : theme === 'dark'
       ? 'bg-gray-900 text-white'
@@ -247,7 +247,7 @@ export function ProfileSidebar({ onClose, theme }: ProfileSidebarProps) {
 
             <div>
               <label className={`block text-sm font-medium mb-2 ${
-  theme === 'romantic' 
+  theme === 'sweet' 
     ? 'text-[#8B004B]' 
     : theme === 'dark'
     ? 'text-gray-400' // This makes it visible (silver/grey) in Dark Mode
@@ -262,19 +262,19 @@ export function ProfileSidebar({ onClose, theme }: ProfileSidebarProps) {
                 rows={4}
                 maxLength={250}
                 className={`w-full px-4 py-2 border rounded-xl outline-none transition-all resize-none focus:ring-2 focus:ring-pink-500 focus:border-transparent ${
-  theme === 'romantic' 
+  theme === 'sweet' 
     ? 'border-[#FFB6C1] text-[#4B004B] placeholder:text-[#8B004B]/50' 
     : theme === 'dark'
     ? 'border-gray-700 text-white' 
     : 'border-gray-300 text-black' // Forced Light to Black
 } ${
   !isEditing 
-    ? theme === 'romantic'
+    ? theme === 'sweet'
       ? 'bg-[#FFC0CB]/30 text-[#8B004B] cursor-allowed'
       : theme === 'dark'
       ? 'bg-gray-800 text-gray-400 cursor-allowed' // Original Dark colors
       : 'bg-gray-100 text-black cursor-allowed'    // Forced Light to Black
-    : theme === 'romantic'
+    : theme === 'sweet'
       ? 'bg-white'
       : theme === 'dark'
       ? 'bg-gray-900 text-white'
@@ -309,7 +309,7 @@ export function ProfileSidebar({ onClose, theme }: ProfileSidebarProps) {
   onClick={handleCancel}
   disabled={loading}
   className={`px-4 py-2 rounded-xl transition-colors disabled:opacity-50 font-medium ${
-    theme === 'romantic'
+    theme === 'sweet'
       ? 'bg-[#FF69B4] text-[#4B004B] hover:bg-[#FF1493]' // Pink bg with Plum text
       : theme === 'dark'
       ? 'bg-gray-800 text-[#9ca3af] hover:bg-gray-700'  // Dark bg with Grey text
@@ -324,10 +324,10 @@ export function ProfileSidebar({ onClose, theme }: ProfileSidebarProps) {
 
           {/* Account Information Section */}
           <div className={`border-t pt-6 ${
-            theme === 'romantic' ? 'border-[#FFB6C1]/50' : 'border-gray-200 dark:border-gray-800'
+            theme === 'sweet' ? 'border-[#FFB6C1]/50' : 'border-gray-200 dark:border-gray-800'
           }`}>
             <h3 className={`text-sm font-semibold mb-4 ${
-              theme === 'romantic' ? 'text-[#4B004B]' : 'text-gray-900 dark:text-white'
+              theme === 'sweet' ? 'text-[#4B004B]' : 'text-gray-900 dark:text-white'
             }`}>
               Account Information
             </h3>
@@ -336,7 +336,7 @@ export function ProfileSidebar({ onClose, theme }: ProfileSidebarProps) {
               {/* Status Row */}
               <div className="flex justify-between items-center">
                 <span className={`text-sm ${
-                  theme === 'romantic' ? 'text-[#8B004B]/70' : 'text-gray-700 dark:text-gray-500'
+                  theme === 'sweet' ? 'text-[#8B004B]/70' : 'text-gray-700 dark:text-gray-500'
                 }`}>
                   Status
                 </span>
@@ -349,12 +349,12 @@ export function ProfileSidebar({ onClose, theme }: ProfileSidebarProps) {
               {/* Member Since Row */}
               <div className="flex justify-between items-center">
                 <span className={`text-sm ${
-                  theme === 'romantic' ? 'text-[#8B004B]/70' : 'text-gray-700 dark:text-gray-500'
+                  theme === 'sweet' ? 'text-[#8B004B]/70' : 'text-gray-700 dark:text-gray-500'
                 }`}>
                   Member since
                 </span>
                 <span className={`text-sm font-bold ${
-  theme === 'romantic'
+  theme === 'sweet'
     ? 'text-[#8B004B]' 
     : theme === 'dark'
     ? 'text-gray-400' // This is the grey you wanted for Dark Theme

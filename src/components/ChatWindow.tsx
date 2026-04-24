@@ -14,7 +14,7 @@ interface ChatWindowProps {
   myGifs: GifItem[];
   setMyGifs: React.Dispatch<React.SetStateAction<GifItem[]>>;
   chatId: string;
-  theme: 'light' | 'dark' | 'romantic';
+  theme: 'light' | 'dark' | 'sweet';
   onBack?: () => void;
 }
 
@@ -767,7 +767,7 @@ const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     <div className={`flex-1 flex flex-col h-full overflow-hidden ${
       theme === 'dark'
         ? 'bg-gray-900 text-white'
-        : theme === 'romantic'
+        : theme === 'sweet'
         ? 'bg-[#FFE4E1] text-[#4B004B]'
         : 'bg-white text-gray-900'
     }`}>
@@ -842,7 +842,7 @@ const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
 )}
 
       {/* HEADER SECTION */}
-      <div className={`px-4 md:px-6 py-3 md:py-4 border-b ${theme === 'romantic' ? 'border-[#FFB6C1]' : 'border-gray-200'} bg-gradient-to-r ${getThemeGradient()} shadow-sm z-10`}>
+      <div className={`px-4 md:px-6 py-3 md:py-4 border-b ${theme === 'sweet' ? 'border-[#FFB6C1]' : 'border-gray-200'} bg-gradient-to-r ${getThemeGradient()} shadow-sm z-10`}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 md:gap-3">
             <button 
@@ -910,7 +910,7 @@ const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
       <div 
   onClick={() => setShowSweetKeyboard(false)}
   className={`flex-1 overflow-y-auto p-4 md:p-6 space-y-4 transition-colors duration-300 scroll-smooth overscroll-behavior-y-contain ${
-    theme === 'dark' ? 'bg-gray-900' : theme === 'romantic' ? 'bg-[#FFE4E1]/30' : 'bg-gray-50'
+    theme === 'dark' ? 'bg-gray-900' : theme === 'sweet' ? 'bg-[#FFE4E1]/30' : 'bg-gray-50'
   }`}
 >
   {messages.map((message, index) => {
@@ -962,12 +962,12 @@ const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
 
                   {!isSending && !isFailed && (
                     <div className={`flex items-center gap-1 text-xs transition-colors ${
-                      theme === 'romantic' ? 'text-[#8B004B]' : 'text-gray-500 dark:text-gray-400'
+                      theme === 'sweet' ? 'text-[#8B004B]' : 'text-gray-500 dark:text-gray-400'
                     }`}>
                       {message.delivery_status === 'read' ? (
                         <div className="flex items-center">
-                          <Check className={`w-3 h-3 ${theme === 'romantic' ? 'text-[#FF1493]' : 'text-blue-500'}`} />
-                          <Check className={`w-3 h-3 -ml-1.5 ${theme === 'romantic' ? 'text-[#FF1493]' : 'text-blue-500'}`} />
+                          <Check className={`w-3 h-3 ${theme === 'sweet' ? 'text-[#FF1493]' : 'text-blue-500'}`} />
+                          <Check className={`w-3 h-3 -ml-1.5 ${theme === 'sweet' ? 'text-[#FF1493]' : 'text-blue-500'}`} />
                         </div>
                       ) : (
                         message.delivery_status === 'sent' && <Check className="w-3 h-3 opacity-60" />
@@ -983,7 +983,7 @@ const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         {/* TYPING INDICATOR */}
         {isOtherTyping && (
           <div className={`flex items-center gap-2 p-2 ml-4 mb-2 animate-in fade-in slide-in-from-left-2 duration-300 ${
-            theme === 'romantic' ? 'text-[#8B004B]' : 'text-gray-500 dark:text-gray-400'
+            theme === 'sweet' ? 'text-[#8B004B]' : 'text-gray-500 dark:text-gray-400'
           }`}>
             <div className="flex gap-1">
               <span className="w-1.5 h-1.5 bg-current opacity-40 rounded-full animate-bounce" />
@@ -998,7 +998,7 @@ const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
 
       {/* INPUT AREA */}
       <div className={`p-3 md:p-4 border-t transition-colors duration-300 ${
-        theme === 'dark' ? 'bg-gray-800 border-gray-700' : theme === 'romantic' ? 'bg-[#FFF0F5] border-[#FFB6C1]' : 'bg-white border-gray-200'
+        theme === 'dark' ? 'bg-gray-800 border-gray-700' : theme === 'sweet' ? 'bg-[#FFF0F5] border-[#FFB6C1]' : 'bg-white border-gray-200'
       }`}>
 
         {selectedDoc && (
@@ -1147,7 +1147,7 @@ const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
                   placeholder="Spread love..."
                   rows={1}
                   className={`w-full pl-4 pr-10 py-2.5 border rounded-2xl focus:outline-none focus:ring-2 resize-none transition-all text-sm md:text-base scrollbar-none md:scrollbar-hidden
-                    ${theme === 'romantic' ? 'bg-white border-[#FFB6C1] text-[#4B004B] focus:ring-[#FF69B4]' : 'bg-gray-50 border-gray-300 focus:ring-pink-400'}`}
+                    ${theme === 'sweet' ? 'bg-white border-[#FFB6C1] text-[#4B004B] focus:ring-[#FF69B4]' : 'bg-gray-50 border-gray-300 focus:ring-pink-400'}`}
                   style={{ maxHeight: '150px', minHeight: '44px', lineHeight: '1.5' }}
                 />
                 {newMessage.length > 0 && (

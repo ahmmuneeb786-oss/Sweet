@@ -1,17 +1,19 @@
 import { useState } from 'react';
-import { ChevronRight, X, Bell, Lock, Palette, HardDrive, LogOut, User, Shield } from 'lucide-react';
+import { ChevronRight, X, Bell, Lock, Palette, HardDrive, LogOut, User, Shield, ShieldCheck, Smile } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 
-type SettingsTab = 'main' | 'account' | 'privacy' | 'notifications' | 'theme' | 'storage' | 'locked';
+type SettingsTab = 'main' | 'account' | 'privacy' | 'notifications' | 'theme' | 'storage' | 'locked' | 'lock';
 
 interface SettingsProps {
   onClose: () => void;
-  theme: 'light' | 'dark' | 'romantic';   // current theme
-  setTheme: React.Dispatch<React.SetStateAction<'light' | 'dark' | 'romantic'>>; // updater
+  theme: 'light' | 'dark' | 'sweet';   // current theme
+  setTheme: React.Dispatch<React.SetStateAction<'light' | 'dark' | 'sweet'>>;
+  faceLockEnabled: boolean;
+  setFaceLockEnabled: (val: boolean) => void;
 }
 
-export function Settings({ onClose, theme, setTheme }: SettingsProps) {
+export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLockEnabled }: SettingsProps) {
   const { profile, updateProfile, signOut } = useAuth();
   const [activeTab, setActiveTab] = useState<SettingsTab>('main');
   const [loading, setLoading] = useState(false);
@@ -20,6 +22,7 @@ export function Settings({ onClose, theme, setTheme }: SettingsProps) {
   const [bio, setBio] = useState(profile?.bio || '');
   const [newUsername, setNewUsername] = useState(profile?.username || '');
   const [usernameError, setUsernameError] = useState('');
+  const [showLockSubMenu, setShowLockSubMenu] = useState(false);
 
   const [privacySettings, setPrivacySettings] = useState({
     lastSeenVisibility: 'everyone',
@@ -113,6 +116,7 @@ export function Settings({ onClose, theme, setTheme }: SettingsProps) {
 
   const settingsSections = [
     { id: 'account', label: 'Account Settings', icon: User },
+    { id: 'lock', label: 'Lock App Settings', icon: ShieldCheck },
     { id: 'privacy', label: 'Privacy Settings', icon: Shield },
     { id: 'notifications', label: 'Notification Settings', icon: Bell },
     { id: 'theme', label: 'Theme Settings', icon: Palette },
@@ -235,6 +239,52 @@ export function Settings({ onClose, theme, setTheme }: SettingsProps) {
               </div>
             </div>
           )}
+
+          {activeTab === 'lock' && (
+  <div className="p-6 space-y-6">
+    <button
+      onClick={() => setActiveTab('main')}
+      className="flex items-center gap-2 text-pink-600 hover:text-pink-700 mb-4"
+    >
+      <X className="w-4 h-4" />
+      Back
+    </button>
+
+    <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-white rounded-lg text-pink-500 shadow-sm">
+            <Smile size={20} />
+          </div>
+          <div>
+            <p className="text-sm font-bold text-gray-800">Smile to Unlock</p>
+            <p className="text-[10px] text-gray-500 uppercase tracking-tight">Biometric Security</p>
+          </div>
+        </div>
+
+        {/* The Toggle Button */}
+        <button
+          onClick={() => {
+            const newValue = !faceLockEnabled;
+            setFaceLockEnabled(newValue);
+            localStorage.setItem('face_lock_enabled', newValue.toString());
+          }}
+          className={`w-12 h-6 rounded-full transition-all relative ${
+            faceLockEnabled ? 'bg-pink-500' : 'bg-gray-300'
+          }`}
+        >
+          <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${
+            faceLockEnabled ? 'left-7' : 'left-1'
+          }`} />
+        </button>
+      </div>
+      
+      <p className="mt-4 text-xs text-gray-500 leading-relaxed italic">
+        "When enabled, you'll need to show a happy smile to the camera to enter your dashboard."
+      </p>
+    </div>
+  </div>
+)}
 
           {activeTab === 'privacy' && (
             <div className="p-6 space-y-6">
@@ -360,18 +410,18 @@ export function Settings({ onClose, theme, setTheme }: SettingsProps) {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-3">App Theme</label>
                 <div className="space-y-2">
-                  {['romantic', 'light', 'dark'].map((t) => (
-  <label key={t}>
-    <input
-      type="radio"
-      name="theme"
-      value={t}
-      checked={theme === t}  // ❌ error
-      onChange={() => setTheme(t as 'light' | 'dark' | 'romantic')}
-    />
-    <span>{t} Mode</span>
-  </label>
-))}
+                  {['sweet', 'light', 'dark'].map((t) => (
+                    <label key={t}>
+                     <input
+                       type="radio"
+                       name="theme"
+                       value={t}
+                       checked={theme === t}
+                       onChange={() => setTheme(t as 'light' | 'dark' | 'sweet')}
+                     />
+                    <span>{t} Mode</span>
+                   </label>
+              ))}
                 </div>
               </div>
 

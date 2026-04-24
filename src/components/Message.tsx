@@ -23,7 +23,7 @@ interface MessageProps {
   showAvatar: boolean;
   showDateSeparator: boolean;
   reactions: string[];
-  theme: 'light' | 'dark' | 'romantic';
+  theme: 'light' | 'dark' | 'sweet';
   onDelete?: () => void;
 }
 
@@ -291,7 +291,7 @@ async function handleCopy() {
   // Deeply rounded "Petal" shape. Only the sender's corner is sharp if it's the last message.
   const shape = "rounded-[32px]";
 
-  if (theme === 'romantic') {
+  if (theme === 'sweet') {
     return own
       ? `${shape} bg-gradient-to-br from-[#FF85A1] via-[#FF69B4] to-[#FF1493] text-white shadow-[0_4px_15px_rgba(255,20,147,0.3)] border border-white/20`
       : `${shape} bg-white/40 backdrop-blur-xl border border-white/40 text-[#8B004B] shadow-[0_4px_10px_rgba(0,0,0,0.05)]`;
@@ -335,7 +335,7 @@ async function handleCopy() {
         <div className="flex items-center gap-3 w-full max-w-[200px]">
           <div className="h-[1px] flex-1 bg-gradient-to-r from-transparent via-pink-300/50 to-transparent" />
           <span className={`text-[10px] font-black uppercase tracking-[2px] whitespace-nowrap
-            ${theme === 'romantic' ? 'text-[#FF1493] bg-white/50 px-3 py-1 rounded-full backdrop-blur-sm shadow-sm' : 'text-gray-400'}
+            ${theme === 'sweet' ? 'text-[#FF1493] bg-white/50 px-3 py-1 rounded-full backdrop-blur-sm shadow-sm' : 'text-gray-400'}
           `}>
             {formatStickyDate(message.created_at)}
           </span>
@@ -361,7 +361,7 @@ async function handleCopy() {
               {message.profiles.display_name[0]}
             </div>
           )}
-          <span className="text-[10px] font-bold text-gray-500 romantic-theme:text-pink-600 uppercase tracking-wider">
+          <span className="text-[10px] font-bold text-gray-500 sweet-theme:text-pink-600 uppercase tracking-wider">
             {message.profiles.display_name}
           </span>
         </div>
@@ -410,7 +410,7 @@ async function handleCopy() {
     )}
   </div>
 ) : (message.type === 'file' || message.type === 'doc') ? (
-    /* --- DOC FACE: "Romantic Receipt" --- */
+    /* --- DOC FACE: "sweet Receipt" --- */
     <a href={message.media_url || '#'} target="_blank" className="flex items-center gap-4 py-2 min-w-[220px]">
       <div className="relative">
         <div className={`p-3 rounded-full ${isOwn ? 'bg-white/30' : 'bg-[#FF69B4]/20'}`}>
@@ -565,13 +565,13 @@ async function handleCopy() {
         onClick={() => handleReaction(r.reaction)}
         className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-bold transition-all shadow-md border whitespace-nowrap ${
           userReactionMap.get(r.reaction) === user?.id
-            ? (theme === 'romantic' ? 'bg-[#FF69B4] text-white border-[#FF1493] scale-105' : 'bg-pink-100 dark:bg-pink-900/30 border-pink-300')
-            : (theme === 'romantic' ? 'bg-white border-[#FFB6C1] text-[#8B004B]' : 'bg-white dark:bg-gray-800 border-gray-200')
+            ? (theme === 'sweet' ? 'bg-[#FF69B4] text-white border-[#FF1493] scale-105' : 'bg-pink-100 dark:bg-pink-900/30 border-pink-300')
+            : (theme === 'sweet' ? 'bg-white border-[#FFB6C1] text-[#8B004B]' : 'bg-white dark:bg-gray-800 border-gray-200')
         }`}
       >
         <span>{r.reaction}</span>
         {r.count > 1 && (
-          <span className={`font-black ${theme === 'romantic' ? 'text-white/90' : 'text-gray-500'}`}>
+          <span className={`font-black ${theme === 'sweet' ? 'text-white/90' : 'text-gray-500'}`}>
             {r.count}
           </span>
         )}
@@ -587,7 +587,7 @@ async function handleCopy() {
   className={`
     flex items-center gap-1 mt-1 w-full
     ${isOwn ? 'ml-auto flex-row-reverse' : 'mr-auto flex-row'}
-    ${theme === 'romantic' ? 'text-[#FF69B4]/80' : 'text-gray-400'}
+    ${theme === 'sweet' ? 'text-[#FF69B4]/80' : 'text-gray-400'}
   `}
 >
   <span className="text-[10px] font-bold">
@@ -599,7 +599,7 @@ async function handleCopy() {
 <button
   onClick={() => setShowReactions(!showReactions)}
   className={`p-1.5 rounded-full border-2 transition-all duration-300 ${
-    theme === 'romantic' 
+    theme === 'sweet' 
       ? 'border-[#FFB6C1] text-[#FF69B4] hover:bg-pink-50 hover:scale-110' 
       : 'border-gray-200 text-gray-600 dark:border-gray-700 dark:text-gray-400 hover:bg-gray-100'
   }`}
@@ -612,7 +612,7 @@ async function handleCopy() {
                 <div className="fixed inset-0 z-10" onClick={() => setShowReactions(false)} />
                 <div
                   className={`absolute -bottom-12 p-2 rounded-xl shadow-lg border flex gap-2 z-20 transition-colors duration-300 ${
-                    theme === 'romantic' ? 'bg-[#FFF0F5] border-[#FFB6C1]' : theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+                    theme === 'sweet' ? 'bg-[#FFF0F5] border-[#FFB6C1]' : theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
                   } ${isOwn ? 'right-0' : 'left-0'}`}
                 >
                   {reactions.map((emoji) => (
@@ -641,7 +641,7 @@ async function handleCopy() {
     setShowMenu(!showMenu);
   }}
   className={`p-1.5 rounded-full border-2 transition-all duration-300 ${
-    theme === 'romantic' 
+    theme === 'sweet' 
       ? 'border-[#FFB6C1] text-[#FF69B4] hover:bg-pink-50 hover:scale-110' 
       : 'border-gray-200 text-gray-600 dark:border-gray-700 dark:text-gray-400 hover:bg-gray-100'
   }`}
@@ -654,7 +654,7 @@ async function handleCopy() {
                   <div className="fixed inset-0 z-10" onClick={() => setShowMenu(false)} />
                   <div
                     className={`absolute w-48 max-w-[70vw] rounded-lg shadow-lg border py-1 z-20 transition-all duration-300 ${
-  theme === 'romantic' ? 'bg-[#FFF0F5] border-[#FFB6C1]' : theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+  theme === 'sweet' ? 'bg-[#FFF0F5] border-[#FFB6C1]' : theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
 } ${isOwn ? 'right-0' : 'left-0'} ${
   menuDirection === 'up' ? 'bottom-full mb-1 origin-bottom' : 'top-full mt-1 origin-top'
 }`}
@@ -670,7 +670,7 @@ async function handleCopy() {
     key={item.label}
     onClick={() => { item.action(); setShowMenu(false); }}
     className={`w-full px-4 py-2 text-left flex items-center gap-2 text-sm border border-transparent transition-all ${
-      theme === 'romantic' 
+      theme === 'sweet' 
         ? 'hover:bg-[#FFC0CB]/30 text-[#4B004B] hover:border-[#FFB6C1]' 
         : theme === 'dark'
         ? 'hover:bg-gray-700 text-white' // Kept your dark theme perfect
@@ -688,7 +688,7 @@ async function handleCopy() {
     <button
       onClick={() => setShowMenu(false)}
       className={`w-full px-4 py-2 text-left flex items-center gap-2 text-sm border border-transparent transition-all ${
-        theme === 'romantic' 
+        theme === 'sweet' 
           ? 'hover:bg-[#FFC0CB]/30 text-[#4B004B] hover:border-[#FFB6C1]' 
           : theme === 'dark'
           ? 'hover:bg-gray-700 text-white'

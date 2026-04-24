@@ -13,8 +13,8 @@ interface DashboardProps {
   onOpenGifPanel: () => void;
   myGifs: GifItem[];
   setMyGifs: React.Dispatch<React.SetStateAction<GifItem[]>>;
-  theme: 'light' | 'dark' | 'romantic';
-  setTheme: React.Dispatch<React.SetStateAction<'light' | 'dark' | 'romantic'>>;
+  theme: 'light' | 'dark' | 'sweet';
+  setTheme: React.Dispatch<React.SetStateAction<'light' | 'dark' | 'sweet'>>;
 }
 
 export function DesktopDashboard({ theme, setTheme, onOpenGifPanel, myGifs, setMyGifs }: DashboardProps) {
@@ -23,18 +23,22 @@ export function DesktopDashboard({ theme, setTheme, onOpenGifPanel, myGifs, setM
   const [showFriends, setShowFriends] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showCreateChat, setShowCreateChat] = useState(false);
+  
+  const [faceLockEnabled, setFaceLockEnabled] = useState(() => {
+  return localStorage.getItem('face_lock_enabled') === 'true';
+  });
 
   return (
     <div
       className={`h-screen w-full flex overflow-hidden relative ${
         theme === 'dark'
           ? 'bg-gray-900'
-          : theme === 'romantic'
+          : theme === 'sweet'
           ? 'bg-[#FFE4E1] text-[#4B004B]'
           : 'bg-gray-50'
       }`}
     >
-      {theme === 'romantic' && <FloatingHearts />}
+      {theme === 'sweet' && <FloatingHearts />}
 
       {/* Chat list sidebar */}
       <ChatList
@@ -73,7 +77,7 @@ export function DesktopDashboard({ theme, setTheme, onOpenGifPanel, myGifs, setM
           className={`flex-1 flex items-center justify-center ${
             theme === 'dark'
               ? 'bg-gray-800'
-              : theme === 'romantic'
+              : theme === 'sweet'
               ? 'bg-[#FFE4E1] text-[#4B004B]'
               : 'bg-white'
           }`}
@@ -87,7 +91,7 @@ export function DesktopDashboard({ theme, setTheme, onOpenGifPanel, myGifs, setM
                 className={`text-2xl font-bold mb-2 ${
                   theme === 'dark'
                     ? 'text-white'
-                    : theme === 'romantic'
+                    : theme === 'sweet'
                     ? 'text-[#4B004B]'
                     : 'text-gray-800'
                 }`}
@@ -98,7 +102,7 @@ export function DesktopDashboard({ theme, setTheme, onOpenGifPanel, myGifs, setM
                 className={`${
                   theme === 'dark'
                     ? 'text-gray-300'
-                    : theme === 'romantic'
+                    : theme === 'sweet'
                     ? 'text-[#8B004B]'
                     : 'text-gray-600'
                 }`}
@@ -133,6 +137,8 @@ export function DesktopDashboard({ theme, setTheme, onOpenGifPanel, myGifs, setM
           onClose={() => setShowSettings(false)}
           theme={theme}
           setTheme={setTheme}
+          faceLockEnabled={faceLockEnabled}
+          setFaceLockEnabled={setFaceLockEnabled}
         />
       )}
       {showCreateChat && (

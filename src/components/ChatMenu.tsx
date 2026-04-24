@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 
 interface ChatMenuProps {
-  theme: 'light' | 'dark' | 'romantic'
+  theme: 'light' | 'dark' | 'sweet'
   chatId: string;
   onClose: () => void;
 }
@@ -72,7 +72,7 @@ export function ChatMenu({ theme, chatId, onClose }: ChatMenuProps) {
         onClick={() => setShowMenu(!showMenu)}
         className="p-2 hover:bg-white/10 rounded-full transition-colors active:scale-90"
       >
-        <MoreVertical className={`w-5 h-5 ${theme === 'romantic' ? 'text-[#8B004B]' : 'text-white'}`} />
+        <MoreVertical className={`w-5 h-5 ${theme === 'sweet' ? 'text-[#8B004B]' : 'text-white'}`} />
       </button>
 
       {/* 2. MENU DROPDOWN / BOTTOM SHEET */}
@@ -91,7 +91,7 @@ export function ChatMenu({ theme, chatId, onClose }: ChatMenuProps) {
             /* Desktop Styles: Small dropdown */
             md:absolute md:top-full md:bottom-auto md:left-auto md:right-0 md:w-56 md:rounded-xl md:p-0 md:pb-0 md:pt-0
             shadow-2xl border transition-all animate-in slide-in-from-bottom md:slide-in-from-top-2 duration-300
-            ${theme === 'romantic' 
+            ${theme === 'sweet' 
               ? 'bg-[#FFE4E1] border-[#FFB6C1]' 
               : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700'}
           `}>
@@ -111,7 +111,7 @@ export function ChatMenu({ theme, chatId, onClose }: ChatMenuProps) {
                     onClose();
                   }}
                   className={`w-full px-6 md:px-4 py-4 md:py-2 text-left flex items-center gap-4 md:gap-3 transition-colors active:bg-black/5 ${
-                    theme === 'romantic' 
+                    theme === 'sweet' 
                       ? 'hover:bg-[#FFC0CB]/30 text-[#4B004B]' 
                       : 'hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200'
                   } ${item.danger ? '!text-red-600' : ''}`}
@@ -127,7 +127,7 @@ export function ChatMenu({ theme, chatId, onClose }: ChatMenuProps) {
             
             <div className="px-6 md:px-4 py-2">
               <p className={`text-xs font-bold uppercase tracking-wider mb-3 ${
-                theme === 'romantic' ? 'text-[#8B004B]' : 'text-gray-400'
+                theme === 'sweet' ? 'text-[#8B004B]' : 'text-gray-400'
               }`}>
                 Mute Notifications
               </p>
@@ -142,7 +142,7 @@ export function ChatMenu({ theme, chatId, onClose }: ChatMenuProps) {
                     key={option.value}
                     onClick={() => { handleMuteChat(option.value as any); setShowMenu(false); onClose(); }}
                     className={`flex-1 md:w-full px-3 py-3 md:py-1 text-center md:text-left text-xs font-bold rounded-xl transition-colors ${
-                      theme === 'romantic' 
+                      theme === 'sweet' 
                         ? 'bg-white/50 text-[#8B004B] hover:bg-[#FFB6C1]/40' 
                         : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200'
                     }`}
@@ -166,10 +166,10 @@ export function ChatMenu({ theme, chatId, onClose }: ChatMenuProps) {
           />
           
           <div className={`relative w-full max-w-lg rounded-2xl shadow-2xl p-4 border animate-in zoom-in-95 duration-200 ${
-            theme === 'romantic' ? 'bg-[#FFF0F5] border-[#FFB6C1]' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700'
+            theme === 'sweet' ? 'bg-[#FFF0F5] border-[#FFB6C1]' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700'
           }`}>
             <div className="flex items-center justify-between mb-3">
-              <h3 className={`font-semibold ${theme === 'romantic' ? 'text-[#4B004B]' : 'text-gray-900 dark:text-white'}`}>
+              <h3 className={`font-semibold ${theme === 'sweet' ? 'text-[#4B004B]' : 'text-gray-900 dark:text-white'}`}>
                 Search Messages
               </h3>
               <button
@@ -186,7 +186,7 @@ export function ChatMenu({ theme, chatId, onClose }: ChatMenuProps) {
               placeholder="Search in conversation..."
               autoFocus
               className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-500 transition-colors ${
-                theme === 'romantic' 
+                theme === 'sweet' 
                   ? 'bg-white border-[#FFB6C1] text-[#4B004B] placeholder:text-[#8B004B]/50' 
                   : 'bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white'
               }`}
