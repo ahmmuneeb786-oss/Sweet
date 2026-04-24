@@ -34,17 +34,8 @@ export function MobileDashboard({ theme, setTheme, onOpenGifPanel, myGifs, setMy
     'bg-gray-50 text-gray-900';
 
   return (
-    /* CHANGE 1: Added 'max-w-full' and 'overflow-x-hidden' to stop the right-side cut-off.
-       CHANGE 2: Used 'h-[100dvh]' (Dynamic Viewport Height) so it fits perfectly 
-       even when the mobile browser address bar pops up.
-    */
     <div className={`h-[100dvh] w-full max-w-full overflow-x-hidden overflow-y-hidden flex flex-col relative ${bgClass}`}>
       {theme === 'sweet' && <FloatingHearts />}
-
-      {/* 1. LAYER ONE: Sidebars */}
-      {/* CHANGE 3: Added 'fixed inset-0' wrapper to ensure sidebars 
-         don't push the main content to the side when they open.
-      */}
       {(showProfile || showFriends || showSettings || showCreateChat) && (
         <div className="fixed inset-0 z-[100] w-full h-full">
           {showProfile && <ProfileSidebar onClose={() => setShowProfile(false)} theme={theme} />}

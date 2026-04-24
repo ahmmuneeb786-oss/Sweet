@@ -20,11 +20,14 @@ function AppContent() { const { user, loading } = useAuth();
   const [theme, setTheme] = useState<'light' | 'dark' | 'sweet'>('sweet');
   const [previewGifs, setPreviewGifs] = useState<any[]>([]);
   const [lastSearchQuery, setLastSearchQuery] = useState('');
-  const [showLetter, setShowLetter] = useState(false);
   const [hasOpened, setHasOpened] = useState(false);
   const [mailStage, setMailStage] = useState<'box-arrival' | 'box-idle' | 'envelope-reveal' | 'letter-unfold'>('box-arrival');
   const [isLocked, setIsLocked] = useState(true);
   const [faceLockEnabled, setFaceLockEnabled] = useState(false);
+  const [showLetter, setShowLetter] = useState(() => {
+  const hasSeenWelcome = localStorage.getItem('has_seen_welcome');
+  return !hasSeenWelcome;
+});
   // Updated storage to handle objects instead of just strings
   const [myGifs, setMyGifs] = useState<GifItem[]>(() => {
     const saved = localStorage.getItem('sweet_user_gifs');
@@ -36,6 +39,12 @@ function AppContent() { const { user, loading } = useAuth();
     );
   });
 
+  const handleCloseWelcome = () => {
+  setShowLetter(false);
+  // Save to browser memory permanently
+  localStorage.setItem('has_seen_welcome', 'true');
+ };
+
   useEffect(() => {
    const savedLockSetting = localStorage.getItem('face_lock_enabled');
    if (savedLockSetting !== null) {
@@ -43,11 +52,12 @@ function AppContent() { const { user, loading } = useAuth();
    }
   }, []);
 
-  useEffect(() => {
-   if (!loading && user && !hasOpened) {
-     setShowLetter(true);
-   }
-  }, [loading, user]);
+useEffect(() => {
+  if (!loading && user && !hasOpened) {
+    // Only trigger if they haven't seen it yet
+    setShowLetter(true);
+  }
+}, [loading, user, showLetter]);
 
   // --- INITIALIZATION ---
   useEffect(() => {
@@ -248,7 +258,7 @@ if (loading) {
 
               <div className="flex-shrink-0 pt-8 flex flex-col items-center">
                 <button 
-                  onClick={() => { setShowLetter(false); setHasOpened(true); }}
+                  onClick={() => { handleCloseWelcome(); setHasOpened(true); }}
                   className="group relative active:scale-95 transition-all w-full max-w-xs"
                 >
                   <div className="absolute inset-0 bg-pink-400 rounded-full blur-xl opacity-20" />
