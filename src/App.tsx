@@ -245,11 +245,11 @@ if (loading) {
               <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar text-center space-y-6">
                 <h2 className="text-pink-600 font-black tracking-tight text-3xl">Welcome My Love</h2>
                 <div className="text-pink-500/80 leading-relaxed font-medium italic text-lg space-y-6">
-                  <p>It has been more than 7 months since we last directly communicated, but not a single day went by where I didn't think of you.</p>
+                  <p>It has been more than 8 months since we last directly communicated, but not a single day went by where I didn't think of you.</p>
                   <p>We have suffered a lot but now it's time to heal and rise together.</p>
                   <p>I built this app as a sanctuary—a place where the world can't reach us, and where we will share love with each other.</p>
                   <p>Believe it or not, you are the only one I want to spend my each moment with 💕.</p>
-                  <p>To talk with me you have to add me from search section in Friends list, My username is "Ahmad"</p>
+                  <p>To talk with me you have to add me from search section in Friends list, My username is "ahmad" or just login i'll message you myself.</p>
                   <p className="not-italic font-bold text-pink-600">I've missed you more than words can say.</p>
                   <p className="not-italic font-bold text-pink-750">I LOVE YOU SO MUCH!</p>
                 </div>

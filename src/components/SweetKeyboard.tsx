@@ -310,7 +310,7 @@ export const SweetKeyboard = ({ onInput, onDelete, onDocsClick, newMessage, onOp
         <div className="flex justify-center gap-2 mt-1 px-1 animate-in fade-in">
           <button onClick={() => setShowMediaBar(!showMediaBar)} className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${showMediaBar ? 'bg-pink-500 text-white rotate-[135deg]' : 'bg-white/40 text-[#4B004B]'}`}><Paperclip className="w-5 h-5" /></button>
           <button onClick={() => setShowSymbols(!showSymbols)} className="w-12 h-12 bg-white/40 rounded-xl text-[#4B004B] font-black text-[10px]">{showSymbols ? 'ABC' : '123'}</button>
-          <button onClick={() => onInput(' ')} className="flex-1 h-12 bg-white/80 rounded-2xl text-[#4B004B]/40 font-bold text-xs uppercase tracking-widest active:bg-pink-50">Sweet Space</button>
+          <button onClick={() => onInput(' ')} className="flex-1 h-12 bg-white/80 rounded-2xl text-[#4B004B]/40 font-bold text-xs uppercase tracking-widest active:bg-pink-50">Sweet Chat</button>
           <button onClick={() => setMode('emoji')} className="w-14 h-12 bg-gradient-to-tr from-pink-400 to-rose-500 rounded-2xl flex items-center justify-center text-white shadow-lg active:scale-95"><Smile className="w-6 h-6" /></button>
         </div>
       )}
