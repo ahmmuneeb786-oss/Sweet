@@ -6,6 +6,7 @@ import { initializeDictionary } from './predictionService';
 import { Heart, Paperclip, X, Search } from 'lucide-react';
 import { FloatingHearts } from './components/FloatingHearts';
 import { StrictLock } from './components/StrictLock';
+import { supabase } from './lib/supabase';
 
 // Define the interface for our GIF objects
 export interface GifItem {
@@ -13,7 +14,31 @@ export interface GifItem {
   packName: string;
 }
 
-function AppContent() { const { user, loading } = useAuth();
+export function useAnonymousVisitTracker() {
+  useEffect(() => {
+    async function trackVisit() {
+      try {
+        let visitorId = localStorage.getItem('app_visitor_id');
+
+        if (!visitorId) {
+          visitorId = 'anon_' + Math.random().toString(36).substring(2, 15);
+          localStorage.setItem('app_visitor_id', visitorId);
+        }
+
+        const { error } = await supabase.from('visits').insert([{ session_id: visitorId }]);
+        if (error) console.error('Error logging visit:', error.message);
+      } catch (err) {
+        console.error('Could not track visit:', err);
+      }
+    }
+
+    trackVisit();
+  }, []);
+}
+
+function AppContent() { 
+  const { user, loading } = useAuth(); 
+  useAnonymousVisitTracker();
   // --- STATES ---
   const [showGifPanel, setShowGifPanel] = useState(false);
   const [gifSearch, setGifSearch] = useState('');
@@ -251,7 +276,7 @@ if (loading) {
                   <p>Believe it or not, you are the only one I want to spend my each moment with 💕.</p>
                   <p>To talk with me you have to add me from search section in Friends list, My username is "ahmad" or just login i'll message you myself.</p>
                   <p className="not-italic font-bold text-pink-600">I've missed you more than words can say.</p>
-                  <p className="not-italic font-bold text-pink-750">I LOVE YOU SO MUCH!</p>
+                  <p className="not-italic font-bold text-pink-700">I LOVE YOU SO MUCH!</p>
                 </div>
               </div>
 
