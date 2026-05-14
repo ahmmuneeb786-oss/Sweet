@@ -7,6 +7,7 @@ import { FriendList } from './FriendList';
 import { CreateChat } from './CreateChat';
 import { Settings } from '../pages/Settings';
 import { GifItem } from '../App';
+import { StrictLock } from './StrictLock';
 
 interface MobileDashboardProps {
   onOpenGifPanel: () => void;
@@ -22,6 +23,7 @@ export function MobileDashboard({ theme, setTheme, onOpenGifPanel, myGifs, setMy
   const [showFriends, setShowFriends] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showCreateChat, setShowCreateChat] = useState(false);
+  const [isRegistering, setIsRegistering] = useState(false);
 
   const [faceLockEnabled, setFaceLockEnabled] = useState(() => {
   return localStorage.getItem('face_lock_enabled') === 'true';
@@ -51,7 +53,9 @@ export function MobileDashboard({ theme, setTheme, onOpenGifPanel, myGifs, setMy
           <Settings onClose={() => 
           setShowSettings(false)} 
           theme={theme} 
-          setTheme={setTheme} 
+          setTheme={setTheme}
+          onRegisterFace={() => setIsRegistering(true)}
+          isFaceRegistered={localStorage.getItem('face_lock_registered') === 'true'}
           faceLockEnabled={faceLockEnabled}
           setFaceLockEnabled={setFaceLockEnabled}
           />}
@@ -64,6 +68,18 @@ export function MobileDashboard({ theme, setTheme, onOpenGifPanel, myGifs, setMy
           )}
         </div>
       )}
+
+      {isRegistering && (
+  <StrictLock 
+    mode="register" 
+    onRegisterSuccess={() => {
+      setIsRegistering(false);
+      setFaceLockEnabled(true);
+      localStorage.setItem('face_lock_enabled', 'true');
+    }}
+    onUnlock={() => setIsRegistering(false)} 
+  />
+)}
 
       {/* 2. LAYER TWO: Chat Window */}
       {selectedChatId ? (

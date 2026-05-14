@@ -1,13 +1,23 @@
 import { useEffect, useRef, useState } from 'react';
 import * as faceapi from 'face-api.js';
-import { Lock, Smile, AlertCircle, ShieldCheck } from 'lucide-react';
+import { Lock, Smile, AlertCircle, ShieldCheck, UserPlus } from 'lucide-react';
 
-export const StrictLock = ({ onUnlock }: { onUnlock: () => void }) => {
+interface StrictLockProps {
+  onUnlock: () => void;
+  mode?: 'verify' | 'register';
+  onRegisterSuccess?: () => void;
+}
+
+export const StrictLock = ({ 
+  onUnlock, 
+  mode = 'verify', 
+  onRegisterSuccess 
+}: StrictLockProps) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isModelLoaded, setIsModelLoaded] = useState(false);
   const [feedback, setFeedback] = useState('Initializing FaceID...');
   const [isPulsing, setIsPulsing] = useState(false);
-  const [errorState, setErrorState] = useState(false); // To use AlertCircle
+  const [errorState, setErrorState] = useState(false);
 
   useEffect(() => {
     const loadModels = async () => {
@@ -25,15 +35,32 @@ export const StrictLock = ({ onUnlock }: { onUnlock: () => void }) => {
       }
     };
     loadModels();
+
+    // Cleanup camera on unmount
+    return () => {
+      if (videoRef.current && videoRef.current.srcObject) {
+        const stream = videoRef.current.srcObject as MediaStream;
+        stream.getTracks().forEach(track => track.stop());
+      }
+    };
   }, []);
 
   const startCamera = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
-      if (videoRef.current) {
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { 
+          facingMode: 'user',
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        } 
+      });
+     if (videoRef.current) {
         videoRef.current.srcObject = stream;
+        // Add this line to force the video to play
+        await videoRef.current.play(); 
       }
     } catch (err) {
+      console.error("Camera Error:", err);
       setFeedback('Camera access denied');
       setErrorState(true);
     }
@@ -60,16 +87,28 @@ export const StrictLock = ({ onUnlock }: { onUnlock: () => void }) => {
         const smileValue = detections[0].expressions.happy;
         
         if (smileValue > 0.85) {
-          setFeedback('Perfect smile! Unlocking...');
           setErrorState(false);
-          clearInterval(interval);
-          setTimeout(() => onUnlock(), 1000);
+          setIsPulsing(true);
+
+          if (mode === 'register') {
+            setFeedback('Smile Captured! Saving...');
+            clearInterval(interval);
+            // Save registration state to storage
+            localStorage.setItem('face_lock_registered', 'true');
+            setTimeout(() => {
+              if (onRegisterSuccess) onRegisterSuccess();
+            }, 1500);
+          } else {
+            setFeedback('Access Granted!');
+            clearInterval(interval);
+            setTimeout(() => onUnlock(), 1000);
+          }
         } else if (smileValue > 0.3) {
-          setFeedback('Smile more! 😊');
+          setFeedback(mode === 'register' ? 'Hold that smile! ✨' : 'Smile more! 😊');
           setIsPulsing(true);
           setErrorState(false);
         } else {
-          setFeedback('Awaiting a beautiful smile...');
+          setFeedback(mode === 'register' ? 'Smile to set your key' : 'Awaiting your smile...');
           setIsPulsing(false);
           setErrorState(false);
         }
@@ -81,6 +120,15 @@ export const StrictLock = ({ onUnlock }: { onUnlock: () => void }) => {
 
   return (
     <div className="fixed inset-0 z-[9999] bg-[#FFF0F3] flex flex-col items-center justify-center p-8">
+      {/* Visual Header for Mode */}
+      <div className="absolute top-10 flex items-center gap-2 bg-white/50 px-4 py-2 rounded-full backdrop-blur-md border border-white">
+        {mode === 'register' ? (
+          <><UserPlus className="w-4 h-4 text-pink-500" /> <span className="text-pink-600 text-xs font-bold uppercase tracking-widest">Face Registration</span></>
+        ) : (
+          <><Lock className="w-4 h-4 text-pink-500" /> <span className="text-pink-600 text-xs font-bold uppercase tracking-widest">Secure Entry</span></>
+        )}
+      </div>
+
       <div className={`relative w-64 h-64 md:w-80 md:h-80 rounded-full overflow-hidden border-[10px] border-white shadow-[0_20px_50px_rgba(255,105,180,0.3)] transition-all duration-500 ${isPulsing ? 'scale-105 shadow-pink-400' : ''}`}>
         <video
           ref={videoRef}
@@ -92,7 +140,7 @@ export const StrictLock = ({ onUnlock }: { onUnlock: () => void }) => {
         <div className="absolute inset-0 bg-gradient-to-b from-transparent via-pink-400/20 to-transparent h-20 w-full animate-[scan_2s_linear_infinite]" />
       </div>
 
-      <div className="mt-12 text-center max-w-xs">
+      <div className="mt-12 text-center max-w-xs w-full">
         <div className="bg-white/80 backdrop-blur-sm p-6 rounded-[32px] shadow-xl border border-white">
           <div className="flex justify-center mb-4 gap-3">
             {errorState ? (
@@ -101,14 +149,25 @@ export const StrictLock = ({ onUnlock }: { onUnlock: () => void }) => {
               <ShieldCheck className="w-10 h-10 text-green-500 animate-bounce" />
             ) : (
               <>
-                <Lock className="w-8 h-8 text-pink-500" />
-                <Smile className="w-8 h-8 text-pink-400" />
+                <Smile className="w-8 h-8 text-pink-400 animate-pulse" />
               </>
             )}
           </div>
-          <h2 className="text-pink-600 font-black text-xl mb-2">{feedback}</h2>
-          <p className="text-pink-400/60 text-[10px] uppercase font-bold tracking-[0.2em]">Biometric Expression Lock</p>
+          <h2 className="text-pink-600 font-black text-xl mb-2 min-h-[1.5em]">{feedback}</h2>
+          <p className="text-pink-400/60 text-[10px] uppercase font-bold tracking-[0.2em]">
+            {mode === 'register' ? 'Setting up biometric key' : 'Biometric Expression Lock'}
+          </p>
         </div>
+        
+        {/* Cancel Button (Only in Register mode so user isn't trapped in settings) */}
+        {mode === 'register' && (
+          <button 
+            onClick={onUnlock}
+            className="mt-6 text-pink-400 text-sm font-medium hover:text-pink-600 transition-colors"
+          >
+            Cancel Registration
+          </button>
+        )}
       </div>
 
       <style>{`

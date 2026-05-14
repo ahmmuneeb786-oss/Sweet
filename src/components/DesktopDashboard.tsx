@@ -7,6 +7,7 @@ import { FriendList } from '../components/FriendList';
 import { CreateChat } from '../components/CreateChat';
 import { Settings } from '../pages/Settings';
 import { GifItem } from '../App';
+import { StrictLock } from './StrictLock';
 
 
 interface DashboardProps {
@@ -23,6 +24,7 @@ export function DesktopDashboard({ theme, setTheme, onOpenGifPanel, myGifs, setM
   const [showFriends, setShowFriends] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showCreateChat, setShowCreateChat] = useState(false);
+  const [isRegistering, setIsRegistering] = useState(false);
   
   const [faceLockEnabled, setFaceLockEnabled] = useState(() => {
   return localStorage.getItem('face_lock_enabled') === 'true';
@@ -114,6 +116,18 @@ export function DesktopDashboard({ theme, setTheme, onOpenGifPanel, myGifs, setM
         </div>
       )}
 
+      {isRegistering && (
+  <StrictLock 
+    mode="register" 
+    onRegisterSuccess={() => {
+      setIsRegistering(false);
+      setFaceLockEnabled(true);
+      localStorage.setItem('face_lock_enabled', 'true');
+    }}
+    onUnlock={() => setIsRegistering(false)} 
+  />
+)}
+
       {/* Sidebars */}
       {showProfile && (
         <ProfileSidebar 
@@ -137,6 +151,8 @@ export function DesktopDashboard({ theme, setTheme, onOpenGifPanel, myGifs, setM
           onClose={() => setShowSettings(false)}
           theme={theme}
           setTheme={setTheme}
+          isFaceRegistered={localStorage.getItem('face_lock_registered') === 'true'}
+          onRegisterFace={() => setIsRegistering(true)}
           faceLockEnabled={faceLockEnabled}
           setFaceLockEnabled={setFaceLockEnabled}
         />

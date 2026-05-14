@@ -52,7 +52,11 @@ function AppContent() {
   const [showLetter, setShowLetter] = useState(() => {
   const hasSeenWelcome = localStorage.getItem('has_seen_welcome');
   return !hasSeenWelcome;
-});
+  });
+  const [isFaceRegistered, setIsFaceRegistered] = useState(() => {
+  return localStorage.getItem('face_lock_data') !== null;
+  });
+  const [isRegistering, setIsRegistering] = useState(false);
   // Updated storage to handle objects instead of just strings
   const [myGifs, setMyGifs] = useState<GifItem[]>(() => {
     const saved = localStorage.getItem('sweet_user_gifs');
@@ -337,12 +341,25 @@ if (loading) {
   return (
     <div className={theme === 'dark' ? 'dark' : theme === 'sweet' ? 'sweet-theme' : ''}>
       {user && !showLetter && faceLockEnabled && isLocked && (
-        <StrictLock onUnlock={() => setIsLocked(false)} />
+        <StrictLock onUnlock={() => setIsLocked(false)} mode="verify" />
       )}
 
       <div className={`min-h-screen transition-colors duration-300 ${
         theme === 'dark' ? 'bg-gray-900 text-white' : theme === 'sweet' ? 'bg-[#FFF0F5] text-[#FF69B4]' : 'bg-gray-50 text-gray-900'
       }`}>
+
+        {isRegistering && (
+         <StrictLock 
+            mode="register" 
+            onRegisterSuccess={() => {
+              setIsFaceRegistered(true);
+              setFaceLockEnabled(true);
+              setIsRegistering(false);
+              localStorage.setItem('face_lock_enabled', 'true');
+            }}
+            onUnlock={() => setIsRegistering(false)} 
+          />
+        )}
         
         <Dashboard 
           theme={theme} 
@@ -350,6 +367,8 @@ if (loading) {
           onOpenGifPanel={() => setShowGifPanel(true)}
           myGifs={myGifs}
           setMyGifs={setMyGifs}
+          isFaceRegistered={isFaceRegistered}
+          onRegisterFace={() => setIsRegistering(true)}
         />
 
         {/* --- GIF STUDIO MODAL --- */}

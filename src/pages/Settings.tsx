@@ -11,9 +11,11 @@ interface SettingsProps {
   setTheme: React.Dispatch<React.SetStateAction<'light' | 'dark' | 'sweet'>>;
   faceLockEnabled: boolean;
   setFaceLockEnabled: (val: boolean) => void;
+  isFaceRegistered: boolean;
+  onRegisterFace: () => void;
 }
 
-export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLockEnabled }: SettingsProps) {
+export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLockEnabled, isFaceRegistered, onRegisterFace }: SettingsProps) {
   const { profile, updateProfile, signOut } = useAuth();
   const [activeTab, setActiveTab] = useState<SettingsTab>('main');
   const [loading, setLoading] = useState(false);
@@ -264,18 +266,24 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
 
         {/* The Toggle Button */}
         <button
-          onClick={() => {
-            const newValue = !faceLockEnabled;
-            setFaceLockEnabled(newValue);
-            localStorage.setItem('face_lock_enabled', newValue.toString());
-          }}
-          className={`w-12 h-6 rounded-full transition-all relative ${
-            faceLockEnabled ? 'bg-pink-500' : 'bg-gray-300'
-          }`}
-        >
-          <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${
-            faceLockEnabled ? 'left-7' : 'left-1'
-          }`} />
+  onClick={() => {
+    if (!faceLockEnabled) {
+      if (!isFaceRegistered) {
+        // If not registered, open the scanner in "Register" mode
+        onRegisterFace(); 
+      } else {
+        setFaceLockEnabled(true);
+        localStorage.setItem('face_lock_enabled', 'true');
+      }
+    } else {
+      setFaceLockEnabled(false);
+      localStorage.setItem('face_lock_enabled', 'false');
+    }
+  }}
+  className={`w-12 h-6 rounded-full transition-all relative ${
+    faceLockEnabled ? 'bg-pink-500' : 'bg-gray-300'
+  }`}
+>
         </button>
       </div>
       
