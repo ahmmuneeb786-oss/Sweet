@@ -25,7 +25,9 @@ export const StrictLock = ({
       try {
         await Promise.all([
           faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
-          faceapi.nets.faceExpressionNet.loadFromUri(MODEL_URL)
+          faceapi.nets.faceExpressionNet.loadFromUri(MODEL_URL),
+          faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
+          faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL)
         ]);
         setIsModelLoaded(true);
         startCamera();
@@ -70,51 +72,65 @@ export const StrictLock = ({
     if (!videoRef.current || !isModelLoaded) return;
 
     const interval = setInterval(async () => {
-      const detections = await faceapi.detectAllFaces(
+      // 1. Detect face + landmarks + expressions + descriptors
+      const detection = await faceapi.detectSingleFace(
         videoRef.current!,
         new faceapi.TinyFaceDetectorOptions()
-      ).withFaceExpressions();
+      ).withFaceLandmarks().withFaceExpressions().withFaceDescriptor();
 
-      if (detections.length === 0) {
+      if (!detection) {
         setFeedback('No face detected');
         setIsPulsing(false);
-        setErrorState(false);
-      } else if (detections.length > 1) {
-        setFeedback('Multiple people detected!');
-        setIsPulsing(false);
-        setErrorState(true);
-      } else {
-        const smileValue = detections[0].expressions.happy;
-        
-        if (smileValue > 0.85) {
-          setErrorState(false);
-          setIsPulsing(true);
+        return;
+      }
 
-          if (mode === 'register') {
-            setFeedback('Smile Captured! Saving...');
-            clearInterval(interval);
-            // Save registration state to storage
-            localStorage.setItem('face_lock_registered', 'true');
-            setTimeout(() => {
-              if (onRegisterSuccess) onRegisterSuccess();
-            }, 1500);
-          } else {
-            setFeedback('Access Granted!');
+      const smileValue = detection.expressions.happy;
+      const currentDescriptor = detection.descriptor; // This is the person's unique "ID"
+
+      if (mode === 'register') {
+        if (smileValue > 0.85) {
+          setFeedback('Saving your Face ID...');
+        // Convert Float32Array to a regular array so it can be stringified
+          const descriptorArray = Array.from(currentDescriptor);
+          localStorage.setItem('user_face_descriptor', JSON.stringify(descriptorArray));
+        
+          clearInterval(interval);
+          setTimeout(() => onRegisterSuccess?.(), 1000);
+        } else {
+          setFeedback('Smile to set your secure key');
+        }
+      } else {
+      // VERIFY MODE
+        const savedDescriptorJson = localStorage.getItem('user_face_descriptor');
+      
+        if (!savedDescriptorJson) {
+          setFeedback('No Face ID found. Please register first.');
+          return;
+        }
+
+      // Convert back to Float32Array
+        const savedDescriptor = new Float32Array(JSON.parse(savedDescriptorJson));
+      
+      // Calculate "Distance" (how similar they are)
+      // 0 = identical, 1 = completely different. 0.6 is a standard threshold.
+        const distance = faceapi.euclideanDistance(currentDescriptor, savedDescriptor);
+
+        if (distance < 0.5) { // Match! (lower is more strict)
+          if (smileValue > 0.85) {
+            setFeedback('Identity Verified! Unlocking...');
             clearInterval(interval);
             setTimeout(() => onUnlock(), 1000);
+          } else {
+            setFeedback('Hi! Just smile to enter 😊');
+            setIsPulsing(true);
           }
-        } else if (smileValue > 0.3) {
-          setFeedback(mode === 'register' ? 'Hold that smile! ✨' : 'Smile more! 😊');
-          setIsPulsing(true);
-          setErrorState(false);
         } else {
-          setFeedback(mode === 'register' ? 'Smile to set your key' : 'Awaiting your smile...');
-          setIsPulsing(false);
-          setErrorState(false);
+          setFeedback('Identity not recognized 🔒');
+          setErrorState(true);
         }
       }
-    }, 600);
-    
+    }, 700);
+
     return () => clearInterval(interval);
   };
 
