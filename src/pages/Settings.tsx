@@ -24,7 +24,6 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
   const [bio, setBio] = useState(profile?.bio || '');
   const [newUsername, setNewUsername] = useState(profile?.username || '');
   const [usernameError, setUsernameError] = useState('');
-  const [showLockSubMenu, setShowLockSubMenu] = useState(false);
 
   const [privacySettings, setPrivacySettings] = useState({
     lastSeenVisibility: 'everyone',

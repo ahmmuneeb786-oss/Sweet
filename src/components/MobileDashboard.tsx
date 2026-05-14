@@ -15,9 +15,11 @@ interface MobileDashboardProps {
   setMyGifs: React.Dispatch<React.SetStateAction<GifItem[]>>;
   theme: 'light' | 'dark' | 'sweet';
   setTheme: React.Dispatch<React.SetStateAction<'light' | 'dark' | 'sweet'>>;
+  user: any;
+  onSaveFace: (userId: string, descriptor: number[]) => Promise<void>;
 }
 
-export function MobileDashboard({ theme, setTheme, onOpenGifPanel, myGifs, setMyGifs}: MobileDashboardProps) {
+export function MobileDashboard({ theme, setTheme, onOpenGifPanel, myGifs, setMyGifs, user, onSaveFace }: MobileDashboardProps) {
   const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
   const [showProfile, setShowProfile] = useState(false);
   const [showFriends, setShowFriends] = useState(false);
@@ -71,7 +73,9 @@ export function MobileDashboard({ theme, setTheme, onOpenGifPanel, myGifs, setMy
 
       {isRegistering && (
   <StrictLock 
-    mode="register" 
+    mode="register"
+    userId={user?.id}
+    onSaveDescriptor={onSaveFace}
     onRegisterSuccess={() => {
       setIsRegistering(false);
       setFaceLockEnabled(true);

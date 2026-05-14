@@ -102,6 +102,15 @@ useEffect(() => {
     localStorage.setItem('theme', theme);
   }, [theme]);
 
+  const updateFaceDescriptor = async (userId: string, descriptor: number[]) => {
+  const { error } = await supabase
+    .from('profiles')
+    .update({ face_descriptor: descriptor })
+    .eq('id', userId);
+
+  if (error) throw error;
+  };
+
   // --- GIF LOGIC ---
   
   const handleAddFullPack = () => {
@@ -341,7 +350,7 @@ if (loading) {
   return (
     <div className={theme === 'dark' ? 'dark' : theme === 'sweet' ? 'sweet-theme' : ''}>
       {user && !showLetter && faceLockEnabled && isLocked && (
-        <StrictLock onUnlock={() => setIsLocked(false)} mode="verify" />
+        <StrictLock onUnlock={() => setIsLocked(false)} mode="verify" userId={user.id} onSaveDescriptor={updateFaceDescriptor} />
       )}
 
       <div className={`min-h-screen transition-colors duration-300 ${
@@ -351,6 +360,8 @@ if (loading) {
         {isRegistering && (
          <StrictLock 
             mode="register" 
+            userId={user?.id}
+            onSaveDescriptor={updateFaceDescriptor}
             onRegisterSuccess={() => {
               setIsFaceRegistered(true);
               setFaceLockEnabled(true);
@@ -369,6 +380,7 @@ if (loading) {
           setMyGifs={setMyGifs}
           isFaceRegistered={isFaceRegistered}
           onRegisterFace={() => setIsRegistering(true)}
+          onSaveFace={updateFaceDescriptor}
         />
 
         {/* --- GIF STUDIO MODAL --- */}

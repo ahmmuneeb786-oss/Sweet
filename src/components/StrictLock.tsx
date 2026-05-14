@@ -1,17 +1,24 @@
 import { useEffect, useRef, useState } from 'react';
 import * as faceapi from 'face-api.js';
 import { Lock, Smile, AlertCircle, ShieldCheck, UserPlus } from 'lucide-react';
+import { supabase } from '../lib/supabase';
 
 interface StrictLockProps {
   onUnlock: () => void;
   mode?: 'verify' | 'register';
   onRegisterSuccess?: () => void;
+  savedDescriptor?: number[] | null;
+  userId: string;
+  onSaveDescriptor: (userId: string, descriptor: number[]) => Promise<void>;
 }
 
 export const StrictLock = ({ 
   onUnlock, 
   mode = 'verify', 
-  onRegisterSuccess 
+  onRegisterSuccess,
+  savedDescriptor,
+  userId,
+  onSaveDescriptor
 }: StrictLockProps) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isModelLoaded, setIsModelLoaded] = useState(false);
@@ -68,71 +75,120 @@ export const StrictLock = ({
     }
   };
 
-  const handleDetection = async () => {
-    if (!videoRef.current || !isModelLoaded) return;
+const handleDetection = async () => {
+  if (!videoRef.current || !isModelLoaded) return;
 
-    const interval = setInterval(async () => {
-      // 1. Detect face + landmarks + expressions + descriptors
-      const detection = await faceapi.detectSingleFace(
-        videoRef.current!,
-        new faceapi.TinyFaceDetectorOptions()
-      ).withFaceLandmarks().withFaceExpressions().withFaceDescriptor();
+  const interval = setInterval(async () => {
+    // 1. Detect ALL faces with landmarks, expressions, and descriptors
+    const detections = await faceapi.detectAllFaces(
+      videoRef.current!,
+      new faceapi.TinyFaceDetectorOptions()
+    ).withFaceLandmarks().withFaceExpressions().withFaceDescriptors();
 
-      if (!detection) {
-        setFeedback('No face detected');
-        setIsPulsing(false);
+    // 2. PRIVACY RULE: Block if more than 1 person is seen
+    if (detections.length > 1) {
+      setFeedback('Privacy Alert: Multiple people detected! 🔒');
+      setErrorState(true);
+      setIsPulsing(false);
+      return; 
+    }
+
+    // 3. NO FACE RULE
+    if (detections.length === 0) {
+      setFeedback('No face detected');
+      setIsPulsing(false);
+      setErrorState(false);
+      return;
+    }
+
+    // 4. PREPARE DATA (Exactly 1 person is in frame)
+    const person = detections[0];
+    const smileValue = person.expressions.happy;
+    const currentDescriptor = person.descriptor;
+
+    if (mode === 'register') {
+      /** --- REGISTRATION MODE --- **/
+      if (smileValue > 0.85) {
+        setFeedback('Smile Captured! Syncing to Cloud...');
+        
+        try {
+          const descriptorArray = Array.from(currentDescriptor);
+
+          await onSaveDescriptor(userId, descriptorArray);
+          
+          // SAVE TO SUPABASE (Replace 'user.id' with your actual user state)
+          const { error } = await supabase
+            .from('profiles')
+            .update({ face_descriptor: descriptorArray })
+            .eq('id', userId);
+
+          if (error) throw error;
+
+          // Locally mark as registered so the UI updates
+          localStorage.setItem('face_lock_registered', 'true');
+          
+          clearInterval(interval);
+          stopCamera(); // Kill camera immediately
+          
+          if (onRegisterSuccess) onRegisterSuccess();
+        } catch (err) {
+          console.error(err);
+          setFeedback('Cloud sync failed. Try again.');
+          setErrorState(true);
+        }
+      } else {
+        setFeedback('Smile to set your secure key');
+        setIsPulsing(smileValue > 0.3);
+      }
+
+    } else {
+      /** --- VERIFY MODE --- **/
+      // Fetch the descriptor we got from Supabase when the app loaded
+      // (This should be passed into StrictLock as a prop: 'savedDescriptor')
+      if (!savedDescriptor) {
+        setFeedback('No Face ID found. Please register first.');
+        setErrorState(true);
         return;
       }
 
-      const smileValue = detection.expressions.happy;
-      const currentDescriptor = detection.descriptor; // This is the person's unique "ID"
+      const targetDescriptor = new Float32Array(savedDescriptor);
+      const distance = faceapi.euclideanDistance(currentDescriptor, targetDescriptor);
 
-      if (mode === 'register') {
+      // Distance check: < 0.5 is a strong match for the same person
+      if (distance < 0.5) {
+        setErrorState(false);
         if (smileValue > 0.85) {
-          setFeedback('Saving your Face ID...');
-        // Convert Float32Array to a regular array so it can be stringified
-          const descriptorArray = Array.from(currentDescriptor);
-          localStorage.setItem('user_face_descriptor', JSON.stringify(descriptorArray));
-        
+          setFeedback('Identity Verified! Opening...');
+          setIsPulsing(true);
+          
           clearInterval(interval);
-          setTimeout(() => onRegisterSuccess?.(), 1000);
+          stopCamera(); // Kill camera immediately
+          setTimeout(() => onUnlock(), 1000);
         } else {
-          setFeedback('Smile to set your secure key');
+          setFeedback('Hi! Just smile to enter 😊');
+          setIsPulsing(true);
         }
       } else {
-      // VERIFY MODE
-        const savedDescriptorJson = localStorage.getItem('user_face_descriptor');
-      
-        if (!savedDescriptorJson) {
-          setFeedback('No Face ID found. Please register first.');
-          return;
-        }
-
-      // Convert back to Float32Array
-        const savedDescriptor = new Float32Array(JSON.parse(savedDescriptorJson));
-      
-      // Calculate "Distance" (how similar they are)
-      // 0 = identical, 1 = completely different. 0.6 is a standard threshold.
-        const distance = faceapi.euclideanDistance(currentDescriptor, savedDescriptor);
-
-        if (distance < 0.5) { // Match! (lower is more strict)
-          if (smileValue > 0.85) {
-            setFeedback('Identity Verified! Unlocking...');
-            clearInterval(interval);
-            setTimeout(() => onUnlock(), 1000);
-          } else {
-            setFeedback('Hi! Just smile to enter 😊');
-            setIsPulsing(true);
-          }
-        } else {
-          setFeedback('Identity not recognized 🔒');
-          setErrorState(true);
-        }
+        // It's a face, but not YOUR face
+        setFeedback('Identity not recognized 🔒');
+        setErrorState(true);
+        setIsPulsing(false);
       }
-    }, 700);
+    }
+  }, 700);
 
-    return () => clearInterval(interval);
-  };
+  return () => clearInterval(interval);
+};
+
+// HELPER FUNCTION: Add this inside your component to kill the camera
+const stopCamera = () => {
+  if (videoRef.current && videoRef.current.srcObject) {
+    const stream = videoRef.current.srcObject as MediaStream;
+    const tracks = stream.getTracks();
+    tracks.forEach(track => track.stop());
+    videoRef.current.srcObject = null;
+  }
+};
 
   return (
     <div className="fixed inset-0 z-[9999] bg-[#FFF0F3] flex flex-col items-center justify-center p-8">
