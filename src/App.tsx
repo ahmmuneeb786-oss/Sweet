@@ -67,6 +67,35 @@ function AppContent() {
       typeof item === 'string' ? { url: item, packName: 'Recent' } : item
     );
   });
+  
+  const [savedDescriptor, setSavedDescriptor] = useState<number[] | null>(null);
+   useEffect(() => {
+  const fetchFaceDescriptor = async () => {
+    if (!user?.id) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('face_descriptor')
+        .eq('id', user.id)
+        .single();
+
+      if (error) throw error;
+
+      if (data && data.face_descriptor) {
+        // Feed the database matrix array into your reactive component state
+        setSavedDescriptor(data.face_descriptor);
+        setIsFaceRegistered(true);
+      }
+    } catch (err) {
+      console.error("Failed to sync descriptor data matrix from Supabase:", err);
+    }
+  };
+
+  if (!loading && user) {
+    fetchFaceDescriptor();
+  }
+}, [user, loading]);
 
   const handleCloseWelcome = () => {
   setShowLetter(false);
@@ -350,7 +379,7 @@ if (loading) {
   return (
     <div className={theme === 'dark' ? 'dark' : theme === 'sweet' ? 'sweet-theme' : ''}>
       {user && !showLetter && faceLockEnabled && isLocked && (
-        <StrictLock onUnlock={() => setIsLocked(false)} mode="verify" userId={user.id} onSaveDescriptor={updateFaceDescriptor} />
+        <StrictLock onUnlock={() => setIsLocked(false)} mode="verify" userId={user.id} onSaveDescriptor={updateFaceDescriptor} savedDescriptor={savedDescriptor}/>
       )}
 
       <div className={`min-h-screen transition-colors duration-300 ${
