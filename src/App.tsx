@@ -49,6 +49,7 @@ function AppContent() {
   const [mailStage, setMailStage] = useState<'box-arrival' | 'box-idle' | 'envelope-reveal' | 'letter-unfold'>('box-arrival');
   const [isLocked, setIsLocked] = useState(true);
   const [faceLockEnabled, setFaceLockEnabled] = useState(false);
+  const [isAppLocked, setIsAppLocked] = useState(true);
   const [showLetter, setShowLetter] = useState(() => {
   const hasSeenWelcome = localStorage.getItem('has_seen_welcome');
   return !hasSeenWelcome;
@@ -87,8 +88,13 @@ function AppContent() {
       }
       setFaceLockEnabled(!!data.face_lock_enabled);
     }
+    setFaceLockEnabled(!!data.face_lock_enabled);
+    if (!data.face_lock_enabled) {
+      setIsAppLocked(false);
+    }
     } catch (err) {
       console.error("Failed to sync descriptor data matrix from Supabase:", err);
+      setIsAppLocked(false);
     }
   };
 
@@ -372,7 +378,12 @@ if (loading) {
   return (
     <div className={theme === 'dark' ? 'dark' : theme === 'sweet' ? 'sweet-theme' : ''}>
       {user && !showLetter && faceLockEnabled && isLocked && (
-        <StrictLock onUnlock={() => setIsLocked(false)} mode="verify" userId={user.id} onSaveDescriptor={updateFaceDescriptor} savedDescriptor={savedDescriptor}/>
+        <StrictLock
+        onUnlock={() => setIsLocked(false)}
+        mode="verify"
+        userId={user.id}
+        onSaveDescriptor={updateFaceDescriptor}
+        savedDescriptor={savedDescriptor}/>
       )}
 
       <div className={`min-h-screen transition-colors duration-300 ${
