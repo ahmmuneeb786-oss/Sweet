@@ -13,9 +13,10 @@ interface SettingsProps {
   setFaceLockEnabled: (val: boolean) => void;
   isFaceRegistered: boolean;
   onRegisterFace: () => void;
+  user: any;
 }
 
-export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLockEnabled, isFaceRegistered, onRegisterFace }: SettingsProps) {
+export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLockEnabled, isFaceRegistered, onRegisterFace, user }: SettingsProps) {
   const { profile, updateProfile, signOut } = useAuth();
   const [activeTab, setActiveTab] = useState<SettingsTab>('main');
   const [loading, setLoading] = useState(false);
@@ -267,19 +268,35 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
 <button
   type="button"
   onClick={async () => {
-    if (!faceLockEnabled) {
-      // 1. If they have NO face data in the cloud database, force a registration scan
-      if (!isFaceRegistered) {
-        onRegisterFace(); 
-      } else {
-        // 2. If they ALREADY have face data in the cloud, turn the lock on instantly!
-        setFaceLockEnabled(true);
-        localStorage.setItem('face_lock_enabled', 'true');
+    if (!user?.id) return;
+
+    // Determine what the next target state should be
+    const nextState = !faceLockEnabled;
+
+    if (nextState && !isFaceRegistered) {
+      // If turning it on but no numerical data exists in the cloud, boot the scanner
+      onRegisterFace();
+      return;
+    }
+
+    try {
+      // Optimistically update frontend UI for a fast, snappy experience
+      setFaceLockEnabled(nextState);
+
+      // Save the switch state directly to the cloud row!
+      const { error } = await supabase
+        .from('profiles')
+        .update({ face_lock_enabled: nextState })
+        .eq('id', user.id);
+
+      if (error) {
+        // Rollback state if the database network fails
+        setFaceLockEnabled(faceLockEnabled);
+        throw error;
       }
-    } else {
-      // 3. Turn it off smoothly
-      setFaceLockEnabled(false);
-      localStorage.setItem('face_lock_enabled', 'false');
+    } catch (err) {
+      console.error("Failed to save toggle state to cloud:", err);
+      alert("Could not update settings. Check network connection.");
     }
   }}
   className={`w-12 h-6 rounded-full transition-all duration-300 relative p-1 cursor-pointer outline-none ${

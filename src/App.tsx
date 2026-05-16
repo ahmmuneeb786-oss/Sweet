@@ -76,17 +76,19 @@ function AppContent() {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('face_descriptor')
+        .select('face_descriptor, face_lock_enabled')
         .eq('id', user.id)
         .single();
 
       if (error) throw error;
 
-      if (data && data.face_descriptor) {
-        // Feed the database matrix array into your reactive component state
+      if (data) {
+        if (data.face_descriptor) {
         setSavedDescriptor(data.face_descriptor);
         setIsFaceRegistered(true);
       }
+      setFaceLockEnabled(!!data.face_lock_enabled);
+    }
     } catch (err) {
       console.error("Failed to sync descriptor data matrix from Supabase:", err);
     }

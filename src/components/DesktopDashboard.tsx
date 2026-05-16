@@ -159,6 +159,7 @@ export function DesktopDashboard({ theme, setTheme, onOpenGifPanel, myGifs, setM
           onRegisterFace={() => setIsRegistering(true)}
           faceLockEnabled={faceLockEnabled}
           setFaceLockEnabled={setFaceLockEnabled}
+          user={user}
         />
       )}
       {showCreateChat && (

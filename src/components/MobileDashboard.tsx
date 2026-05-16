@@ -60,6 +60,7 @@ export function MobileDashboard({ theme, setTheme, onOpenGifPanel, myGifs, setMy
           isFaceRegistered={localStorage.getItem('face_lock_registered') === 'true'}
           faceLockEnabled={faceLockEnabled}
           setFaceLockEnabled={setFaceLockEnabled}
+            user={user}
           />}
           {showCreateChat && (
             <CreateChat
