@@ -18,9 +18,10 @@ interface DashboardProps {
   setTheme: React.Dispatch<React.SetStateAction<'light' | 'dark' | 'sweet'>>;
   user: any;
   onSaveFace: (userId: string, descriptor: number[]) => Promise<void>;
+  savedDescriptor: number[] | null;
 }
 
-export function DesktopDashboard({ theme, setTheme, onOpenGifPanel, myGifs, setMyGifs, user, onSaveFace }: DashboardProps) {
+export function DesktopDashboard({ theme, setTheme, onOpenGifPanel, myGifs, setMyGifs, user, onSaveFace, savedDescriptor }: DashboardProps) {
   const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
   const [showProfile, setShowProfile] = useState(false);
   const [showFriends, setShowFriends] = useState(false);
@@ -160,6 +161,7 @@ export function DesktopDashboard({ theme, setTheme, onOpenGifPanel, myGifs, setM
           faceLockEnabled={faceLockEnabled}
           setFaceLockEnabled={setFaceLockEnabled}
           user={user}
+          savedDescriptor={savedDescriptor}
         />
       )}
       {showCreateChat && (

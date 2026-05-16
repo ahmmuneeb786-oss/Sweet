@@ -14,9 +14,10 @@ interface SettingsProps {
   isFaceRegistered: boolean;
   onRegisterFace: () => void;
   user: any;
+  savedDescriptor: number[] | null;
 }
 
-export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLockEnabled, isFaceRegistered, onRegisterFace, user }: SettingsProps) {
+export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLockEnabled, onRegisterFace, user, savedDescriptor }: SettingsProps) {
   const { profile, updateProfile, signOut } = useAuth();
   const [activeTab, setActiveTab] = useState<SettingsTab>('main');
   const [loading, setLoading] = useState(false);
@@ -273,7 +274,7 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
     // Determine what the next target state should be
     const nextState = !faceLockEnabled;
 
-    if (nextState && !isFaceRegistered) {
+    if (nextState && (!savedDescriptor || savedDescriptor.length === 0)) {
       // If turning it on but no numerical data exists in the cloud, boot the scanner
       onRegisterFace();
       return;

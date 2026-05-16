@@ -17,9 +17,10 @@ interface MobileDashboardProps {
   setTheme: React.Dispatch<React.SetStateAction<'light' | 'dark' | 'sweet'>>;
   user: any;
   onSaveFace: (userId: string, descriptor: number[]) => Promise<void>;
+  savedDescriptor: number[] | null;
 }
 
-export function MobileDashboard({ theme, setTheme, onOpenGifPanel, myGifs, setMyGifs, user, onSaveFace }: MobileDashboardProps) {
+export function MobileDashboard({ theme, setTheme, onOpenGifPanel, myGifs, setMyGifs, user, onSaveFace, savedDescriptor }: MobileDashboardProps) {
   const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
   const [showProfile, setShowProfile] = useState(false);
   const [showFriends, setShowFriends] = useState(false);
@@ -60,7 +61,8 @@ export function MobileDashboard({ theme, setTheme, onOpenGifPanel, myGifs, setMy
           isFaceRegistered={localStorage.getItem('face_lock_registered') === 'true'}
           faceLockEnabled={faceLockEnabled}
           setFaceLockEnabled={setFaceLockEnabled}
-            user={user}
+          user={user}
+          savedDescriptor={savedDescriptor}
           />}
           {showCreateChat && (
             <CreateChat
