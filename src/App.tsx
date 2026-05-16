@@ -414,6 +414,7 @@ if (loading) {
           isFaceRegistered={isFaceRegistered}
           onRegisterFace={() => setIsRegistering(true)}
           onSaveFace={updateFaceDescriptor}
+          savedDescriptor={savedDescriptor}
         />
 
         {/* --- GIF STUDIO MODAL --- */}

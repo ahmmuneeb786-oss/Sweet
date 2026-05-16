@@ -270,6 +270,7 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
   type="button"
   onClick={async () => {
     if (!user?.id) return;
+    console.log("DEBUG BUTTON SCAN: savedDescriptor is currently ->", savedDescriptor);
 
     // Determine what the next target state should be
     const nextState = !faceLockEnabled;
