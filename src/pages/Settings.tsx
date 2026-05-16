@@ -271,7 +271,7 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
         // If not registered, open the scanner in "Register" mode
         onRegisterFace(); 
       } else {
-        setFaceLockEnabled(true);
+        setFaceLockEnabled(false);
         localStorage.setItem('face_lock_enabled', 'true');
       }
     } else {
