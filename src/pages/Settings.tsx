@@ -270,12 +270,11 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
   type="button"
   onClick={async () => {
     if (!user?.id) return;
-    console.log("DEBUG BUTTON SCAN: savedDescriptor is currently ->", savedDescriptor);
 
     // Determine what the next target state should be
     const nextState = !faceLockEnabled;
 
-    if (nextState && (!savedDescriptor || savedDescriptor.length === 0)) {
+    if (nextState && (!savedDescriptor || savedDescriptor?.length === 0)) {
       // If turning it on but no numerical data exists in the cloud, boot the scanner
       onRegisterFace();
       return;

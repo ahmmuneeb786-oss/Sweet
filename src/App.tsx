@@ -53,9 +53,7 @@ function AppContent() {
   const hasSeenWelcome = localStorage.getItem('has_seen_welcome');
   return !hasSeenWelcome;
   });
-  const [isFaceRegistered, setIsFaceRegistered] = useState(() => {
-  return localStorage.getItem('face_lock_data') !== null;
-  });
+  const [isFaceRegistered, setIsFaceRegistered] = useState(false);
   const [isRegistering, setIsRegistering] = useState(false);
   // Updated storage to handle objects instead of just strings
   const [myGifs, setMyGifs] = useState<GifItem[]>(() => {
@@ -105,13 +103,6 @@ function AppContent() {
   localStorage.setItem('has_seen_welcome', 'true');
  };
 
-  useEffect(() => {
-   const savedLockSetting = localStorage.getItem('face_lock_enabled');
-   if (savedLockSetting !== null) {
-     setFaceLockEnabled(savedLockSetting === 'true');
-   }
-  }, []);
-
 useEffect(() => {
   if (!loading && user && !hasOpened) {
   }
@@ -136,7 +127,7 @@ useEffect(() => {
   const updateFaceDescriptor = async (userId: string, descriptor: number[]) => {
   const { error } = await supabase
     .from('profiles')
-    .update({ face_descriptor: descriptor })
+    .update({ face_descriptor: descriptor, face_lock_enabled: true })
     .eq('id', userId);
 
   if (error) throw error;
@@ -397,7 +388,6 @@ if (loading) {
               setIsFaceRegistered(true);
               setFaceLockEnabled(true);
               setIsRegistering(false);
-              localStorage.setItem('face_lock_enabled', 'true');
             }}
             onUnlock={() => setIsRegistering(false)} 
           />
@@ -415,6 +405,8 @@ if (loading) {
           onRegisterFace={() => setIsRegistering(true)}
           onSaveFace={updateFaceDescriptor}
           savedDescriptor={savedDescriptor}
+          faceLockEnabled={faceLockEnabled}
+          setFaceLockEnabled={setFaceLockEnabled}
         />
 
         {/* --- GIF STUDIO MODAL --- */}

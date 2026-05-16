@@ -19,19 +19,18 @@ interface DashboardProps {
   user: any;
   onSaveFace: (userId: string, descriptor: number[]) => Promise<void>;
   savedDescriptor: number[] | null;
+  faceLockEnabled: boolean;
+  setFaceLockEnabled: (enabled: boolean) => void;
+  isFaceRegistered: boolean;
 }
 
-export function DesktopDashboard({ theme, setTheme, onOpenGifPanel, myGifs, setMyGifs, user, onSaveFace, savedDescriptor }: DashboardProps) {
+export function DesktopDashboard({ theme, setTheme, onOpenGifPanel, myGifs, setMyGifs, user, onSaveFace, savedDescriptor, faceLockEnabled, setFaceLockEnabled, isFaceRegistered }: DashboardProps) {
   const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
   const [showProfile, setShowProfile] = useState(false);
   const [showFriends, setShowFriends] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showCreateChat, setShowCreateChat] = useState(false);
   const [isRegistering, setIsRegistering] = useState(false);
-  
-  const [faceLockEnabled, setFaceLockEnabled] = useState(() => {
-  return localStorage.getItem('face_lock_enabled') === 'true';
-  });
 
   return (
     <div
@@ -127,7 +126,6 @@ export function DesktopDashboard({ theme, setTheme, onOpenGifPanel, myGifs, setM
     onRegisterSuccess={() => {
       setIsRegistering(false);
       setFaceLockEnabled(true);
-      localStorage.setItem('face_lock_enabled', 'true');
     }}
     onUnlock={() => setIsRegistering(false)} 
   />
@@ -156,7 +154,7 @@ export function DesktopDashboard({ theme, setTheme, onOpenGifPanel, myGifs, setM
           onClose={() => setShowSettings(false)}
           theme={theme}
           setTheme={setTheme}
-          isFaceRegistered={localStorage.getItem('face_lock_registered') === 'true'}
+          isFaceRegistered={isFaceRegistered}
           onRegisterFace={() => setIsRegistering(true)}
           faceLockEnabled={faceLockEnabled}
           setFaceLockEnabled={setFaceLockEnabled}

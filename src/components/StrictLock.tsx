@@ -120,9 +120,6 @@ const handleDetection = async () => {
 
           // Delegate saving entirely to the app's centralized prop function
           await onSaveDescriptor(userId, descriptorArray);
-
-          // Locally mark as registered so the UI updates
-          localStorage.setItem('face_lock_registered', 'true');
           
           stopCamera(); 
           

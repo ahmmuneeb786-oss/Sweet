@@ -18,19 +18,18 @@ interface MobileDashboardProps {
   user: any;
   onSaveFace: (userId: string, descriptor: number[]) => Promise<void>;
   savedDescriptor: number[] | null;
+  faceLockEnabled: boolean;
+  setFaceLockEnabled: (enabled: boolean) => void;
+  isFaceRegistered: boolean;
 }
 
-export function MobileDashboard({ theme, setTheme, onOpenGifPanel, myGifs, setMyGifs, user, onSaveFace, savedDescriptor }: MobileDashboardProps) {
+export function MobileDashboard({ theme, setTheme, onOpenGifPanel, myGifs, setMyGifs, user, onSaveFace, savedDescriptor, faceLockEnabled, setFaceLockEnabled, isFaceRegistered }: MobileDashboardProps) {
   const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
   const [showProfile, setShowProfile] = useState(false);
   const [showFriends, setShowFriends] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showCreateChat, setShowCreateChat] = useState(false);
   const [isRegistering, setIsRegistering] = useState(false);
-
-  const [faceLockEnabled, setFaceLockEnabled] = useState(() => {
-  return localStorage.getItem('face_lock_enabled') === 'true';
-  });
 
   // Helper for background colors based on theme
   const bgClass = 
@@ -58,7 +57,7 @@ export function MobileDashboard({ theme, setTheme, onOpenGifPanel, myGifs, setMy
           theme={theme} 
           setTheme={setTheme}
           onRegisterFace={() => setIsRegistering(true)}
-          isFaceRegistered={localStorage.getItem('face_lock_registered') === 'true'}
+          isFaceRegistered={isFaceRegistered}
           faceLockEnabled={faceLockEnabled}
           setFaceLockEnabled={setFaceLockEnabled}
           user={user}
@@ -82,7 +81,6 @@ export function MobileDashboard({ theme, setTheme, onOpenGifPanel, myGifs, setMy
     onRegisterSuccess={() => {
       setIsRegistering(false);
       setFaceLockEnabled(true);
-      localStorage.setItem('face_lock_enabled', 'true');
     }}
     onUnlock={() => setIsRegistering(false)} 
   />
