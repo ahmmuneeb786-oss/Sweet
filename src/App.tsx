@@ -373,7 +373,8 @@ if (loading) {
         )}
         
         <Dashboard 
-          theme={theme} 
+          theme={theme}
+          onSaveDescriptor={updateFaceDescriptor}
           user={user}
           setTheme={setTheme} 
           onOpenGifPanel={() => setShowGifPanel(true)}
