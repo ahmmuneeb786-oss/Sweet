@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import * as faceapi from 'face-api.js';
 import { Lock, Smile, AlertCircle, ShieldCheck, UserPlus } from 'lucide-react';
-import { supabase } from '../lib/supabase';
 
 interface StrictLockProps {
   onUnlock: () => void;
@@ -79,13 +78,11 @@ const handleDetection = async () => {
   if (!videoRef.current || !isModelLoaded) return;
 
   const interval = setInterval(async () => {
-    // 1. Detect ALL faces with landmarks, expressions, and descriptors
     const detections = await faceapi.detectAllFaces(
       videoRef.current!,
       new faceapi.TinyFaceDetectorOptions()
     ).withFaceLandmarks().withFaceExpressions().withFaceDescriptors();
 
-    // 2. PRIVACY RULE: Block if more than 1 person is seen
     if (detections.length > 1) {
       setFeedback('Privacy Alert: Multiple people detected! 🔒');
       setErrorState(true);
@@ -93,7 +90,6 @@ const handleDetection = async () => {
       return; 
     }
 
-    // 3. NO FACE RULE
     if (detections.length === 0) {
       setFeedback('No face detected');
       setIsPulsing(false);
@@ -101,34 +97,27 @@ const handleDetection = async () => {
       return;
     }
 
-    // 4. PREPARE DATA (Exactly 1 person is in frame)
     const person = detections[0];
     const smileValue = person.expressions.happy;
     const currentDescriptor = person.descriptor;
 
     if (mode === 'register') {
-      /** --- REGISTRATION MODE --- **/
       if (smileValue > 0.85) {
         setFeedback('Smile Captured! Syncing to Cloud...');
         
         try {
           const descriptorArray = Array.from(currentDescriptor);
 
-          await onSaveDescriptor(userId, descriptorArray);
-          
-          // SAVE TO SUPABASE (Replace 'user.id' with your actual user state)
-          const { error } = await supabase
-            .from('profiles')
-            .update({ face_descriptor: descriptorArray })
-            .eq('id', userId);
+          // Clear interval immediately so it stops scanning during network latency
+          clearInterval(interval);
 
-          if (error) throw error;
+          // Delegate saving entirely to the app's centralized prop function
+          await onSaveDescriptor(userId, descriptorArray);
 
           // Locally mark as registered so the UI updates
           localStorage.setItem('face_lock_registered', 'true');
           
-          clearInterval(interval);
-          stopCamera(); // Kill camera immediately
+          stopCamera(); 
           
           if (onRegisterSuccess) onRegisterSuccess();
         } catch (err) {
@@ -142,9 +131,6 @@ const handleDetection = async () => {
       }
 
     } else {
-      /** --- VERIFY MODE --- **/
-      // Fetch the descriptor we got from Supabase when the app loaded
-      // (This should be passed into StrictLock as a prop: 'savedDescriptor')
       if (!savedDescriptor) {
         setFeedback('No Face ID found. Please register first.');
         setErrorState(true);
@@ -154,7 +140,6 @@ const handleDetection = async () => {
       const targetDescriptor = new Float32Array(savedDescriptor);
       const distance = faceapi.euclideanDistance(currentDescriptor, targetDescriptor);
 
-      // Distance check: < 0.5 is a strong match for the same person
       if (distance < 0.5) {
         setErrorState(false);
         if (smileValue > 0.85) {
@@ -162,14 +147,13 @@ const handleDetection = async () => {
           setIsPulsing(true);
           
           clearInterval(interval);
-          stopCamera(); // Kill camera immediately
+          stopCamera(); 
           setTimeout(() => onUnlock(), 1000);
         } else {
           setFeedback('Hi! Just smile to enter 😊');
           setIsPulsing(true);
         }
       } else {
-        // It's a face, but not YOUR face
         setFeedback('Identity not recognized 🔒');
         setErrorState(true);
         setIsPulsing(false);
