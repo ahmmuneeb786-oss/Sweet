@@ -225,7 +225,10 @@ const stopCamera = () => {
         {/* Cancel Button (Only in Register mode so user isn't trapped in settings) */}
         {mode === 'register' && (
           <button 
-            onClick={onUnlock}
+            onClick={() => {
+              stopCamera();
+              onUnlock();
+            }}
             className="mt-6 text-pink-400 text-sm font-medium hover:text-pink-600 transition-colors"
           >
             Cancel Registration

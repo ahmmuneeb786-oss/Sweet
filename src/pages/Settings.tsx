@@ -264,26 +264,35 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
         </div>
 
         {/* The Toggle Button */}
-        <button
-  onClick={() => {
+<button
+  type="button"
+  onClick={async () => {
     if (!faceLockEnabled) {
+      // 1. If they have NO face data in the cloud database, force a registration scan
       if (!isFaceRegistered) {
-        // If not registered, open the scanner in "Register" mode
         onRegisterFace(); 
       } else {
+        // 2. If they ALREADY have face data in the cloud, turn the lock on instantly!
         setFaceLockEnabled(true);
         localStorage.setItem('face_lock_enabled', 'true');
       }
     } else {
+      // 3. Turn it off smoothly
       setFaceLockEnabled(false);
       localStorage.setItem('face_lock_enabled', 'false');
     }
   }}
-  className={`w-12 h-6 rounded-full transition-all relative ${
-    faceLockEnabled ? 'bg-pink-500' : 'bg-gray-300'
+  className={`w-12 h-6 rounded-full transition-all duration-300 relative p-1 cursor-pointer outline-none ${
+    faceLockEnabled ? 'bg-pink-500 shadow-md shadow-pink-200' : 'bg-gray-300'
   }`}
 >
-        </button>
+  {/* The sliding white dot indicator */}
+  <div 
+    className={`w-4 h-4 bg-white rounded-full shadow-md transition-transform duration-300 ease-out ${
+      faceLockEnabled ? 'translate-x-6' : 'translate-x-0'
+    }`}
+  />
+</button>
       </div>
       
       <p className="mt-4 text-xs text-gray-500 leading-relaxed italic">
