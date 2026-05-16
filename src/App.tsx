@@ -374,6 +374,7 @@ if (loading) {
         
         <Dashboard 
           theme={theme} 
+          user={user}
           setTheme={setTheme} 
           onOpenGifPanel={() => setShowGifPanel(true)}
           myGifs={myGifs}

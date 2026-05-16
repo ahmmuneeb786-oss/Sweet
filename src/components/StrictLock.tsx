@@ -103,6 +103,13 @@ const handleDetection = async () => {
 
     if (mode === 'register') {
       if (smileValue > 0.85) {
+        if (!userId || userId === 'undefined') {
+         console.error("Critical: Cannot register face because userId is missing!");
+         setFeedback('Error: User session lost. Please log in again.');
+         setErrorState(true);
+         clearInterval(interval);
+         return;
+       }
         setFeedback('Smile Captured! Syncing to Cloud...');
         
         try {
