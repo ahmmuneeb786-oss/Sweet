@@ -174,7 +174,7 @@ const handleDetection = async () => {
         setErrorState(true);
         setIsPulsing(false);
       }
-    }
+    } 
   }, 700);
 
   return () => clearInterval(interval);

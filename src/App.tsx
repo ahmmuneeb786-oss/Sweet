@@ -349,9 +349,9 @@ if (loading) {
 
   return (
     <div className={theme === 'dark' ? 'dark' : theme === 'sweet' ? 'sweet-theme' : ''}>
-      {user && !showLetter && faceLockEnabled && isLocked && (
+      {/*{user && !showLetter && faceLockEnabled && isLocked && (
         <StrictLock onUnlock={() => setIsLocked(false)} mode="verify" userId={user.id} onSaveDescriptor={updateFaceDescriptor} />
-      )}
+      )}*/}
 
       <div className={`min-h-screen transition-colors duration-300 ${
         theme === 'dark' ? 'bg-gray-900 text-white' : theme === 'sweet' ? 'bg-[#FFF0F5] text-[#FF69B4]' : 'bg-gray-50 text-gray-900'
