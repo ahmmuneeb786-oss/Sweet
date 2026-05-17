@@ -135,7 +135,8 @@ export function DesktopDashboard({ theme, setTheme, onOpenGifPanel, myGifs, setM
       {showProfile && (
         <ProfileSidebar 
           onClose={() => setShowProfile(false)} 
-          theme={theme} 
+          theme={theme}
+          user={user}
         />
       )}
       {showFriends && (

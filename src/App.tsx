@@ -49,6 +49,7 @@ function AppContent() {
   const [mailStage, setMailStage] = useState<'box-arrival' | 'box-idle' | 'envelope-reveal' | 'letter-unfold'>('box-arrival');
   const [isLocked, setIsLocked] = useState(true);
   const [faceLockEnabled, setFaceLockEnabled] = useState(false);
+  const [profileSyncLoading, setProfileSyncLoading] = useState(true);
   const [isAppLocked, setIsAppLocked] = useState(true);
   const [showLetter, setShowLetter] = useState(() => {
   const hasSeenWelcome = localStorage.getItem('has_seen_welcome');
@@ -68,11 +69,16 @@ function AppContent() {
   });
   
   const [savedDescriptor, setSavedDescriptor] = useState<number[] | null>(null);
-   useEffect(() => {
+
+  useEffect(() => {
   const fetchFaceDescriptor = async () => {
-    if (!user?.id) return;
+    if (!user?.id) {
+      setProfileSyncLoading(false);
+      return;
+    }
 
     try {
+      setProfileSyncLoading(true);
       const { data, error } = await supabase
         .from('profiles')
         .select('face_descriptor, face_lock_enabled')
@@ -93,13 +99,18 @@ function AppContent() {
       setIsAppLocked(false);
     }
     } catch (err) {
-      console.error("Failed to sync descriptor data matrix from Supabase:", err);
       setIsAppLocked(false);
+    }
+    finally {
+      setProfileSyncLoading(false);
     }
   };
 
   if (!loading && user) {
     fetchFaceDescriptor();
+  }
+  else {
+    setProfileSyncLoading(false);
   }
 }, [user, loading]);
 
@@ -186,7 +197,7 @@ const handleGifAction = async (input: string) => {
   }
 };
 
-if (loading) {
+if (loading || profileSyncLoading) {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-[#FFF0F3] overflow-hidden">
       <div className="relative flex items-center justify-center">
@@ -233,6 +244,16 @@ if (loading) {
     </div>
   );
 }
+
+  if (!user) {
+    return (
+      <div className={theme === 'dark' ? 'dark' : ''}>
+        <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
+          <Auth setProfileSyncLoading={setProfileSyncLoading} />
+        </div>
+      </div>
+    );
+  }
 
   if (showLetter) {
   return (
@@ -365,19 +386,9 @@ if (loading) {
   );
 }
 
-  if (!user) {
-    return (
-      <div className={theme === 'dark' ? 'dark' : ''}>
-        <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
-          <Auth />
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className={theme === 'dark' ? 'dark' : theme === 'sweet' ? 'sweet-theme' : ''}>
-      {user && !showLetter && faceLockEnabled && isLocked && (
+      {!showLetter && faceLockEnabled && isLocked && (
         <StrictLock
         onUnlock={() => setIsLocked(false)}
         mode="verify"

@@ -6,7 +6,7 @@ import { supabase } from '../lib/supabase';
 
 type AuthMode = 'login' | 'signup' | 'forgot';
 
-export function Auth() {
+export function Auth({ setProfileSyncLoading }: { setProfileSyncLoading: (loading: boolean) => void }) {
   const { signIn, signUp } = useAuth();
   const [mode, setMode] = useState<AuthMode>('login');
   const [loading, setLoading] = useState(false);
@@ -50,9 +50,10 @@ export function Auth() {
     }
   }, [password]);
 
-  useEffect(() => {
+useEffect(() => {
     if (mode === 'signup' && username) {
       const timeoutId = setTimeout(async () => {
+        // 1. Basic character validation
         if (!/^[a-z0-9_-]+$/.test(username)) {
           setUsernameError('Username can only contain a-z, 0-9, - and _');
           setUsernameAvailable(false);
@@ -63,12 +64,22 @@ export function Auth() {
         setUsernameError('');
 
         try {
-          const { data } = await supabase
+          // 2. The Bug Fix: Clean the input and explicitly capture potential database errors
+          const { data, error: fetchError } = await supabase
             .from('profiles')
             .select('username')
-            .eq('username', username.toLowerCase())
+            .eq('username', username.toLowerCase().trim()) // Added .trim() to prevent space bypass bugs
             .maybeSingle();
 
+          // 3. The Bug Fix: If the database throws an error, stop and handle it safely
+          if (fetchError) {
+            console.error('Database query issue:', fetchError);
+            setUsernameError('Could not verify availability. Try again.');
+            setUsernameAvailable(false);
+            return;
+          }
+
+          // 4. Evaluate the actual presence of data
           if (data) {
             setUsernameError('Username already taken');
             setUsernameAvailable(false);
@@ -78,6 +89,7 @@ export function Auth() {
           }
         } catch (error) {
           console.error('Error checking username:', error);
+          setUsernameAvailable(false);
         } finally {
           setCheckingUsername(false);
         }
@@ -115,26 +127,76 @@ export function Auth() {
     setError('');
     setSuccess('');
     setLoading(true);
+    setProfileSyncLoading(true);
 
     try {
       if (mode === 'login') {
         const { error } = await signIn(email, password);
         if (error) throw error;
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('id')
+            .eq('id', user.id)
+            .maybeSingle();
+
+          if (!profile) {
+            const { error: insertError } = await supabase
+              .from('profiles')
+              .insert([
+                {
+                  id: user.id,
+                  username: user.email ? user.email.split('@')[0].toLowerCase().replace(/[^a-z0-9_-]/g, '') : 'user_' + user.id.substring(0, 5),
+                  display_name: displayName || (user.email ? user.email.split('@')[0] : 'User'),
+                  theme: 'sweet',
+                  face_lock_enabled: false
+                }
+              ]);
+              if (insertError) throw insertError;
+              await supabase.auth.refreshSession();
+              return;
+          }
+          setProfileSyncLoading(false);
+        }
       } else if (mode === 'signup') {
         if (password !== confirmPassword) {
           throw new Error('Passwords do not match');
         }
 
-        const { error } = await signUp(email, password, username, displayName);
-        if (error) throw error;
+        const result = await signUp(email, password, username, displayName);
+        if (result?.error) throw result.error;
+        const user = result?.data?.user;
+          if (!user) {
+            throw new Error('Authentication completed, but failed to retrieve secure user token session.');
+          }
+        const { error: profileError } = await supabase
+        .from('profiles')
+        .insert([
+          {
+            id: user.id,
+            username: username.toLowerCase().trim(),
+            display_name: displayName.trim(),
+            theme: 'sweet',
+            face_lock_enabled: false
+          }
+          ]);
+        if (profileError) {
+          console.error("Database table allocation rejection:", profileError);
+          throw new Error(`Account built, but profile creation failed: ${profileError.message}`);
+        }
+        setProfileSyncLoading(false);
+
       } else if (mode === 'forgot') {
         const { error } = await supabase.auth.resetPasswordForEmail(email, {
           redirectTo: window.location.origin + '/reset-password',
         });
         if (error) throw error;
         setSuccess('Password reset email sent! Check your inbox.');
+        setProfileSyncLoading(false);
       }
     } catch (err: unknown) {
+      setProfileSyncLoading(false);
       if (err instanceof Error) {
         setError(err.message);
       } else {

@@ -18,7 +18,10 @@ interface AuthContextType {
   profile: Profile | null;
   session: Session | null;
   loading: boolean;
-  signUp: (email: string, password: string, username: string, displayName: string) => Promise<{ error: Error | null }>;
+  signUp: (email: string, password: string, username: string, displayName: string) => Promise<{
+    data: any;
+    error: Error | null 
+}>;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
   updateProfile: (updates: Partial<Profile>) => Promise<{ error: Error | null }>;
@@ -99,7 +102,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const lowerUsername = username.toLowerCase();
 
       if (!/^[A-Za-z0-9_-]+$/.test(lowerUsername)) {
-        return { error: new Error('Username can only contain A-Z, a-z, 0-9, - and _') };
+        return { data: null, error: new Error('Username can only contain A-Z, a-z, 0-9, - and _') };
       }
 
       const { data: existingUser } = await supabase
@@ -109,7 +112,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .maybeSingle();
 
       if (existingUser) {
-        return { error: new Error('Username already taken') };
+        return { data: null, error: new Error('Username already taken') };
       }
 
       const { data: authData, error: authError } = await supabase.auth.signUp({
@@ -159,9 +162,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           });
       }
 
-      return { error: null };
+      return { data: authData.user, error: null };
     } catch (error) {
-      return { error: error as Error };
+      return { data: null, error: error as Error };
     }
   }
 

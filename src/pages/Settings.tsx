@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { ChevronRight, X, Bell, Lock, Palette, HardDrive, LogOut, User, Shield, ShieldCheck, Smile } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { ChevronRight, X, Bell, Lock, Palette, HardDrive, LogOut, User, Shield, ShieldCheck, Smile, CheckCircle, AlertCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 
@@ -26,6 +26,8 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
   const [bio, setBio] = useState(profile?.bio || '');
   const [newUsername, setNewUsername] = useState(profile?.username || '');
   const [usernameError, setUsernameError] = useState('');
+  const [usernameAvailable, setUsernameAvailable] = useState(false);
+  const [checkingUsername, setCheckingUsername] = useState(false);
 
   const [privacySettings, setPrivacySettings] = useState({
     lastSeenVisibility: 'everyone',
@@ -39,6 +41,69 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
     callNotifications: true,
     muteAll: false
   });
+
+  useEffect(() => {
+    const CleanedUsername = newUsername.trim().toLowerCase();
+
+    // If input matches their current username, clear warnings and mark available
+    if (CleanedUsername === profile?.username?.toLowerCase()) {
+      setUsernameError('');
+      setUsernameAvailable(true);
+      setCheckingUsername(false);
+      return;
+    }
+
+    if (newUsername.trim()) {
+      const timeoutId = setTimeout(async () => {
+        // 1. Basic character validation (Supporting uppercase in input, converted down)
+        if (!/^[A-Za-z0-9_-]+$/.test(CleanedUsername)) {
+          setUsernameError('Username can only contain A-Z, a-z, 0-9, - and _');
+          setUsernameAvailable(false);
+          return;
+        }
+
+        setCheckingUsername(true);
+        setUsernameError('');
+
+        try {
+          // 2. Querying Supabase while excluding the current user's profile ID
+          const { data, error: fetchError } = await supabase
+            .from('profiles')
+            .select('username')
+            .eq('username', CleanedUsername)
+            .neq('id', profile?.id)
+            .maybeSingle();
+
+          // 3. Explicitly capture database errors safely
+          if (fetchError) {
+            console.error('Database query issue:', fetchError);
+            setUsernameError('Could not verify availability. Try again.');
+            setUsernameAvailable(false);
+            return;
+          }
+
+          // 4. Evaluate data presence
+          if (data) {
+            setUsernameError('Username already taken');
+            setUsernameAvailable(false);
+          } else {
+            setUsernameError('');
+            setUsernameAvailable(true);
+          }
+        } catch (error) {
+          console.error('Error checking username:', error);
+          setUsernameAvailable(false);
+        } finally {
+          setCheckingUsername(false);
+        }
+      }, 500);
+
+      return () => clearTimeout(timeoutId);
+    } else {
+      setUsernameError('');
+      setUsernameAvailable(false);
+    }
+  }, [newUsername, profile?.username, profile?.id]);
 
   async function handleUpdateProfile() {
     setLoading(true);
@@ -58,38 +123,53 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
   }
 
   async function handleChangeUsername() {
-    if (!newUsername.trim()) {
+    const CleanedUsername = newUsername.trim().toLowerCase();
+
+    if (!CleanedUsername) {
       setUsernameError('Username cannot be empty');
       return;
     }
 
-    if (!/^[A-Za-z0-9_-]+$/.test(newUsername)) {
+    if (!/^[A-Za-z0-9_-]+$/.test(CleanedUsername)) {
       setUsernameError('Username can only contain A-Z, a-z, 0-9, - and _');
+      return;
+    }
+
+    // If they didn't even alter their current username, just go back to main menu
+    if (CleanedUsername === profile?.username?.toLowerCase()) {
+      setActiveTab('main');
       return;
     }
 
     setLoading(true);
     try {
-      const { data: existing } = await supabase
+      // Double check availability upon submit click to prevent race conditions
+      const { data: existing, error: fetchError } = await supabase
         .from('profiles')
         .select('username')
-        .eq('username', newUsername.toLowerCase())
+        .eq('username', CleanedUsername)
         .neq('id', profile?.id)
         .maybeSingle();
 
+      if (fetchError) throw fetchError;
+
       if (existing) {
         setUsernameError('Username already taken');
+        setUsernameAvailable(false);
         return;
       }
 
+      // Everything looks completely valid; execute profile data update row rewrite
       const { error } = await updateProfile({
-        username: newUsername.toLowerCase()
+        username: CleanedUsername
       });
 
       if (error) throw error;
+      
       setUsernameError('');
       setActiveTab('main');
     } catch (error) {
+      console.error('Error updating profile username data context:', error);
       setUsernameError('Failed to update username');
     } finally {
       setLoading(false);
@@ -194,23 +274,59 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Username</label>
-                <input
-                  type="text"
-                  value={newUsername}
-                  onChange={(e) => setNewUsername(e.target.value)}
-                  className={`w-full px-4 py-2 border rounded-xl focus:ring-2 focus:ring-pink-500 outline-none ${
-                    usernameError ? 'border-red-500' : 'border-gray-300'
-                  }`}
-                />
-                {usernameError && <p className="text-sm text-red-600 mt-1">{usernameError}</p>}
-              <button
-  type="button"
-  onClick={handleChangeUsername} // ← call the function
-  className="mt-2 px-4 py-2 bg-pink-500 text-white rounded-xl hover:bg-pink-600 transition"
->
-  Save Username
-</button>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Username
+                </label>
+                <div className="relative">
+                  {/* Left Side User Icon */}
+                  <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                  
+                  <input
+                    type="text"
+                    value={newUsername}
+                    onChange={(e) => setNewUsername(e.target.value)}
+                    placeholder="sweet_alex"
+                    className={`w-full pl-10 pr-10 py-3 border rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-transparent outline-none transition-all ${
+                      usernameError ? 'border-red-500' : newUsername && usernameAvailable ? 'border-green-500' : 'border-gray-300'
+                    }`}
+                  />
+                  
+                  {/* Right Side Loading Spinner */}
+                  {checkingUsername && (
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                      <div className="w-5 h-5 border-2 border-pink-500 border-t-transparent rounded-full animate-spin" />
+                    </div>
+                  )}
+                  
+                  {/* Right Side Success Icon */}
+                  {!checkingUsername && newUsername && usernameAvailable && newUsername.toLowerCase().trim() !== profile?.username?.toLowerCase() && (
+                    <CheckCircle className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-green-500" />
+                  )}
+                  
+                  {/* Right Side Error Icon */}
+                  {!checkingUsername && usernameError && (
+                    <AlertCircle className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-red-500" />
+                  )}
+                </div>
+                
+                {/* Error Messaging */}
+                {usernameError && (
+                  <p className="mt-1 text-sm text-red-600">{usernameError}</p>
+                )}
+                
+                {/* Success Messaging */}
+                {!usernameError && newUsername && usernameAvailable && newUsername.toLowerCase().trim() !== profile?.username?.toLowerCase() && (
+                  <p className="mt-1 text-sm text-green-600">Username available!</p>
+                )}
+
+                <button
+                  type="button"
+                  onClick={handleChangeUsername}
+                  disabled={loading || !usernameAvailable || checkingUsername}
+                  className="mt-3 px-4 py-2 bg-pink-500 text-white rounded-xl hover:bg-pink-600 transition disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium shadow-sm"
+                >
+                  Save Username
+                </button>
               </div>
 
               <div>

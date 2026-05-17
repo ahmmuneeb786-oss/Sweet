@@ -5,10 +5,11 @@ import { supabase } from '../lib/supabase';
 
 interface ProfileSidebarProps {
   onClose: () => void;
-  theme: 'light' | 'dark' | 'sweet'; // Add this line!
+  theme: 'light' | 'dark' | 'sweet';
+  user: any;
 }
 
-export function ProfileSidebar({ onClose, theme }: ProfileSidebarProps) {
+export function ProfileSidebar({ onClose, theme, user }: ProfileSidebarProps) {
   const { profile, updateProfile } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
   const [displayName, setDisplayName] = useState(profile?.display_name || '');
@@ -203,8 +204,14 @@ export function ProfileSidebar({ onClose, theme }: ProfileSidebarProps) {
     : 'bg-gray-50 border-gray-300 text-black'
 }`}
               />
-              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                Username cannot be changed
+              <p className="mt-1 text-xs ${
+  theme === 'sweet' 
+    ? 'text-[#8B004B]' 
+    : theme === 'dark'
+    ? 'dark:text-gray-400' 
+    : 'text-gray-500'
+}">
+                Head toward settings to change your username.
               </p>
             </div>
 
@@ -283,7 +290,13 @@ export function ProfileSidebar({ onClose, theme }: ProfileSidebarProps) {
                 placeholder="Tell us about yourself..."
               />
               <div className="flex justify-between items-center mt-1">
-                <p className="text-xs text-gray-500 dark:text-gray-400">
+                <p className="text-xs ${
+  theme === 'sweet' 
+    ? 'text-[#8B004B]' 
+    : theme === 'dark'
+    ? 'dark:text-gray-400' 
+    : 'text-gray-500'
+}">
                   {bio.length}/250 characters
                 </p>
               </div>
@@ -306,18 +319,18 @@ export function ProfileSidebar({ onClose, theme }: ProfileSidebarProps) {
                   )}
                 </button>
                 <button
-  onClick={handleCancel}
-  disabled={loading}
-  className={`px-4 py-2 rounded-xl transition-colors disabled:opacity-50 font-medium ${
-    theme === 'sweet'
-      ? 'bg-[#FF69B4] text-[#4B004B] hover:bg-[#FF1493]' // Pink bg with Plum text
-      : theme === 'dark'
-      ? 'bg-gray-800 text-[#9ca3af] hover:bg-gray-700'  // Dark bg with Grey text
-      : 'bg-gray-100 text-black hover:bg-gray-200'      // Light bg with Black text
-  }`}
->
-  Cancel
-</button>
+                  onClick={handleCancel}
+                  disabled={loading}
+                  className={`px-4 py-2 rounded-xl transition-colors disabled:opacity-50 font-medium ${
+                   theme === 'sweet'
+                   ? 'bg-[#FF69B4] text-[#4B004B] hover:bg-[#FF1493]' // Pink bg with Plum text
+                   : theme === 'dark'
+                   ? 'bg-gray-800 text-[#9ca3af] hover:bg-gray-700'  // Dark bg with Grey text
+                   : 'bg-gray-100 text-black hover:bg-gray-200'      // Light bg with Black text
+                 }`}
+               >
+                Cancel
+               </button>
               </div>
             )}
           </div>
@@ -354,13 +367,13 @@ export function ProfileSidebar({ onClose, theme }: ProfileSidebarProps) {
                   Member since
                 </span>
                 <span className={`text-sm font-bold ${
-  theme === 'sweet'
-    ? 'text-[#8B004B]' 
-    : theme === 'dark'
-    ? 'text-gray-400' // This is the grey you wanted for Dark Theme
-    : 'text-black'    // This is the black you like for Light Theme
-}`}>
-                  {profile?.created_at ? new Date(profile.created_at).toLocaleDateString() : 'N/A'}
+                  theme === 'sweet'
+                   ? 'text-[#8B004B]' 
+                   : theme === 'dark'
+                   ? 'text-gray-400' // This is the grey you wanted for Dark Theme
+                   : 'text-black'    // This is the black you like for Light Theme
+             }`}>
+                  {user?.created_at ? new Date(user.created_at).toLocaleDateString() : 'N/A'}
                 </span>
               </div>
             </div>
