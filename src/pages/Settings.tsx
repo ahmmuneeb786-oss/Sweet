@@ -403,27 +403,32 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
   onClick={async () => {
     if (!user?.id) return;
 
-    // Determine what the next target state should be
     const nextState = !faceLockEnabled;
 
-    if (nextState && (!savedDescriptor || savedDescriptor?.length === 0)) {
-      // If turning it on but no numerical data exists in the cloud, boot the scanner
-      onRegisterFace();
+    // 1. IF THE USER IS TURNING IT ON: Check if they actually have a face registered
+    if (nextState) {
+      const hasFaceData = Array.isArray(savedDescriptor) && savedDescriptor.length > 0;
+      
+      if (!hasFaceData) {
+        // Stop here! Open the face scanner overlay, but DO NOT flip the main toggle yet.
+        onRegisterFace();
+        return; 
+      }
     }
 
+    // 2. IF THEY HAVE DATA (or are turning it OFF): Safely run the state change
     try {
-      // Optimistically update frontend UI for a fast, snappy experience
+      // Snappy local update
       setFaceLockEnabled(nextState);
 
-      // Save the switch state directly to the cloud row!
+      // Persist to database
       const { error } = await supabase
         .from('profiles')
         .update({ face_lock_enabled: nextState })
         .eq('id', user.id);
 
       if (error) {
-        // Rollback state if the database network fails
-        setFaceLockEnabled(faceLockEnabled);
+        setFaceLockEnabled(faceLockEnabled); // Rollback on failure
         throw error;
       }
     } catch (err) {

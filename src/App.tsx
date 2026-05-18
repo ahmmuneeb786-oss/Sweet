@@ -47,7 +47,6 @@ function AppContent() {
   const [lastSearchQuery, setLastSearchQuery] = useState('');
   const [hasOpened, setHasOpened] = useState(false);
   const [mailStage, setMailStage] = useState<'box-arrival' | 'box-idle' | 'envelope-reveal' | 'letter-unfold'>('box-arrival');
-  const [isLocked, setIsLocked] = useState(true);
   const [faceLockEnabled, setFaceLockEnabled] = useState(false);
   const [profileSyncLoading, setProfileSyncLoading] = useState(true);
   const [isAppLocked, setIsAppLocked] = useState(true);
@@ -93,8 +92,8 @@ function AppContent() {
         setIsFaceRegistered(true);
       }
       setFaceLockEnabled(!!data.face_lock_enabled);
-    }
-    setFaceLockEnabled(!!data.face_lock_enabled);
+      setIsAppLocked(!!data.face_lock_enabled);
+   }
     if (!data.face_lock_enabled) {
       setIsAppLocked(false);
     }
@@ -388,9 +387,9 @@ if (loading || profileSyncLoading) {
 
   return (
     <div className={theme === 'dark' ? 'dark' : theme === 'sweet' ? 'sweet-theme' : ''}>
-      {!showLetter && faceLockEnabled && isLocked && (
+      {!showLetter && isAppLocked && (
         <StrictLock
-        onUnlock={() => setIsLocked(false)}
+        onUnlock={() => setIsAppLocked(false)}
         mode="verify"
         userId={user.id}
         onSaveDescriptor={updateFaceDescriptor}
