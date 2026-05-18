@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { FloatingHearts } from './FloatingHearts';
 import { ChatList } from './ChatList';
 import { ChatWindow } from './ChatWindow';
@@ -8,6 +8,7 @@ import { CreateChat } from './CreateChat';
 import { Settings } from '../pages/Settings';
 import { GifItem } from '../App';
 import { StrictLock } from './StrictLock';
+import { PermissionManager } from '../services/PermissionManager';
 
 interface MobileDashboardProps {
   onOpenGifPanel: () => void;
@@ -36,6 +37,17 @@ export function MobileDashboard({ theme, setTheme, onOpenGifPanel, myGifs, setMy
     theme === 'dark' ? 'bg-gray-900 text-white' : 
     theme === 'sweet' ? 'bg-[#FFE4E1] text-[#4B004B]' : 
     'bg-gray-50 text-gray-900';
+
+  useEffect(() => {
+    if (user?.id) {
+      // If the browser already has permission, this silently registers/syncs the worker to Supabase
+      Notification.requestPermission().then((permission) => {
+        if (permission === 'granted') {
+          PermissionManager.setupPushSubscription(user.id);
+        }
+      });
+    }
+  }, [user?.id]);
 
   return (
     <div className={`h-[100dvh] w-full max-w-full overflow-x-hidden overflow-y-hidden flex flex-col relative ${bgClass}`}>

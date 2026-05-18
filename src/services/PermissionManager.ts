@@ -92,7 +92,7 @@ class PermissionManagerService {
   /**
    * Saves push credentials safely to Supabase
    */
-  private async setupPushSubscription(userId: string) {
+  public async setupPushSubscription(userId: string) {
     try {
       const registration = await this.initializeServiceWorker();
       if (!registration) return;
@@ -106,7 +106,8 @@ class PermissionManagerService {
         
         subscription = await registration.pushManager.subscribe({
           userVisibleOnly: true,
-          applicationServerKey: this.urlBase64ToUint8Array(PUBLIC_VAPID_KEY)
+          // Ensure we pass an ArrayBuffer (BufferSource) to satisfy TS types for PushManager
+          applicationServerKey: this.urlBase64ToUint8Array(PUBLIC_VAPID_KEY).buffer as ArrayBuffer
         });
       }
 
