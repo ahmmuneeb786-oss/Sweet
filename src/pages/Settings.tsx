@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { ChevronRight, X, Bell, Lock, Palette, HardDrive, LogOut, User, Shield, ShieldCheck, Smile, CheckCircle, AlertCircle, ChevronLeft } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
+import { PermissionManager } from '../services/PermissionManager';
 
 type SettingsTab = 'main' | 'account' | 'privacy' | 'notifications' | 'theme' | 'storage' | 'locked' | 'lock';
 
@@ -28,6 +29,7 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
   const [usernameError, setUsernameError] = useState('');
   const [usernameAvailable, setUsernameAvailable] = useState(false);
   const [checkingUsername, setCheckingUsername] = useState(false);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
 
   const [privacySettings, setPrivacySettings] = useState({
     lastSeenVisibility: 'everyone',
@@ -104,6 +106,28 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
       setUsernameAvailable(false);
     }
   }, [newUsername, profile?.username, profile?.id]);
+
+  useEffect(() => {
+    async function checkExistingPermission() {
+      const status = await PermissionManager.checkPermission('notifications');
+      setNotificationsEnabled(status === 'granted');
+    }
+    checkExistingPermission();
+  }, []);
+
+  const handleNotificationToggle = async () => {
+  if (!notificationsEnabled) {
+    // Passing user.id ensures the subscription gets saved to Supabase!
+    const granted = await PermissionManager.requestPermission('notifications', user?.id);
+    if (granted) {
+      setNotificationsEnabled(true);
+    }
+  } else {
+    // Note: Browsers don't let you programmatically "revoke" permission to 'default', 
+    // but we can tell them how to turn it off or handle local state suppression.
+    alert("To turn off whispers completely, you can tap the lock/info icon next to your browser URL bar at the top! 🍬");
+  }
+};
 
   async function handleUpdateProfile() {
     setLoading(true);
@@ -450,7 +474,7 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
       </div>
       
       <p className="mt-4 text-xs text-gray-500 leading-relaxed italic">
-        "When enabled, you'll need to show a happy smile to the camera to enter your dashboard."
+        "An inbuilt biometric lock that uses your unique facial features to secure the app. When enabled, you'll need to verify your identity with a quick face scan each time you open the app, ensuring that only you can access your messages and data. It's like having a personal security guard that's always on duty, providing an extra layer of protection for your private conversations."
       </p>
     </div>
   </div>
@@ -504,6 +528,34 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
                   <option value="nobody">Nobody</option>
                 </select>
               </div>
+
+              <div className="p-4 bg-white rounded-2xl border border-pink-100 flex items-center justify-between shadow-sm mt-4">
+               <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-pink-50 flex items-center justify-center text-pink-500 text-lg">
+                  🍬
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-xs font-black uppercase tracking-wider text-pink-600">Sweet Whispers</span>
+                  <span className="text-[10px] text-pink-400 font-bold">BACKGROUND NOTIFICATIONS</span>
+                </div>
+              </div>
+      
+              <button
+                onClick={handleNotificationToggle}
+                className={`w-11 h-6 rounded-full transition-colors duration-200 focus:outline-none relative ${
+                  notificationsEnabled ? 'bg-pink-500' : 'bg-gray-200'
+                }`}
+              >
+                <span
+                  className={`absolute top-0.5 left-0.5 bg-white w-5 h-5 rounded-full shadow-md transform transition-transform duration-200 ${
+                    notificationsEnabled ? 'translate-x-5' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
+            <p className="text-[11px] text-pink-400/80 font-medium italic mt-2 px-1">
+              "Receive a sweet little notification banner whenever someone messages you, even if your browser tab is entirely closed."
+        </p>
 
               <button
                 onClick={handleUpdatePrivacy}
