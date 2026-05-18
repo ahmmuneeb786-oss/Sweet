@@ -1,5 +1,5 @@
 import { FloatingHearts } from '../components/FloatingHearts';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ChatList } from '../components/ChatList';
 import { ChatWindow } from '../components/ChatWindow';
 import { ProfileSidebar } from '../components/ProfileSidebar';
@@ -8,6 +8,7 @@ import { CreateChat } from '../components/CreateChat';
 import { Settings } from '../pages/Settings';
 import { GifItem } from '../App';
 import { StrictLock } from './StrictLock';
+import { PermissionManager } from '../services/PermissionManager';
 
 
 interface DashboardProps {
@@ -31,6 +32,17 @@ export function DesktopDashboard({ theme, setTheme, onOpenGifPanel, myGifs, setM
   const [showSettings, setShowSettings] = useState(false);
   const [showCreateChat, setShowCreateChat] = useState(false);
   const [isRegistering, setIsRegistering] = useState(false);
+
+    useEffect(() => {
+      if (user?.id) {
+        // If the browser already has permission, this silently registers/syncs the worker to Supabase
+        Notification.requestPermission().then((permission) => {
+          if (permission === 'granted') {
+            PermissionManager.setupPushSubscription(user.id);
+          }
+        });
+      }
+    }, [user?.id]);
 
   return (
     <div
