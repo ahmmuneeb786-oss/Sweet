@@ -238,11 +238,17 @@ function subscribeToChats() {
           </div>
 
           <div className="relative">
-            <button
-              onClick={() => setShowMenu(!showMenu)}
-              className="p-2 hover:bg-gray-100 rounded-full transition-colors"
-            >
-              <MoreVertical className="w-5 h-5 text-gray-600" />
+      <button
+      onClick={() => setShowMenu(!showMenu)}
+      className={`p-2 rounded-full transition-colors outline-none ${
+        theme === 'dark'
+          ? 'hover:bg-gray-800 text-white'
+          : theme === 'sweet'
+          ? 'hover:bg-[#FAD1D1] text-[#4B004B]'
+          : 'hover:bg-gray-100 text-gray-700'
+      }`}
+    >
+              <MoreVertical className={`w-5 h-5 ${theme === 'dark' ? 'text-gray-200' : theme === 'sweet' ? 'text-[#4B004B]' : 'text-gray-700'}`} />
             </button>
 
             {showMenu && (
@@ -255,7 +261,8 @@ function subscribeToChats() {
                     theme === 'sweet' 
                      ? 'bg-[#FFE4E1] border-[#FFB6C1]' 
                       : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700'
-                   }`}>                  <button
+                   }`}>
+                  <button
                     onClick={() => {
                       onShowProfile();
                       setShowMenu(false);

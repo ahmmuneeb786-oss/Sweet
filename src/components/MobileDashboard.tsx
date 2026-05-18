@@ -42,7 +42,7 @@ export function MobileDashboard({ theme, setTheme, onOpenGifPanel, myGifs, setMy
       {theme === 'sweet' && <FloatingHearts />}
       {(showProfile || showFriends || showSettings || showCreateChat) && (
         <div className="fixed inset-0 z-[100] w-full h-full">
-          {showProfile && <ProfileSidebar onClose={() => setShowProfile(false)} theme={theme} />}
+          {showProfile && <ProfileSidebar onClose={() => setShowProfile(false)} theme={theme} user={user}/>}
           {showFriends && (
             <FriendList 
               theme={theme} 

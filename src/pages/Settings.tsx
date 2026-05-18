@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ChevronRight, X, Bell, Lock, Palette, HardDrive, LogOut, User, Shield, ShieldCheck, Smile, CheckCircle, AlertCircle } from 'lucide-react';
+import { ChevronRight, X, Bell, Lock, Palette, HardDrive, LogOut, User, Shield, ShieldCheck, Smile, CheckCircle, AlertCircle, ChevronLeft } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 
@@ -210,8 +210,14 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
   return (
     <>
       <div className="fixed inset-0 bg-black/50 z-40" onClick={onClose} />
-      <div className="fixed right-0 top-0 h-full w-full md:w-96 bg-white shadow-2xl z-50 flex flex-col overflow-hidden">
-        <div className="p-6 border-b border-gray-200 flex items-center justify-between">
+      <div className={`fixed right-0 top-0 h-full w-full md:w-96 shadow-2xl z-50 flex flex-col overflow-hidden transition-all duration-300 ${
+        theme === 'dark' 
+          ? 'bg-gray-900 text-white' 
+          : theme === 'sweet' 
+          ? 'bg-[#FFE4E1] text-[#4B004B]' 
+          : 'bg-white text-gray-900'
+      }`}>
+        <div className="p-6 border-b border-[#FFB6C1] flex items-center justify-between">
           <h2 className="text-2xl font-bold text-gray-900">Settings</h2>
           <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full">
             <X className="w-5 h-5" />
@@ -220,7 +226,7 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
 
         <div className="flex-1 overflow-y-auto">
           {activeTab === 'main' && (
-            <div className="divide-y divide-gray-200">
+            <div className="divide-y divide-[#FFB6C1]">
               {settingsSections.map((section) => {
                 const Icon = section.icon;
                 return (
@@ -259,7 +265,7 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
                 onClick={() => setActiveTab('main')}
                 className="flex items-center gap-2 text-pink-600 hover:text-pink-700 mb-4"
               >
-                <X className="w-4 h-4" />
+                <ChevronLeft className="w-4 h-4" />
                 Back
               </button>
 
@@ -269,7 +275,11 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
                   type="text"
                   value={displayName}
                   onChange={(e) => setDisplayName(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-pink-500 outline-none"
+                  className={`w-full px-4 py-2 border rounded-xl focus:ring-2 focus:ring-pink-500 outline-none ${
+                    theme === 'sweet'
+                      ? 'border-[#FFB6C1] focus:ring-[#FFB6C1]'
+                      : ''
+                  }`}
                 />
               </div>
 
@@ -336,7 +346,13 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
                   onChange={(e) => setBio(e.target.value.slice(0, 250))}
                   maxLength={250}
                   rows={4}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-pink-500 outline-none resize-none"
+                  className={`w-full px-4 py-2 border rounded-xl focus:ring-2 focus:ring-pink-500 outline-none resize-none ${
+                    theme === 'sweet'
+                      ? 'border-[#FFB6C1] focus:ring-[#FFB6C1]'
+                      : theme === 'dark'
+                      ? 'border-gray-700'
+                      : 'border-gray-300'
+                  }`}
                 />
                 <p className="text-xs text-gray-500 mt-1">{bio.length}/250</p>
               </div>
@@ -376,7 +392,7 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
             <Smile size={20} />
           </div>
           <div>
-            <p className="text-sm font-bold text-gray-800">Smile to Unlock</p>
+            <p className="text-sm font-bold text-gray-800">Face lock</p>
             <p className="text-[10px] text-gray-500 uppercase tracking-tight">Biometric Security</p>
           </div>
         </div>
@@ -393,7 +409,6 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
     if (nextState && (!savedDescriptor || savedDescriptor?.length === 0)) {
       // If turning it on but no numerical data exists in the cloud, boot the scanner
       onRegisterFace();
-      return;
     }
 
     try {
