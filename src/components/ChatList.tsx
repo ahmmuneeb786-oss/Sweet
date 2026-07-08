@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { FloatingHearts } from './FloatingHearts';
 import { localDB } from '../db';
+import { usePresence } from '../hooks/usePresence';
 
 interface Chat {
   id: string;
@@ -36,11 +37,46 @@ interface ChatListProps {
 
 export function ChatList({ selectedChatId, onSelectChat, onShowProfile, onShowFriends, onShowSettings, onShowCreateChat, theme, onShowLockedChats }: ChatListProps) {
   const { user, profile, signOut } = useAuth();
+  const { isOnline: isUserOnline } = usePresence(user?.id);
   const [chats, setChats] = useState<Chat[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [showMenu, setShowMenu] = useState(false);
   const [loading, setLoading] = useState(true);
   const [isOnline, setIsOnline] = useState(navigator.onLine); // 🌐 Track network variations
+
+  // Own profile (avatar + username shown top-left) — cached so it doesn't
+  // flash blank on reload while AuthContext is still fetching it.
+  const [myProfile, setMyProfile] = useState<{ display_name: string; username: string; avatar_url: string | null } | null>(null);
+
+  useEffect(() => {
+    async function hydrateMyProfile() {
+      if (!user?.id) return;
+
+      if (navigator.onLine && profile) {
+        const fresh = {
+          display_name: profile.display_name || '',
+          username: profile.username || '',
+          avatar_url: profile.avatar_url || null,
+        };
+        setMyProfile(fresh);
+        await localDB.saveUserProfile(user.id, {
+          ...fresh,
+          bio: profile.bio,
+          created_at: user.created_at,
+        });
+      } else {
+        const cached = await localDB.getUserProfile(user.id);
+        if (cached) {
+          setMyProfile({
+            display_name: cached.display_name,
+            username: cached.username,
+            avatar_url: cached.avatar_url,
+          });
+        }
+      }
+    }
+    hydrateMyProfile();
+  }, [user?.id, profile]);
 
   // Listen to network status modifications live
   useEffect(() => {
@@ -71,21 +107,32 @@ export function ChatList({ selectedChatId, onSelectChat, onShowProfile, onShowFr
           { event: 'INSERT', schema: 'public', table: 'messages' },
           (payload) => {
             const newMessage = payload.new;
-            
+
             setChats((currentChats) => {
-              return currentChats.map((chat) => {
-                if (chat.id === newMessage.chat_id) {
-                  return {
-                    ...chat,
-                    lastMessage: {
-                      content: newMessage.content,
-                      created_at: newMessage.created_at
-                    }
-                  };
+              const idx = currentChats.findIndex((chat) => chat.id === newMessage.chat_id);
+              if (idx === -1) return currentChats;
+
+              const updatedChat = {
+                ...currentChats[idx],
+                lastMessage: {
+                  content: newMessage.content,
+                  created_at: newMessage.created_at
                 }
-                return chat;
-              });
+              };
+
+              // Move the chat with the new message to the top, like a real chat list.
+              const next = [...currentChats];
+              next.splice(idx, 1);
+              next.unshift(updatedChat);
+              return next;
             });
+
+            // Persist so the next app open shows this message from cache instantly,
+            // instead of only reflecting whatever the last full loadChats() saw.
+            localDB.chats.update(newMessage.chat_id, {
+              last_message_content: newMessage.content,
+              last_message_time: newMessage.created_at
+            }).catch(() => {});
           }
         )
         .on(
@@ -108,6 +155,14 @@ export function ChatList({ selectedChatId, onSelectChat, onShowProfile, onShowFr
                 return chat;
               });
             });
+
+            // Online/offline itself now comes from usePresence, not last_seen —
+            // this is just keeping the cached "last seen" value from going stale.
+            localDB.chats
+              .where('other_user_id')
+              .equals(updatedProfile.id)
+              .modify({ other_user_last_seen: updatedProfile.last_seen })
+              .catch(() => {});
           }
         )
         .subscribe();
@@ -118,100 +173,112 @@ export function ChatList({ selectedChatId, onSelectChat, onShowProfile, onShowFr
     }
   }, [user]);
 
-  useEffect(() => {
-    const tickerInterval = setInterval(() => {
-      setChats(currentChats => [...currentChats]);
-    }, 10000);
-    return () => clearInterval(tickerInterval);
-  }, []);
+  // Shared shape conversion: LocalChat (cache row) -> Chat (what the UI renders)
+  function toChat(c: any): Chat {
+    return {
+      id: c.id,
+      type: c.type,
+      name: c.name,
+      avatar_url: c.avatar_url,
+      theme: c.theme,
+      lastMessage: c.last_message_content ? {
+        content: c.last_message_content,
+        created_at: c.last_message_time || ''
+      } : undefined,
+      otherUser: c.other_user_id ? {
+        id: c.other_user_id,
+        display_name: c.other_user_name || '',
+        avatar_url: c.other_user_avatar || null,
+        last_seen: c.other_user_last_seen || null
+      } : undefined
+    };
+  }
+
+  // Most recently active conversation first — a chat list should always feel
+  // "sorted by what just happened", not by whatever order the DB returned.
+  function byRecency(a: Chat, b: Chat) {
+    const aTime = a.lastMessage?.created_at ? new Date(a.lastMessage.created_at).getTime() : 0;
+    const bTime = b.lastMessage?.created_at ? new Date(b.lastMessage.created_at).getTime() : 0;
+    return bTime - aTime;
+  }
 
   async function loadChats() {
     if (!user) return;
 
     try {
-      // PHASE 1: Read internal phone storage instantly
+      // PHASE 1: Read internal phone storage instantly — this is what makes
+      // the list show up immediately on open instead of a blank/loading screen.
       const cachedChats = await localDB.chats.toArray();
       if (cachedChats.length > 0) {
-        const formattedCache = cachedChats.map(c => ({
-          id: c.id,
-          type: c.type,
-          name: c.name,
-          avatar_url: c.avatar_url,
-          theme: c.theme,
-          lastMessage: c.last_message_content ? {
-            content: c.last_message_content,
-            created_at: c.last_message_time || ''
-          } : undefined,
-          otherUser: c.other_user_id ? {
-            id: c.other_user_id,
-            display_name: c.other_user_name || '',
-            avatar_url: c.other_user_avatar || null,
-            last_seen: c.other_user_last_seen || null
-          } : undefined
-        }));
-        
-        setChats(formattedCache);
+        setChats(cachedChats.map(toChat).sort(byRecency));
         setLoading(false);
       } else {
         setLoading(true);
       }
 
       // PHASE 2: Quietly ask Supabase if there are new changes over the network
-      if (navigator.onLine) {
-        const { data: participants, error: pError } = await supabase
-          .from('chat_participants')
-          .select(`
-            chat_id,
-            chats:chat_id ( id, type, name, avatar_url, theme, created_at )
-          `)
-          .eq('user_id', user.id)
-          .eq('is_locked', false)
-          .is('left_at', null);
+      if (!navigator.onLine) return;
 
-        if (pError) {
-          console.error('Supabase Error:', pError.message);
-          return;
-        }
+      const { data: participants, error: pError } = await supabase
+        .from('chat_participants')
+        .select(`
+          chat_id,
+          chats:chat_id ( id, type, name, avatar_url, theme, created_at )
+        `)
+        .eq('user_id', user.id)
+        .eq('is_locked', false)
+        .is('left_at', null);
 
-        if (!participants || participants.length === 0) {
-          setChats([]);
-          await localDB.chats.clear();
-          return;
-        }
+      if (pError) {
+        console.error('Supabase Error:', pError.message);
+        return;
+      }
 
-        const chatIds = participants.map(p => p.chat_id);
+      if (!participants || participants.length === 0) {
+        setChats([]);
+        await localDB.chats.clear();
+        return;
+      }
 
-        const { data: messages } = await supabase
+      const chatIds = participants.map(p => p.chat_id);
+      const directChatIds = participants
+        .filter(p => {
+          const c = Array.isArray(p.chats) ? p.chats[0] : p.chats;
+          return c?.type === 'direct';
+        })
+        .map(p => p.chat_id);
+
+      // Batched instead of one query per chat — this was the N+1 query problem.
+      const [{ data: messages }, { data: otherParticipants }] = await Promise.all([
+        supabase
           .from('messages')
           .select('chat_id, content, created_at')
           .in('chat_id', chatIds)
-          .order('created_at', { ascending: false });
+          .order('created_at', { ascending: false }),
+        directChatIds.length > 0
+          ? supabase
+              .from('chat_participants')
+              .select('chat_id, profiles:user_id ( id, display_name, avatar_url, last_seen )')
+              .in('chat_id', directChatIds)
+              .neq('user_id', user.id)
+          : Promise.resolve({ data: [] as any[] })
+      ]);
 
-        const freshLocalChats: any[] = [];
+      const otherUserByChat = new Map<string, any>();
+      otherParticipants?.forEach((row: any) => {
+        const profile = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles;
+        if (profile) otherUserByChat.set(row.chat_id, profile);
+      });
 
-        for (const p of participants) {
+      const freshLocalChats = participants
+        .map(p => {
           const chatData = Array.isArray(p.chats) ? p.chats[0] : p.chats;
-          if (!chatData) continue;
+          if (!chatData) return null;
 
           const lastMsg = messages?.find(m => m.chat_id === p.chat_id);
-          
-          let otherUserObj: any = null;
-          if (chatData.type === 'direct') {
-            const { data: otherParticipant } = await supabase
-              .from('chat_participants')
-              .select(`profiles:user_id ( id, display_name, avatar_url, last_seen )`)
-              .eq('chat_id', chatData.id)
-              .neq('user_id', user.id)
-              .maybeSingle();
+          const otherUserObj = otherUserByChat.get(p.chat_id);
 
-            if (otherParticipant && otherParticipant.profiles) {
-              otherUserObj = Array.isArray(otherParticipant.profiles) 
-                ? otherParticipant.profiles[0] 
-                : otherParticipant.profiles;
-            }
-          }
-
-          freshLocalChats.push({
+          return {
             id: chatData.id,
             type: chatData.type,
             name: chatData.name,
@@ -223,23 +290,20 @@ export function ChatList({ selectedChatId, onSelectChat, onShowProfile, onShowFr
             other_user_name: otherUserObj?.display_name,
             other_user_avatar: otherUserObj?.avatar_url,
             other_user_last_seen: otherUserObj?.last_seen
-          });
-        }
+          };
+        })
+        .filter((c): c is NonNullable<typeof c> => c !== null);
 
-        // PHASE 3: Write data back into local User Data memory files
-        await localDB.chats.bulkPut(freshLocalChats);
-
-        const finalChats = freshLocalChats.map(c => ({
-          id: c.id,
-          type: c.type,
-          name: c.name,
-          avatar_url: c.avatar_url,
-          theme: c.theme,
-          lastMessage: c.last_message_content ? { content: c.last_message_content, created_at: c.last_message_time || '' } : undefined,
-          otherUser: c.other_user_id ? { id: c.other_user_id, display_name: c.other_user_name || '', avatar_url: c.other_user_avatar || null, last_seen: c.other_user_last_seen || null } : undefined
-        }));
-        setChats(finalChats);
+      // PHASE 3: Write fresh data back to local storage, AND prune anything
+      // that's now gone (left/deleted chats) instead of leaving it cached forever.
+      const freshIds = new Set(freshLocalChats.map(c => c.id));
+      const staleIds = cachedChats.map(c => c.id).filter(id => !freshIds.has(id));
+      if (staleIds.length > 0) {
+        await localDB.chats.bulkDelete(staleIds);
       }
+      await localDB.chats.bulkPut(freshLocalChats);
+
+      setChats(freshLocalChats.map(toChat).sort(byRecency));
     } catch (error) {
       console.error('Logic Error loading chats:', error);
     } finally {
@@ -272,16 +336,6 @@ export function ChatList({ selectedChatId, onSelectChat, onShowProfile, onShowFr
     }
   }
 
-  function checkIsOnline(lastSeenTimestamp: string | null | undefined): boolean {
-    if (!lastSeenTimestamp) return false;
-    
-    const lastSeen = new Date(lastSeenTimestamp).getTime();
-    const now = new Date().getTime();
-    const diffInSeconds = Math.abs(now - lastSeen) / 1000;
-    
-    return diffInSeconds <= 60;
-  }
-
   function getThemeColor(theme: string) {
     switch (theme) {
       case 'love': return 'border-l-4 border-pink-500';
@@ -300,15 +354,15 @@ export function ChatList({ selectedChatId, onSelectChat, onShowProfile, onShowFr
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
             <div className="relative">
-              {profile?.avatar_url ? (
+              {(profile?.avatar_url || myProfile?.avatar_url) ? (
                 <img
-                  src={profile.avatar_url}
-                  alt={profile.display_name}
+                  src={profile?.avatar_url || myProfile?.avatar_url || ''}
+                  alt={profile?.display_name || myProfile?.display_name}
                   className="w-12 h-12 rounded-full object-cover"
                 />
               ) : (
                 <div className="w-12 h-12 rounded-full bg-gradient-to-br from-pink-400 to-purple-500 flex items-center justify-center text-white font-medium text-lg uppercase">
-                  {profile?.display_name?.[0] || profile?.username?.[0] || 'U'}
+                  {profile?.display_name?.[0] || myProfile?.display_name?.[0] || profile?.username?.[0] || myProfile?.username?.[0] || 'U'}
                 </div>
               )}
             </div>
@@ -317,7 +371,7 @@ export function ChatList({ selectedChatId, onSelectChat, onShowProfile, onShowFr
                 <Heart className="w-5 h-5 text-pink-500 fill-pink-500 shrink-0" />
                 Sweet
               </h1>
-              <p className="text-xs text-gray-500 dark:text-gray-400">@{profile?.username}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">@{profile?.username || myProfile?.username}</p>
             </div>
           </div>
 
@@ -489,7 +543,7 @@ export function ChatList({ selectedChatId, onSelectChat, onShowProfile, onShowFr
                           className={`absolute bottom-0 right-0 block h-3.5 w-3.5 rounded-full border-2 ${
                             theme === 'sweet' ? 'border-[#FFF0F5]' : 'border-white dark:border-gray-900'
                           } ${
-                            checkIsOnline(chat.otherUser.last_seen) ? 'bg-green-500' : 'bg-gray-400'
+                            isUserOnline(chat.otherUser.id) ? 'bg-green-500' : 'bg-gray-400'
                           }`}
                         />
                       </>

@@ -10,6 +10,8 @@ import { learnFromMessage } from '../predictionService';
 import { GifItem } from '../App';
 import { localDB } from '../db';
 import { CallOverlay } from './CallOverlay';
+import { usePresence } from '../hooks/usePresence';
+import { queuePendingMessage, retryPendingMessage, subscribeToSyncEvents } from '../hooks/useOfflineSync';
 
 interface ChatWindowProps {
   onOpenGifPanel: () => void;
@@ -31,7 +33,7 @@ interface MessageType {
   is_edited: boolean;
   is_deleted: boolean;
   created_at: string;
-  delivery_status?: 'sending' | 'sent' | 'delivered' | 'read';
+  delivery_status?: 'sending' | 'sent' | 'delivered' | 'read' | 'pending' | 'failed';
   profiles: {
     display_name: string;
     avatar_url: string | null;
@@ -60,13 +62,6 @@ const REACTIONS_EMOJIS = ['💖', '🥰', '😍', '💋', '😂'] as const;
 const EMPTY_REACTIONS: Reaction[] = [];
 const EMPTY_USER_MAP: Record<string, string> = {};
 
-function checkIsOnline(lastSeenTimestamp: string | null | undefined): boolean {
-  if (!lastSeenTimestamp) return false;
-  const lastSeen = new Date(lastSeenTimestamp).getTime();
-  const now = new Date().getTime();
-  return Math.abs(now - lastSeen) / 1000 <= 60;
-}
-
 function formatLastSeen(lastSeenTimestamp: string | null | undefined): string {
   if (!lastSeenTimestamp) return 'last seen long time ago';
   const date = new Date(lastSeenTimestamp);
@@ -86,13 +81,12 @@ function formatLastSeen(lastSeenTimestamp: string | null | undefined): string {
 
 export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setMyGifs }: ChatWindowProps) {
   const { user } = useAuth();
+  const { isOnline: isUserOnline } = usePresence(user?.id);
   const [messages, setMessages] = useState<MessageType[]>([]);
   const [chatInfo, setChatInfo] = useState<ChatInfo | null>(null);
   const [newMessage, setNewMessage] = useState('');
   const [isOtherTyping, setIsOtherTyping] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [failedMessages, setFailedMessages] = useState<Set<string>>(new Set());
-  const [sendingMessages, setSendingMessages] = useState<Set<string>>(new Set());
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   // Throttle typing broadcasts — fire at most once per 2500ms
@@ -617,6 +611,44 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
 
     if (textareaRef.current) textareaRef.current.style.height = 'auto';
 
+    // Save the optimistic message right away so it survives a reload even if
+    // the app closes mid-send, before we know whether it'll succeed.
+    await localDB.messages.put(tempMessage);
+
+    const messageType = videoToUpload ? "video" : voiceToUpload ? "voice" : docToUpload ? "file" : (fileToUpload ? "image" : "text");
+    const mediaBlob: Blob | undefined = docToUpload || fileToUpload || voiceToUpload || videoToUpload || undefined;
+    const mediaFileName =
+      docToUpload?.name ||
+      fileToUpload?.name ||
+      (videoToUpload as any)?.name ||
+      (voiceToUpload ? `${tempId}.wav` : undefined);
+
+    async function queueForLater(reason: unknown) {
+      console.error("Send failed, queueing for retry:", reason);
+      await queuePendingMessage({
+        id: tempId,
+        chat_id: chatInfo!.id,
+        sender_id: user!.id,
+        content: messageContent || (docToUpload ? docToUpload.name : (voiceToUpload ? "Voice Note" : null)),
+        message_type: messageType,
+        media_blob: mediaBlob,
+        media_file_name: mediaFileName,
+        created_at: tempMessage.created_at,
+        attempts: 0,
+        last_error: null,
+      });
+      setMessages(prev => prev.map(m => (m.id === tempId ? { ...m, delivery_status: 'pending' } : m)));
+    }
+
+    if (!navigator.onLine) {
+      // Don't even attempt the network — go straight to the outbox.
+      await queueForLater(new Error('Offline'));
+      setAudioBlob(null);
+      setRecordedAudioUrl(null);
+      setRecordingDuration(0);
+      return;
+    }
+
     try {
       let finalMediaUrl = null;
 
@@ -642,43 +674,43 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
         chat_id: chatInfo.id,
         sender_id: user.id,
         content: messageContent || (docToUpload ? docToUpload.name : (voiceToUpload ? "Voice Note" : null)),
-        type: docToUpload ? "file" : (voiceToUpload ? "voice" : (fileToUpload ? "image" : "text")),
+        type: messageType,
         media_url: finalMediaUrl,
         delivery_status: 'sent'
       });
 
       if (error) throw error;
 
-      await localDB.messages.put({ ...tempMessage, id: tempId, delivery_status: 'sent' });
-      await (localDB.chats as any).put({
-        id: chatInfo.id, type: chatInfo.type, name: chatInfo.name, theme: chatInfo.theme,
+      await localDB.messages.update(tempId, { delivery_status: 'sent', media_url: finalMediaUrl });
+      // Flattened to match what LocalChat / ChatList actually reads — the previous
+      // version wrote a nested `otherUser` object here instead, which silently
+      // wiped out avatar_url/other_user_* on this chat's cached list entry
+      // every time a message was sent.
+      await localDB.chats.update(chatInfo.id, {
         last_message_content: messageContent || (docToUpload ? docToUpload.name : (voiceToUpload ? "Voice Note" : "Media")),
         last_message_time: new Date().toISOString(),
-        otherUser: chatInfo.otherUser
       });
 
       setAudioBlob(null);
       setRecordedAudioUrl(null);
       setRecordingDuration(0);
     } catch (error) {
-      console.error("Send failed:", error);
-      setMessages(prev => prev.filter(m => m.id !== tempId));
-      alert("Message failed to send. Try again!");
+      // Whether this failed because the connection just dropped mid-send, or
+      // for a real reason, queue it — the outbox will keep retrying
+      // automatically, and the user can also tap it to retry manually.
+      await queueForLater(error);
     }
   }, [newMessage, selectedFile, audioBlob, selectedVideo, selectedDoc, user, chatInfo, videoPreview, recordedAudioUrl, imagePreview]);
 
-  useEffect(() => {
-    let messageUnsubscribe: (() => void) | undefined;
-    let typingUnsubscribe: (() => void) | undefined;
-    let reactionsUnsubscribe: (() => void) | undefined;
+   useEffect(() => {
+  // Ensure subscription definitions stay completely unconditional
+    if (!chatInfo?.id) return;
 
-    if (chatInfo?.id) {
-      loadMessages();
-      markMessagesAsRead();
-      messageUnsubscribe = subscribeToMessages();
-      typingUnsubscribe = subscribeToTyping();
-      reactionsUnsubscribe = subscribeToReactions();
-    }
+    loadMessages();
+    markMessagesAsRead();
+    const messageUnsubscribe = subscribeToMessages();
+    const typingUnsubscribe = subscribeToTyping();
+    const reactionsUnsubscribe = subscribeToReactions();
 
     return () => {
       if (messageUnsubscribe) messageUnsubscribe();
@@ -687,27 +719,42 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
     };
   }, [chatInfo?.id, chatInfo?.otherUser?.id]);
 
+  // Live-update message bubbles when the offline outbox resolves one of
+  // this chat's queued sends (e.g. connection comes back while this
+  // ChatWindow happens to be open).
+  useEffect(() => {
+    if (!chatInfo?.id) return;
+
+    const unsubscribe = subscribeToSyncEvents(chatInfo.id, (result) => {
+      setMessages(prev => prev.map(m => {
+        if (m.id !== result.id) return m;
+        if (result.status === 'sent') {
+          return { ...m, delivery_status: 'sent', media_url: result.media_url };
+        }
+        if (result.status === 'failed' && result.permanent) {
+          return { ...m, delivery_status: 'failed' };
+        }
+        return m; // transient failure — outbox will keep retrying automatically
+      }));
+    });
+
+    return unsubscribe;
+  }, [chatInfo?.id]);
+
   const handleRetryMessage = useCallback(async (messageId: string) => {
-    try {
-      setSendingMessages(prev => new Set(prev).add(messageId));
-      setFailedMessages(prev => {
-        const updated = new Set(prev);
-        updated.delete(messageId);
-        return updated;
-      });
+    // Optimistically show it as sending again while we retry.
+    setMessages(prev => prev.map(m => (m.id === messageId ? { ...m, delivery_status: 'sending' } : m)));
 
-      const msg = messages.find(m => m.id === messageId);
-      if (!msg) return;
+    const result = await retryPendingMessage(messageId);
 
-      const { error } = await supabase.from('messages').update({ delivery_status: 'sent' }).eq('id', messageId);
-      if (error) throw error;
-
-      setSendingMessages(prev => { const s = new Set(prev); s.delete(messageId); return s; });
-    } catch (error) {
-      setFailedMessages(prev => new Set(prev).add(messageId));
-      setSendingMessages(prev => { const s = new Set(prev); s.delete(messageId); return s; });
-    }
-  }, [messages]);
+    setMessages(prev => prev.map(m => {
+      if (m.id !== messageId) return m;
+      if (result.status === 'sent') return { ...m, delivery_status: 'sent', media_url: result.media_url };
+      // Not permanent yet (e.g. still offline) — fall back to 'pending' rather
+      // than 'failed', so it's clear this will keep auto-retrying.
+      return { ...m, delivery_status: result.permanent ? 'failed' : 'pending' };
+    }));
+  }, []);
 
   // Stable delete handler — child passes its own id instead of inline arrow
   const handleDeleteMessage = useCallback(async (messageId: string) => {
@@ -753,14 +800,6 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
       case 'friend': return 'from-blue-500 to-cyan-500';
       default: return 'from-[#FF69B4] to-[#FFC0CB]';
     }
-  }
-
-  if (loading || !chatInfo) {
-    return (
-      <div className="flex-1 flex items-center justify-center">
-        <div className="w-8 h-8 border-3 border-pink-500 border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
   }
 
   const handleMicClick = (e: React.MouseEvent) => {
@@ -870,6 +909,14 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
     handleSendMessage(new Event('submit') as any);
   }, [handleSendMessage]);
 
+  if (loading || !chatInfo) {
+    return (
+      <div className="flex-1 flex items-center justify-center">
+        <div className="w-8 h-8 border-3 border-pink-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
   return (
     <div className={`flex-1 flex flex-col h-full overflow-hidden ${
       theme === 'dark'
@@ -967,7 +1014,7 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
                     {chatInfo.otherUser.display_name}
                   </h2>
                   <p className="text-[10px] text-white/80 font-bold uppercase tracking-widest mt-0.5">
-                    {checkIsOnline(chatInfo.otherUser.last_seen) ? (
+                    {isUserOnline(chatInfo.otherUser.id) ? (
                       <span className="flex items-center gap-1 normal-case font-bold text-green-300">
                         <span className="w-1.5 h-1.5 bg-green-300 rounded-full animate-pulse" />
                         online
@@ -1019,8 +1066,9 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
           const prevMsgDate = index > 0 ? new Date(messages[index - 1].created_at).toDateString() : null;
           const showDateSeparator = msgDate !== prevMsgDate;
           const isOwn = message.sender_id === user?.id;
-          const isFailed = failedMessages.has(message.id);
-          const isSending = sendingMessages.has(message.id);
+          const isSending = message.delivery_status === 'sending';
+          const isPending = message.delivery_status === 'pending';
+          const isFailed = message.delivery_status === 'failed';
           const reactionState = messageReactions[message.id];
 
           return (
@@ -1045,6 +1093,12 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
                       <span>Sending...</span>
                     </div>
                   )}
+                  {isPending && (
+                    <div className="flex items-center gap-1 text-[10px] text-gray-500">
+                      <span className="w-1.5 h-1.5 bg-gray-400 rounded-full" />
+                      <span>Waiting to reconnect...</span>
+                    </div>
+                  )}
                   {isFailed && (
                     <button
                       onClick={() => handleRetryMessage(message.id)}
@@ -1054,7 +1108,7 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
                       <span>Failed - Tap to retry</span>
                     </button>
                   )}
-                  {!isSending && !isFailed && (
+                  {!isSending && !isPending && !isFailed && (
                     <div className={`flex items-center gap-1 text-xs transition-colors ${
                       theme === 'sweet' ? 'text-[#8B004B]' : 'text-gray-500 dark:text-gray-400'
                     }`}>

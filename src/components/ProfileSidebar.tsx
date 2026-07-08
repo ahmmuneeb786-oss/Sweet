@@ -3,6 +3,7 @@ import { X, Camera, Save, CreditCard as Edit3, CloudOff } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { localDB } from '../db'; // 🌸 Integrated our fast offline Dexie store
+import { subscribeToProfileSyncEvents } from '../hooks/useOfflineSync';
 
 interface ProfileSidebarProps {
   onClose: () => void;
@@ -45,6 +46,21 @@ export function ProfileSidebar({ onClose, theme, user }: ProfileSidebarProps) {
       if (!user?.id) return;
 
       if (isOnline && profile) {
+        const cached = await localDB.getUserProfile(user.id);
+
+        if (cached?.pending_sync) {
+          // There's a local edit the server doesn't have yet (e.g. made
+          // while offline). Show that instead of overwriting it with
+          // `profile`, which may still be stale — useOfflineSync will push
+          // it up and clear this flag once it actually succeeds.
+          setDisplayName(cached.display_name || '');
+          setBio(cached.bio || '');
+          setAvatarUrl(cached.avatar_url || null);
+          setUsername(cached.username || '');
+          setCreatedAt(cached.created_at || null);
+          return;
+        }
+
         setDisplayName(profile.display_name || '');
         setBio(profile.bio || '');
         setAvatarUrl(profile.avatar_url || null);
@@ -57,7 +73,7 @@ export function ProfileSidebar({ onClose, theme, user }: ProfileSidebarProps) {
           avatar_url: profile.avatar_url,
           username: profile.username,
           created_at: user.created_at
-        });
+        }); // no pendingSync flag — this is just mirroring the server, not an edit
       } else {
         const cached = await localDB.getUserProfile(user.id);
         if (cached) {
@@ -71,6 +87,18 @@ export function ProfileSidebar({ onClose, theme, user }: ProfileSidebarProps) {
     }
     hydrateProfile();
   }, [user?.id, isOnline]); // 🌸 Removed profile reference to stop the crash loop
+
+  // If a profile edit made while offline finishes syncing while this
+  // sidebar happens to be open, reflect that instead of leaving a stale
+  // "saved locally, will sync" message up.
+  useEffect(() => {
+    return subscribeToProfileSyncEvents((result) => {
+      if (result.status === 'synced') {
+        setSuccess('✨ Your offline changes are now synced!');
+        setTimeout(() => setSuccess(''), 3000);
+      }
+    });
+  }, []);
 
   // Function to handle the gallery upload
   async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -97,7 +125,7 @@ export function ProfileSidebar({ onClose, theme, user }: ProfileSidebarProps) {
           avatar_url: base64Image,
           username: username || currentCache?.username || '',
           created_at: createdAt || currentCache?.created_at || null
-        });
+        }, { pendingSync: true });
 
         setSuccess('✨ Saved avatar to local pocket! It will sync up when online.');
         setLoading(false);
@@ -127,7 +155,7 @@ export function ProfileSidebar({ onClose, theme, user }: ProfileSidebarProps) {
           avatar_url: publicUrl,
           username: username,
           created_at: createdAt
-        });
+        }, { pendingSync: false });
 
         setSuccess('Profile picture updated across the cloud! ✨');
       } catch (err) {
@@ -152,7 +180,7 @@ export function ProfileSidebar({ onClose, theme, user }: ProfileSidebarProps) {
     };
 
     if (user?.id) {
-      await localDB.saveUserProfile(user.id, profilePayload);
+      await localDB.saveUserProfile(user.id, profilePayload, { pendingSync: true });
     }
 
     if (!isOnline) {
@@ -173,6 +201,10 @@ export function ProfileSidebar({ onClose, theme, user }: ProfileSidebarProps) {
       });
 
       if (updateError) throw updateError;
+
+      if (user?.id) {
+        await localDB.saveUserProfile(user.id, profilePayload, { pendingSync: false });
+      }
 
       setSuccess('Profile updated successfully!');
       setIsEditing(false);

@@ -8,6 +8,8 @@ import { FloatingHearts } from './components/FloatingHearts';
 import { StrictLock } from './components/StrictLock';
 import { supabase } from './lib/supabase';
 import { useHeartbeat } from './hooks/useHeartbeat';
+import { usePresence } from './hooks/usePresence';
+import { useOfflineSync } from './hooks/useOfflineSync';
 
 // Define the interface for our GIF objects
 export interface GifItem {
@@ -41,6 +43,8 @@ function AppContent() {
   const { user, loading } = useAuth(); 
   useAnonymousVisitTracker();
   useHeartbeat(user?.id);
+  usePresence(user?.id);
+  useOfflineSync();
   const [showGifPanel, setShowGifPanel] = useState(false);
   const [gifSearch, setGifSearch] = useState('');
   const [theme, setTheme] = useState<'light' | 'dark' | 'sweet'>('sweet');
