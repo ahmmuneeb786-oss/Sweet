@@ -5,6 +5,8 @@ import { supabase } from '../lib/supabase';
 import { PermissionManager } from '../services/PermissionManager';
 import { StrictLock } from '../components/StrictLock';
 import { localDB } from '../db';
+import { hashSecret } from '../lib/secureHash';
+import { useNotify } from '../contexts/NotificationContext';
 
 
 type SettingsTab = 'main' | 'account' | 'privacy' | 'notifications' | 'theme' | 'storage' | 'locked' | 'lock';
@@ -42,6 +44,7 @@ interface SecureProfile {
 export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLockEnabled, onRegisterFace, user, savedDescriptor, onCloseLockedPanel }: SettingsProps) {
   // 3. Destructure and apply the typecast ('as SecureProfile')
   const { profile: rawProfile, updateProfile, signOut } = useAuth();
+  const { showSuccess, showError, showInfo } = useNotify();
   const profile = rawProfile as SecureProfile; // ✨ This instantly cleans up all profile red marks!
 
   const [activeTab, setActiveTab] = useState<SettingsTab>('main');
@@ -268,7 +271,7 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
   } else {
     // Note: Browsers don't let you programmatically "revoke" permission to 'default', 
     // but we can tell them how to turn it off or handle local state suppression.
-    alert("To turn off whispers completely, you can tap the lock/info icon next to your browser URL bar at the top! 🍬");
+    showInfo("To turn off whispers completely, you can tap the lock/info icon next to your browser URL bar at the top! 🍬");
   }
 };
 
@@ -294,7 +297,7 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
       if (!isOnline) {
         setDisplayName(displayName);
         setBio(bio);
-        alert('✨ Saved profile changes locally! They will sync automatically when back online.');
+        showSuccess('✨ Saved profile changes locally! They will sync automatically when back online.');
         setActiveTab('main');
         return;
       }
@@ -350,7 +353,7 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
       // 🌸 Offline branch: bypass cloud check temporarily, commit to Dexie cache
       if (!isOnline) {
         setNewUsername(CleanedUsername);
-        alert('✨ Saved username locally! It will attempt to update on the cloud once online.');
+        showSuccess('✨ Saved username locally! It will attempt to update on the cloud once online.');
         setActiveTab('main');
         return;
       }
@@ -438,24 +441,25 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
         if (nextPin === savedPin) {
           try {
             setSecurityType('pin');
+            const hashedPin = await hashSecret(nextPin, user?.id || '');
             await supabase
               .from('profiles')
               .update({ 
-                chat_pin: nextPin,
+                chat_pin: hashedPin,
                 chat_security_type: 'pin' 
               })
               .eq('id', user?.id);
             
-            alert("Security PIN successfully set up!");
+            showSuccess("Security PIN successfully set up!");
             setPinModal(false);
             setTempPin('');
             setPinStep('enter');
           } catch (err) {
             console.error(err);
-            alert("Could not update secure PIN configuration framework layers.");
+            showError("Could not update secure PIN configuration framework layers.");
           }
         } else {
-          alert("PIN codes did not match up! Let's try again.");
+          showError("PIN codes did not match up! Let's try again.");
           setTempPin('');
           setPinStep('enter');
         }
@@ -813,7 +817,7 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
       }
     } catch (err) {
       console.error("Failed to save toggle state to cloud:", err);
-      alert("Could not update settings. Check network connection.");
+      showError("Could not update settings. Check network connection.");
     }
   }}
   className={`w-12 h-6 rounded-full transition-all duration-300 relative p-1 cursor-pointer outline-none ${
@@ -1112,7 +1116,7 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
                       setShowFaceScanner(false);
                     } catch (err) {
                       console.error("Cloud saving descriptor failed:", err);
-                      alert("Could not sync biometric information to cloud.");
+                      showError("Could not sync biometric information to cloud.");
                     }
                   }}
                   onUnlock={() => {
@@ -1358,15 +1362,15 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
                                   chat_security_type: 'biometric',
                                   chat_biometric_type: 'fingerprint'
                                 }).eq('id', user?.id);
-                                alert("Fingerprint hardware checked successfully!");
+                                showSuccess("Fingerprint hardware checked successfully!");
                               } else {
-                                alert("Biometric module missing on current device profile.");
+                                showError("Biometric module missing on current device profile.");
                               }
                             } catch (e) {
                               console.warn(e);
                             }
                           } else {
-                            alert("Authentication framework not supported by container layers.");
+                            showError("Authentication framework not supported by container layers.");
                           }
                         }}
                         className={`p-3 text-left rounded-xl border flex flex-col gap-1 transition-all ${
@@ -1474,10 +1478,11 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
                     <button
                       type="button"
                       onClick={async () => {
-                        if (!tempPassword.trim()) return alert("Password configuration requirements can't be blank!");
+                        if (!tempPassword.trim()) return showError("Password configuration requirements can't be blank!");
                         setSecurityType('password');
+                        const hashedPassword = await hashSecret(tempPassword, user?.id || '');
                         await supabase.from('profiles').update({ 
-                          chat_password: tempPassword,
+                          chat_password: hashedPassword,
                           chat_security_type: 'password'
                         }).eq('id', user?.id);
                         setShowPasswordModal(false);

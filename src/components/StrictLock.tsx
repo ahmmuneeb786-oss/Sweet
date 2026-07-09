@@ -9,6 +9,13 @@ interface StrictLockProps {
   savedDescriptor?: number[] | null;
   userId: string;
   onSaveDescriptor: (userId: string, descriptor: number[]) => Promise<void>;
+  // Escape hatch for verify mode — without this, a user with no working
+  // verification path (camera denied, models failed, no saved descriptor)
+  // has literally no way back into their own app.
+  onSignOut?: () => void;
+  // A lighter, non-destructive escape — e.g. LockedChatsPanel uses this to
+  // just back out to the chat list, rather than signing out of the app.
+  onCancel?: () => void;
 }
 
 export const StrictLock = ({ 
@@ -17,9 +24,12 @@ export const StrictLock = ({
   onRegisterSuccess,
   savedDescriptor,
   userId,
-  onSaveDescriptor
+  onSaveDescriptor,
+  onSignOut,
+  onCancel
 }: StrictLockProps) => {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const detectionIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [isModelLoaded, setIsModelLoaded] = useState(false);
   const [feedback, setFeedback] = useState('Initializing FaceID...');
   const [isPulsing, setIsPulsing] = useState(false);
@@ -44,8 +54,12 @@ export const StrictLock = ({
     };
     loadModels();
 
-    // Cleanup camera on unmount
+    // Cleanup camera AND the detection interval on unmount
     return () => {
+      if (detectionIntervalRef.current) {
+        clearInterval(detectionIntervalRef.current);
+        detectionIntervalRef.current = null;
+      }
       if (videoRef.current && videoRef.current.srcObject) {
         const stream = videoRef.current.srcObject as MediaStream;
         stream.getTracks().forEach(track => track.stop());
@@ -77,7 +91,20 @@ export const StrictLock = ({
 const handleDetection = async () => {
   if (!videoRef.current || !isModelLoaded) return;
 
+  // onPlay can fire more than once in some browsers (e.g. after any
+  // pause/replay cycle). Without this guard, each firing stacked another
+  // concurrent setInterval scanning the same feed — the previous version's
+  // returned cleanup function was silently discarded, since onPlay is a DOM
+  // event handler, not a useEffect.
+  if (detectionIntervalRef.current) return;
+
   const interval = setInterval(async () => {
+    if (!videoRef.current) {
+      clearInterval(interval);
+      detectionIntervalRef.current = null;
+      return;
+    }
+
     const detections = await faceapi.detectAllFaces(
       videoRef.current!,
       new faceapi.TinyFaceDetectorOptions()
@@ -108,6 +135,7 @@ const handleDetection = async () => {
          setFeedback('Error: User session lost. Please log in again.');
          setErrorState(true);
          clearInterval(interval);
+      detectionIntervalRef.current = null;
          return;
        }
         setFeedback('Smile Captured! Syncing to Cloud...');
@@ -117,6 +145,7 @@ const handleDetection = async () => {
 
           // Clear interval immediately so it stops scanning during network latency
           clearInterval(interval);
+      detectionIntervalRef.current = null;
 
           // Delegate saving entirely to the app's centralized prop function
           await onSaveDescriptor(userId, descriptorArray);
@@ -151,6 +180,7 @@ const handleDetection = async () => {
           setIsPulsing(true);
           
           clearInterval(interval);
+      detectionIntervalRef.current = null;
           stopCamera(); 
           setTimeout(() => onUnlock(), 1000);
         } else {
@@ -165,11 +195,15 @@ const handleDetection = async () => {
     } 
   }, 700);
 
-  return () => clearInterval(interval);
+  detectionIntervalRef.current = interval;
 };
 
-// HELPER FUNCTION: Add this inside your component to kill the camera
+// HELPER FUNCTION: kills the camera AND the detection loop together
 const stopCamera = () => {
+  if (detectionIntervalRef.current) {
+    clearInterval(detectionIntervalRef.current);
+    detectionIntervalRef.current = null;
+  }
   if (videoRef.current && videoRef.current.srcObject) {
     const stream = videoRef.current.srcObject as MediaStream;
     const tracks = stream.getTracks();
@@ -219,7 +253,7 @@ const stopCamera = () => {
           </p>
         </div>
         
-        {/* Cancel Button (Only in Register mode so user isn't trapped in settings) */}
+        {/* Cancel Button (register mode) so the user isn't trapped in settings */}
         {mode === 'register' && (
           <button 
             onClick={() => {
@@ -229,6 +263,35 @@ const stopCamera = () => {
             className="mt-6 text-pink-400 text-sm font-medium hover:text-pink-600 transition-colors"
           >
             Cancel Registration
+          </button>
+        )}
+
+        {/* Escape hatch for verify mode — without this, a user with no
+            working verification path (camera denied, models failed to
+            load, or no saved descriptor at all) has no way back into
+            their own app. Always present, deliberately low-emphasis so it
+            doesn't read as an easy security bypass. */}
+        {mode === 'verify' && onSignOut && (
+          <button
+            onClick={() => {
+              stopCamera();
+              onSignOut();
+            }}
+            className="mt-6 text-pink-300 text-xs font-medium hover:text-pink-500 transition-colors"
+          >
+            Not you? Sign out instead
+          </button>
+        )}
+
+        {mode === 'verify' && onCancel && (
+          <button
+            onClick={() => {
+              stopCamera();
+              onCancel();
+            }}
+            className="mt-6 text-pink-300 text-xs font-medium hover:text-pink-500 transition-colors"
+          >
+            Cancel
           </button>
         )}
       </div>

@@ -3,6 +3,8 @@ import { X, Search, Eye, Lock, Unlock, Trash2, Bell, BellOff, MoreVertical } fro
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { localDB } from '../db';
+import { useNotify } from '../contexts/NotificationContext';
+import { useConfirm } from '../contexts/ConfirmContext';
 
 interface ChatMenuProps {
   theme: 'light' | 'dark' | 'sweet'
@@ -12,6 +14,8 @@ interface ChatMenuProps {
 
 export function ChatMenu({ theme, chatId, onClose }: ChatMenuProps) {
   const { user } = useAuth();
+  const { showSuccess, showError } = useNotify();
+  const confirm = useConfirm();
   const [showMenu, setShowMenu] = useState(false);
   const [muteStatus, setMuteStatus] = useState<'8h' | '1w' | 'forever' | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -87,9 +91,9 @@ export function ChatMenu({ theme, chatId, onClose }: ChatMenuProps) {
       if (newLockState) {
         // If locked, remove it completely from the local main feed storage cache
         await localDB.chats.delete(chatId);
-        alert('Conversation moved to your secure Locked Chats vault! 🔒');
+        showSuccess('Conversation moved to your secure Locked Chats vault! 🔒');
       } else {
-        alert('Conversation restored to your main chat feed! 🔓');
+        showSuccess('Conversation restored to your main chat feed! 🔓');
       }
       
       setIsLocked(newLockState);
@@ -100,12 +104,19 @@ export function ChatMenu({ theme, chatId, onClose }: ChatMenuProps) {
       window.location.reload(); 
     } catch (error) {
       console.error('Error locking conversation:', error);
-      alert('Failed to lock conversation.');
+      showError('Failed to lock conversation.');
     }
   }
 
   async function handleClearChat() {
-    if (!user || !window.confirm('Clear all messages in this chat? This cannot be undone.')) return;
+    if (!user) return;
+    const confirmed = await confirm({
+      title: 'Clear chat history?',
+      message: 'Clear all messages in this chat? This cannot be undone.',
+      confirmLabel: 'Clear',
+      danger: true,
+    });
+    if (!confirmed) return;
 
     try {
       // 1. Tell Supabase server
@@ -124,7 +135,7 @@ export function ChatMenu({ theme, chatId, onClose }: ChatMenuProps) {
         });
       }
 
-      alert('Chat history cleared locally! 🧹');
+      showSuccess('Chat history cleared locally! 🧹');
       window.location.reload();
     } catch (error) {
       console.error('Error clearing chat:', error);

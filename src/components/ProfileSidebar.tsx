@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { localDB } from '../db'; // 🌸 Integrated our fast offline Dexie store
 import { subscribeToProfileSyncEvents } from '../hooks/useOfflineSync';
+import { useNotify } from '../contexts/NotificationContext';
 
 interface ProfileSidebarProps {
   onClose: () => void;
@@ -13,6 +14,7 @@ interface ProfileSidebarProps {
 
 export function ProfileSidebar({ onClose, theme, user }: ProfileSidebarProps) {
   const { profile, updateProfile } = useAuth();
+  const { showSuccess, showError } = useNotify();
   const [isEditing, setIsEditing] = useState(false);
   const [displayName, setDisplayName] = useState(profile?.display_name || '');
   const [bio, setBio] = useState(profile?.bio || '');
@@ -21,8 +23,6 @@ export function ProfileSidebar({ onClose, theme, user }: ProfileSidebarProps) {
   const [username, setUsername] = useState(profile?.username || '');
   
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
   const [isOnline, setIsOnline] = useState(navigator.onLine);
 
   // Reference to the hidden input
@@ -94,8 +94,7 @@ export function ProfileSidebar({ onClose, theme, user }: ProfileSidebarProps) {
   useEffect(() => {
     return subscribeToProfileSyncEvents((result) => {
       if (result.status === 'synced') {
-        setSuccess('✨ Your offline changes are now synced!');
-        setTimeout(() => setSuccess(''), 3000);
+        showSuccess('✨ Your offline changes are now synced!');
       }
     });
   }, []);
@@ -106,8 +105,7 @@ export function ProfileSidebar({ onClose, theme, user }: ProfileSidebarProps) {
     if (!file || !user?.id) return;
 
     setLoading(true);
-    setError('');
-    setSuccess('');
+    // errors/success now surface via toast, nothing to reset locally
 
     const reader = new FileReader();
     reader.readAsDataURL(file);
@@ -127,7 +125,7 @@ export function ProfileSidebar({ onClose, theme, user }: ProfileSidebarProps) {
           created_at: createdAt || currentCache?.created_at || null
         }, { pendingSync: true });
 
-        setSuccess('✨ Saved avatar to local pocket! It will sync up when online.');
+        showSuccess('✨ Saved avatar to local pocket! It will sync up when online.');
         setLoading(false);
         return;
       }
@@ -157,9 +155,9 @@ export function ProfileSidebar({ onClose, theme, user }: ProfileSidebarProps) {
           created_at: createdAt
         }, { pendingSync: false });
 
-        setSuccess('Profile picture updated across the cloud! ✨');
+        showSuccess('Profile picture updated across the cloud! ✨');
       } catch (err) {
-        setError('Upload failed. Check if "avatars" bucket is public in Supabase.');
+        showError('Upload failed. Check if "avatars" bucket is public in Supabase.');
       } finally {
         setLoading(false);
       }
@@ -168,8 +166,7 @@ export function ProfileSidebar({ onClose, theme, user }: ProfileSidebarProps) {
 
   async function handleSave() {
     setLoading(true);
-    setError('');
-    setSuccess('');
+    // errors/success now surface via toast, nothing to reset locally
 
     const profilePayload = {
       display_name: displayName,
@@ -187,10 +184,9 @@ export function ProfileSidebar({ onClose, theme, user }: ProfileSidebarProps) {
       // 🌸 FIXED: State preservation prevents values from resetting back to old values
       setDisplayName(displayName);
       setBio(bio);
-      setSuccess('✨ Saved changes locally! Your details will sync automatically.');
+      showSuccess('✨ Saved changes locally! Your details will sync automatically.');
       setIsEditing(false);
       setLoading(false);
-      setTimeout(() => setSuccess(''), 3000);
       return;
     }
 
@@ -206,11 +202,10 @@ export function ProfileSidebar({ onClose, theme, user }: ProfileSidebarProps) {
         await localDB.saveUserProfile(user.id, profilePayload, { pendingSync: false });
       }
 
-      setSuccess('Profile updated successfully!');
+      showSuccess('Profile updated successfully!');
       setIsEditing(false);
-      setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to update profile');
+      showError(err instanceof Error ? err.message : 'Failed to update profile');
     } finally {
       setLoading(false);
     }
@@ -223,7 +218,6 @@ export function ProfileSidebar({ onClose, theme, user }: ProfileSidebarProps) {
       setAvatarUrl(profile.avatar_url || null);
     }
     setIsEditing(false);
-    setError('');
   }
 
   return (
@@ -274,18 +268,6 @@ export function ProfileSidebar({ onClose, theme, user }: ProfileSidebarProps) {
 
         {/* CONTAINER CONTENT */}
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
-          {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm">
-              {error}
-            </div>
-          )}
-
-          {success && (
-            <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-xl text-sm font-semibold animate-pulse">
-              {success}
-            </div>
-          )}
-
           <div className="flex flex-col items-center space-y-4">
             <div className="relative group">
               {avatarUrl ? (

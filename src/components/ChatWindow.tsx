@@ -12,6 +12,7 @@ import { localDB } from '../db';
 import { CallOverlay } from './CallOverlay';
 import { usePresence } from '../hooks/usePresence';
 import { queuePendingMessage, retryPendingMessage, subscribeToSyncEvents } from '../hooks/useOfflineSync';
+import { useNotify } from '../contexts/NotificationContext';
 
 interface ChatWindowProps {
   onOpenGifPanel: () => void;
@@ -82,6 +83,7 @@ function formatLastSeen(lastSeenTimestamp: string | null | undefined): string {
 export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setMyGifs }: ChatWindowProps) {
   const { user } = useAuth();
   const { isOnline: isUserOnline } = usePresence(user?.id);
+  const { showError } = useNotify();
   const [messages, setMessages] = useState<MessageType[]>([]);
   const [chatInfo, setChatInfo] = useState<ChatInfo | null>(null);
   const [newMessage, setNewMessage] = useState('');
@@ -245,7 +247,7 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
           recorder.start();
           mediaRecorderRef.current = recorder;
         } catch (err) {
-          alert("Please allow camera and microphone access!");
+          showError("Please allow camera and microphone access!");
           setIsRecordingVideoNote(false);
         }
       };
@@ -361,6 +363,12 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
       });
     } catch (error) {
       console.error('Error in loadChat:', error);
+      // Only surface this if the user is left with nothing to look at —
+      // if a cached version already painted, a quiet background
+      // reconciliation failure isn't worth interrupting them for.
+      if (!cachedForThisChat && !isStale()) {
+        showError("Couldn't load this chat. Check your connection.");
+      }
     } finally {
       if (!isStale()) setLoading(false);
     }
@@ -451,6 +459,8 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
       });
     } catch (err) {
       console.error("Failed to broadcast call initiation:", err);
+      showError("Couldn't start the call. Check your connection.");
+      setActiveCall(null);
     }
   };
 
@@ -841,7 +851,7 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
       setMessages((prev) => prev.filter((m) => m.id !== messageId));
     } catch (error) {
       console.error("Error deleting message:", error);
-      alert("Could not delete message.");
+      showError("Could not delete message.");
     }
   }, [user?.id]);
 
@@ -898,7 +908,7 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
       setIsRecording(true);
     } catch (err) {
       console.error("Mic Error:", err);
-      alert("Microphone access denied. Please allow microphone access from settings!");
+      showError("Microphone access denied. Please allow microphone access from settings!");
     }
   };
 

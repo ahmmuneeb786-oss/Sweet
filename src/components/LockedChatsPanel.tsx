@@ -1,8 +1,11 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, Lock, MessageSquare } from 'lucide-react';
+import { ArrowLeft, Lock, MessageSquare, ShieldAlert } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { localDB } from '../db';
+import { StrictLock } from './StrictLock';
+import { VaultVerify } from './VaultVerify';
+import { useNotify } from '../contexts/NotificationContext';
 
 interface LockedChatsPanelProps {
   theme: 'light' | 'dark' | 'sweet';
@@ -23,9 +26,50 @@ interface Chat {
 }
 
 export function LockedChatsPanel({ theme, onClose, onSelectChat }: LockedChatsPanelProps) {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
+  const { showError } = useNotify();
   const [lockedChats, setLockedChats] = useState<Chat[]>([]);
   const [loading, setLoading] = useState(true);
+  const [verifyingChatId, setVerifyingChatId] = useState<string | null>(null);
+  const [vaultVerify, setVaultVerify] = useState<{ chatId: string; mode: 'pin' | 'password' } | null>(null);
+  const [unsupportedNotice, setUnsupportedNotice] = useState(false);
+
+  // These columns exist on the profiles row (select('*') in AuthContext)
+  // but aren't declared on its TS type, since they're specific to the
+  // locked-chats vault rather than general profile fields.
+  const secureProfile = profile as any;
+
+  function handleOpenLockedChat(chatId: string) {
+    const securityType = secureProfile?.chat_security_type || 'none';
+
+    if (securityType === 'none') {
+      // User explicitly chose no extra protection for the vault — respect that.
+      onSelectChat(chatId);
+      onClose();
+      return;
+    }
+
+    if (securityType === 'biometric' && secureProfile?.face_descriptor) {
+      // Reuse the same registered face as the app lock — one registration,
+      // both places, rather than a second separate enrollment flow.
+      setVerifyingChatId(chatId);
+      return;
+    }
+
+    if (securityType === 'pin' && secureProfile?.chat_pin) {
+      setVaultVerify({ chatId, mode: 'pin' });
+      return;
+    }
+
+    if (securityType === 'password' && secureProfile?.chat_password) {
+      setVaultVerify({ chatId, mode: 'password' });
+      return;
+    }
+
+    // Configured but missing the actual saved secret (edge case, e.g. an
+    // interrupted setup) — don't silently let them in or silently fail.
+    setUnsupportedNotice(true);
+  }
 
   useEffect(() => {
     if (user) {
@@ -35,7 +79,9 @@ export function LockedChatsPanel({ theme, onClose, onSelectChat }: LockedChatsPa
 
   async function loadLockedChats() {
     if (!user) return;
-    
+
+    let hadCache = false;
+
     try {
       setLoading(true);
 
@@ -57,10 +103,14 @@ export function LockedChatsPanel({ theme, onClose, onSelectChat }: LockedChatsPa
           name: chat.name || 'Private Chat',
           avatar_url: chat.avatar_url || null,
           theme: chat.theme,
-          otherUser: chat.otherUser || undefined
+          otherUser: chat.other_user_id ? {
+            display_name: chat.other_user_name || '',
+            avatar_url: chat.other_user_avatar || null,
+          } : undefined
         }));
 
       if (cachedLockedChats.length > 0) {
+        hadCache = true;
         setLockedChats(cachedLockedChats);
       }
 
@@ -101,6 +151,7 @@ export function LockedChatsPanel({ theme, onClose, onSelectChat }: LockedChatsPa
             };
 
             // If it's a 1-on-1 private DM chat, pull the other user's identity profile details
+            let otherUserId: string | undefined;
             if (chatData.type === 'direct') {
               const { data: otherPart } = await supabase
                 .from('chat_participants')
@@ -110,6 +161,7 @@ export function LockedChatsPanel({ theme, onClose, onSelectChat }: LockedChatsPa
                 .maybeSingle();
 
               if (otherPart?.user_id) {
+                otherUserId = otherPart.user_id;
                 const { data: profile } = await supabase
                   .from('profiles')
                   .select('display_name, avatar_url')
@@ -139,7 +191,9 @@ export function LockedChatsPanel({ theme, onClose, onSelectChat }: LockedChatsPa
               last_message_content: "Encrypted Vault Message 🔒",
               last_message_time: new Date().toISOString(),
               is_locked: true, // 🌟 Flag saved locally to separate this room from public chats
-              otherUser: structuredChat.otherUser as any
+              other_user_id: otherUserId,
+              other_user_name: structuredChat.otherUser?.display_name,
+              other_user_avatar: structuredChat.otherUser?.avatar_url,
             } as any);
           }
 
@@ -148,6 +202,11 @@ export function LockedChatsPanel({ theme, onClose, onSelectChat }: LockedChatsPa
       }
     } catch (err) {
       console.error('Failed to sync or load secure locked vault panel:', err);
+      // Without this, a genuine fetch failure with no cache looked
+      // identical to "your vault is empty" — actively misleading.
+      if (!hadCache) {
+        showError("Couldn't load your locked chats. Check your connection.");
+      }
     } finally {
       setLoading(false);
     }
@@ -197,10 +256,7 @@ export function LockedChatsPanel({ theme, onClose, onSelectChat }: LockedChatsPa
               {lockedChats.map((chat) => (
                 <button
                   key={chat.id}
-                  onClick={() => {
-                    onSelectChat(chat.id);
-                    onClose();
-                  }}
+                  onClick={() => handleOpenLockedChat(chat.id)}
                   className={`w-full p-4 flex items-center gap-3 text-left transition-colors ${
                     theme === 'sweet' ? 'hover:bg-[#FFC0CB]/20' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'
                   }`}
@@ -220,6 +276,65 @@ export function LockedChatsPanel({ theme, onClose, onSelectChat }: LockedChatsPa
           )}
         </div>
       </div>
+
+      {/* Verification gate — chat only opens after onUnlock fires */}
+      {verifyingChatId && user && (
+        <StrictLock
+          mode="verify"
+          userId={user.id}
+          savedDescriptor={secureProfile?.face_descriptor}
+          onSaveDescriptor={async () => {}} // not used in verify mode
+          onUnlock={() => {
+            const chatId = verifyingChatId;
+            setVerifyingChatId(null);
+            onSelectChat(chatId);
+            onClose();
+          }}
+          onCancel={() => setVerifyingChatId(null)}
+        />
+      )}
+
+      {vaultVerify && user && (
+        <VaultVerify
+          mode={vaultVerify.mode}
+          userId={user.id}
+          expectedHash={vaultVerify.mode === 'pin' ? secureProfile?.chat_pin : secureProfile?.chat_password}
+          onUnlock={() => {
+            const chatId = vaultVerify.chatId;
+            setVaultVerify(null);
+            onSelectChat(chatId);
+            onClose();
+          }}
+          onCancel={() => setVaultVerify(null)}
+        />
+      )}
+
+      {/* PIN/password verification doesn't exist yet anywhere in the app —
+          told honestly rather than silently bypassing or doing nothing. */}
+      {unsupportedNotice && (
+        <div className="fixed inset-0 z-[9999] bg-black/40 flex items-center justify-center p-6" onClick={() => setUnsupportedNotice(false)}>
+          <div
+            className={`max-w-sm w-full rounded-2xl p-6 text-center space-y-3 ${
+              theme === 'sweet' ? 'bg-[#FFF0F5]' : 'bg-white dark:bg-gray-900'
+            }`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <ShieldAlert className="w-10 h-10 text-pink-500 mx-auto" />
+            <h3 className={`font-bold ${theme === 'sweet' ? 'text-[#4B004B]' : 'text-gray-900 dark:text-white'}`}>
+              Security setup looks incomplete
+            </h3>
+            <p className="text-sm text-gray-500">
+              This chat is set to require a security method, but the actual PIN/password/face wasn't saved properly. Go to Settings and set it up again.
+            </p>
+            <button
+              onClick={() => setUnsupportedNotice(false)}
+              className="mt-2 px-5 py-2 rounded-xl bg-pink-500 text-white text-sm font-bold hover:bg-pink-600 transition-colors"
+            >
+              Got it
+            </button>
+          </div>
+        </div>
+      )}
     </>
   );
 }

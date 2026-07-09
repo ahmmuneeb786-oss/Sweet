@@ -6,6 +6,7 @@ import { FloatingHearts } from './FloatingHearts';
 import { localDB } from '../db';
 import { usePresence } from '../hooks/usePresence';
 import { markChatsReady } from '../hooks/useChatsReady';
+import { useNotify } from '../contexts/NotificationContext';
 
 interface Chat {
   id: string;
@@ -39,6 +40,7 @@ interface ChatListProps {
 export function ChatList({ selectedChatId, onSelectChat, onShowProfile, onShowFriends, onShowSettings, onShowCreateChat, theme, onShowLockedChats }: ChatListProps) {
   const { user, profile, signOut } = useAuth();
   const { isOnline: isUserOnline } = usePresence(user?.id);
+  const { showError } = useNotify();
   const [chats, setChats] = useState<Chat[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [showMenu, setShowMenu] = useState(false);
@@ -206,11 +208,14 @@ export function ChatList({ selectedChatId, onSelectChat, onShowProfile, onShowFr
   async function loadChats() {
     if (!user) return;
 
+    let hadCache = false;
+
     try {
       // PHASE 1: Read internal phone storage instantly — this is what makes
       // the list show up immediately on open instead of a blank/loading screen.
       const cachedChats = await localDB.chats.toArray();
       if (cachedChats.length > 0) {
+        hadCache = true;
         setChats(cachedChats.map(toChat).sort(byRecency));
         setLoading(false);
         markChatsReady();
@@ -233,6 +238,9 @@ export function ChatList({ selectedChatId, onSelectChat, onShowProfile, onShowFr
 
       if (pError) {
         console.error('Supabase Error:', pError.message);
+        if (!hadCache) {
+          showError("Couldn't load your chats. Check your connection.");
+        }
         return;
       }
 
@@ -308,6 +316,9 @@ export function ChatList({ selectedChatId, onSelectChat, onShowProfile, onShowFr
       setChats(freshLocalChats.map(toChat).sort(byRecency));
     } catch (error) {
       console.error('Logic Error loading chats:', error);
+      if (!hadCache) {
+        showError("Couldn't load your chats. Check your connection.");
+      }
     } finally {
       setLoading(false);
       markChatsReady();

@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth, AuthProvider } from './contexts/AuthContext';
+import { NotificationProvider, useNotify } from './contexts/NotificationContext';
+import { ConfirmProvider } from './contexts/ConfirmContext';
 import { Auth } from './pages/Auth';
 import { Dashboard } from './pages/Dashboard';
 import { initializeDictionary } from './predictionService';
@@ -93,7 +95,8 @@ function SplashScreen({ message, overlay = false }: { message: string; overlay?:
 }
 
 function AppContent() { 
-  const { user, loading } = useAuth(); 
+  const { user, loading, signOut } = useAuth(); 
+  const { showSuccess } = useNotify();
   useAnonymousVisitTracker();
   useHeartbeat(user?.id);
   usePresence(user?.id);
@@ -166,7 +169,10 @@ function AppContent() {
       setIsAppLocked(false);
     }
     } catch (err) {
-      setIsAppLocked(false);
+      // Fail-safe, not fail-open: if we can't confirm whether face lock is
+      // enabled (network error, etc.), stay locked rather than letting
+      // someone in because a status check happened to fail.
+      console.error('Failed to check face lock status:', err);
     }
     finally {
       setProfileSyncLoading(false);
@@ -241,7 +247,7 @@ useEffect(() => {
       return [...uniqueNewGifs, ...prev];
     });
 
-    alert(`Added "${packName}" pack to your library!`);
+    showSuccess(`Added "${packName}" pack to your library!`);
   };
 
 const handleGifAction = async (input: string) => {
@@ -416,23 +422,21 @@ if (loading || profileSyncLoading) {
 
   return (
     <div className={theme === 'dark' ? 'dark' : theme === 'sweet' ? 'sweet-theme' : ''}>
-      {/* Overlay, not a blocking early-return: Dashboard/ChatList mount and
-          load underneath this, and markChatsReady() (called from ChatList
-          once it has real data to show) is what makes this disappear. An
-          early return here instead would stop ChatList from ever mounting,
-          which would mean markChatsReady() never fires — every load would
-          then sit through the full 8s timeout below, every single time. */}
-      {!chatsReady && !readyTimedOut && (
-        <SplashScreen message="Loading your chats..." overlay />
-      )}
-
-      {!showLetter && isAppLocked && (
+      {/* Lock screen always wins: if the app is locked, that's the only
+          thing that should be visible — showing "Loading your chats..."
+          on top of (or racing against) the lock screen was the flash. */}
+      {!showLetter && isAppLocked ? (
         <StrictLock
         onUnlock={() => setIsAppLocked(false)}
         mode="verify"
         userId={user.id}
         onSaveDescriptor={updateFaceDescriptor}
-        savedDescriptor={savedDescriptor}/>
+        savedDescriptor={savedDescriptor}
+        onSignOut={signOut}/>
+      ) : (
+        !chatsReady && !readyTimedOut && (
+          <SplashScreen message="Loading your chats..." overlay />
+        )
       )}
 
       <div className={`min-h-screen transition-colors duration-300 ${
@@ -540,7 +544,7 @@ if (loading || profileSyncLoading) {
                                    if (prev.some(g => g.url === gifUrl)) return prev;
                                    return [{ url: gifUrl, packName: lastSearchQuery || 'Recent' }, ...prev];
                                  });
-                                 alert("Added to Library!");
+                                 showSuccess("Added to Library!");
                                }}
                                className="absolute inset-0 bg-pink-500/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
                              >
@@ -563,8 +567,12 @@ if (loading || profileSyncLoading) {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <AppContent />
-    </AuthProvider>
+    <NotificationProvider>
+      <ConfirmProvider>
+        <AuthProvider>
+          <AppContent />
+        </AuthProvider>
+      </ConfirmProvider>
+    </NotificationProvider>
   );
 }
