@@ -119,13 +119,53 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
   // Shape: { [messageId]: { reactions: Reaction[], userMap: Record<string,string> } }
   const [messageReactions, setMessageReactions] = useState<Record<string, MessageReactionState>>({});
 
+  const latestChatIdRef = useRef<string | undefined>(chatId);
+  latestChatIdRef.current = chatId;
+
   useEffect(() => {
     if (chatId && user) {
-      setLoading(true);
-      setChatInfo(null);
-      loadChat();
+      hydrateThenLoad(chatId);
     }
   }, [chatId, user]);
+
+  async function hydrateThenLoad(requestedChatId: string) {
+    // Cache-first: if we've opened this chat before (including "switching
+    // back" to one already visited this session), paint the header instantly
+    // from localDB instead of blanking the screen for another 1-2s round trip
+    // to Supabase. loadChat() still runs right after to quietly reconcile
+    // with the network — this is the exact same pattern ChatList uses.
+    const cached = await localDB.chats.get(requestedChatId);
+
+    // If the user has already switched to a different chat while this await
+    // was in flight, this response is stale — applying it would show the
+    // wrong chat's info for a moment, which is the bug being fixed here.
+    if (latestChatIdRef.current !== requestedChatId) return;
+
+    if (cached) {
+      setChatInfo({
+        id: cached.id,
+        type: cached.type,
+        name: cached.name,
+        theme: cached.theme,
+        otherUser: cached.other_user_id ? {
+          id: cached.other_user_id,
+          display_name: cached.other_user_name || '',
+          avatar_url: cached.other_user_avatar || null,
+          is_online: false, // unused for display now — usePresence drives the dot
+          last_seen: cached.other_user_last_seen || '',
+        } : undefined,
+      });
+      setLoading(false);
+    } else {
+      // Genuinely never seen this chat before (brand new chat, or first
+      // device/browser) — nothing to show yet, so a real loading state here
+      // is correct rather than a bug.
+      setLoading(true);
+      setChatInfo(null);
+    }
+
+    loadChat(requestedChatId);
+  }
 
   useEffect(() => {
     const tickerInterval = setInterval(() => {
@@ -217,12 +257,16 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
     };
   }, [isRecordingVideoNote]);
 
-  async function loadChat() {
-    if (!user || !chatId) return;
+  async function loadChat(requestedChatId: string) {
+    if (!user || !requestedChatId) return;
+
+    const cachedForThisChat = await localDB.chats.get(requestedChatId);
+    const isStale = () => latestChatIdRef.current !== requestedChatId;
 
     try {
-      if (chatId === user.id) {
+      if (requestedChatId === user.id) {
         await supabase.from('chats').upsert({ id: user.id, type: 'direct', name: 'Saved Messages', theme: 'love' });
+        if (isStale()) return;
         setChatInfo({
           id: user.id,
           type: 'direct',
@@ -234,10 +278,10 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
         return;
       }
 
-      let { data: chat } = await supabase.from('chats').select('*').eq('id', chatId).maybeSingle();
+      let { data: chat } = await supabase.from('chats').select('*').eq('id', requestedChatId).maybeSingle();
 
       if (!chat) {
-        const sortedIds = [user.id, chatId].sort();
+        const sortedIds = [user.id, requestedChatId].sort();
         const consistentRoomId = `${sortedIds[0]}_${sortedIds[1]}`;
 
         let { data: existingChat } = await supabase
@@ -294,11 +338,31 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
         }
       }
 
+      if (isStale()) return; // a newer chat switch happened while these queries were in flight
+
       setChatInfo(chatData);
+
+      // Seed/refresh the cache so this chat opens instantly next time too —
+      // not just chats ChatList happened to fetch first. Flattened shape to
+      // match LocalChat (see the earlier bug where a nested `otherUser`
+      // object silently corrupted this same cache).
+      await localDB.chats.put({
+        id: chatData.id,
+        type: chatData.type,
+        name: chatData.name,
+        avatar_url: (chat as any)?.avatar_url ?? null,
+        theme: chatData.theme,
+        last_message_content: cachedForThisChat?.last_message_content,
+        last_message_time: cachedForThisChat?.last_message_time,
+        other_user_id: chatData.otherUser?.id,
+        other_user_name: chatData.otherUser?.display_name,
+        other_user_avatar: chatData.otherUser?.avatar_url,
+        other_user_last_seen: chatData.otherUser?.last_seen,
+      });
     } catch (error) {
       console.error('Error in loadChat:', error);
     } finally {
-      setLoading(false);
+      if (!isStale()) setLoading(false);
     }
   }
 
@@ -666,6 +730,12 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
         const { error: uploadError } = await supabase.storage.from('voice-notes').upload(fileName, voiceToUpload);
         if (uploadError) throw uploadError;
         const { data: urlData } = supabase.storage.from('voice-notes').getPublicUrl(fileName);
+        finalMediaUrl = urlData.publicUrl;
+      } else if (videoToUpload) {
+        const fileName = `${user.id}/videos/${Date.now()}_${(videoToUpload as any).name || 'video.mp4'}`;
+        const { error: uploadError } = await supabase.storage.from('chat-media').upload(fileName, videoToUpload);
+        if (uploadError) throw uploadError;
+        const { data: urlData } = supabase.storage.from('chat-media').getPublicUrl(fileName);
         finalMediaUrl = urlData.publicUrl;
       }
 

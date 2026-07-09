@@ -10,6 +10,7 @@ import { supabase } from './lib/supabase';
 import { useHeartbeat } from './hooks/useHeartbeat';
 import { usePresence } from './hooks/usePresence';
 import { useOfflineSync } from './hooks/useOfflineSync';
+import { useChatsReady } from './hooks/useChatsReady';
 
 // Define the interface for our GIF objects
 export interface GifItem {
@@ -39,6 +40,58 @@ export function useAnonymousVisitTracker() {
   }, []);
 }
 
+function SplashScreen({ message, overlay = false }: { message: string; overlay?: boolean }) {
+  return (
+    <div className={
+      overlay
+        ? "fixed inset-0 z-[200] flex flex-col items-center justify-center bg-[#FFF0F3] overflow-hidden"
+        : "min-h-screen flex flex-col items-center justify-center bg-[#FFF0F3] overflow-hidden"
+    }>
+      <div className="relative flex items-center justify-center">
+        {/* Central Logo */}
+        <div className="relative z-10 w-32 h-32 bg-white rounded-[40px] shadow-2xl shadow-pink-200/50 flex items-center justify-center mb-8 border border-white transition-transform duration-500 hover:scale-105">
+          <div className="relative">
+            <Heart
+              className="w-16 h-16 text-pink-200 fill-pink-100 absolute -top-1 -right-1 opacity-60 animate-[bounce_1.8s_infinite_ease-in-out]"
+              style={{ animationDelay: '0.15s' }}
+            />
+            <Heart className="relative z-10 w-16 h-16 text-[#FF69B4] fill-[#FF69B4] drop-shadow-xl animate-[bounce_1.8s_infinite_ease-in-out]" />
+          </div>
+        </div>
+
+        {/* Orbiting small hearts */}
+        <Heart className="absolute -top-10 -right-10 w-6 h-6 text-pink-300 animate-bounce delay-75" />
+        <Heart className="absolute top-20 -left-12 w-4 h-4 text-rose-300 animate-pulse delay-300" />
+        <Heart className="absolute -bottom-8 right-12 w-5 h-5 text-pink-200 animate-bounce delay-500" />
+      </div>
+
+      <div className="mt-12 space-y-3 text-center flex flex-col items-center">
+        <p className="text-[#FF1493] font-bold text-lg tracking-[0.4em] animate-pulse">
+          SWEET CHAT
+        </p>
+
+        <div className="space-y-3">
+          <p className="text-pink-400/60 text-xs font-medium italic">
+            {message}
+          </p>
+
+          {/* Enhanced Progress Bar */}
+          <div className="w-24 h-[3px] bg-pink-100/50 rounded-full overflow-hidden mx-auto">
+            <div className="h-full bg-gradient-to-r from-pink-400 to-rose-400 w-1/2 rounded-full animate-[loading_1.5s_infinite_ease-in-out]"></div>
+          </div>
+        </div>
+      </div>
+
+      <style>{`
+        @keyframes loading {
+          0% { transform: translateX(-100%); }
+          100% { transform: translateX(250%); }
+        }
+      `}</style>
+    </div>
+  );
+}
+
 function AppContent() { 
   const { user, loading } = useAuth(); 
   useAnonymousVisitTracker();
@@ -55,6 +108,16 @@ function AppContent() {
   const [faceLockEnabled, setFaceLockEnabled] = useState(false);
   const [profileSyncLoading, setProfileSyncLoading] = useState(true);
   const [isAppLocked, setIsAppLocked] = useState(true);
+  const chatsReady = useChatsReady();
+  const [readyTimedOut, setReadyTimedOut] = useState(false);
+
+  // Safety net: if ChatList never reports ready for any reason (a bug, a
+  // stalled request, whatever), don't trap the user on the splash forever.
+  useEffect(() => {
+    if (chatsReady) return;
+    const timer = setTimeout(() => setReadyTimedOut(true), 8000);
+    return () => clearTimeout(timer);
+  }, [chatsReady]);
   const [showLetter, setShowLetter] = useState(() => {
   const hasSeenWelcome = localStorage.getItem('has_seen_welcome');
   return !hasSeenWelcome;
@@ -116,7 +179,12 @@ function AppContent() {
   else {
     setProfileSyncLoading(false);
   }
-}, [user, loading]);
+  // Depending on user?.id (a stable primitive) instead of the whole `user`
+  // object was the second half of the tab-refocus splash bug: Supabase
+  // hands back a new `user` object reference on every token refresh even
+  // when it's the same person, which used to retrigger this effect (and
+  // therefore re-flash profileSyncLoading) on every tab refocus.
+}, [user?.id, loading]);
 
   const handleCloseWelcome = () => {
   setShowLetter(false);
@@ -202,51 +270,7 @@ const handleGifAction = async (input: string) => {
 };
 
 if (loading || profileSyncLoading) {
-  return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-[#FFF0F3] overflow-hidden">
-      <div className="relative flex items-center justify-center">
-        {/* Central Logo */}
-        <div className="relative z-10 w-32 h-32 bg-white rounded-[40px] shadow-2xl shadow-pink-200/50 flex items-center justify-center mb-8 border border-white transition-transform duration-500 hover:scale-105">
-          <div className="relative">
-            <Heart 
-              className="w-16 h-16 text-pink-200 fill-pink-100 absolute -top-1 -right-1 opacity-60 animate-[bounce_1.8s_infinite_ease-in-out]" 
-              style={{ animationDelay: '0.15s' }} 
-            />
-            <Heart className="relative z-10 w-16 h-16 text-[#FF69B4] fill-[#FF69B4] drop-shadow-xl animate-[bounce_1.8s_infinite_ease-in-out]" />
-          </div>
-        </div>
-
-        {/* Orbiting small hearts */}
-        <Heart className="absolute -top-10 -right-10 w-6 h-6 text-pink-300 animate-bounce delay-75" />
-        <Heart className="absolute top-20 -left-12 w-4 h-4 text-rose-300 animate-pulse delay-300" />
-        <Heart className="absolute -bottom-8 right-12 w-5 h-5 text-pink-200 animate-bounce delay-500" />
-      </div>
-
-      <div className="mt-12 space-y-3 text-center flex flex-col items-center">
-        <p className="text-[#FF1493] font-bold text-lg tracking-[0.4em] animate-pulse">
-          SWEET CHAT
-        </p>
-        
-        <div className="space-y-3">
-          <p className="text-pink-400/60 text-xs font-medium italic">
-            Preparing your inbox...
-          </p>
-          
-          {/* Enhanced Progress Bar */}
-          <div className="w-24 h-[3px] bg-pink-100/50 rounded-full overflow-hidden mx-auto">
-            <div className="h-full bg-gradient-to-r from-pink-400 to-rose-400 w-1/2 rounded-full animate-[loading_1.5s_infinite_ease-in-out]"></div>
-          </div>
-        </div>
-      </div>
-
-      <style>{`
-        @keyframes loading {
-          0% { transform: translateX(-100%); }
-          100% { transform: translateX(250%); }
-        }
-      `}</style>
-    </div>
-  );
+  return <SplashScreen message="Preparing your inbox..." />;
 }
 
   if (!user) {
@@ -392,6 +416,16 @@ if (loading || profileSyncLoading) {
 
   return (
     <div className={theme === 'dark' ? 'dark' : theme === 'sweet' ? 'sweet-theme' : ''}>
+      {/* Overlay, not a blocking early-return: Dashboard/ChatList mount and
+          load underneath this, and markChatsReady() (called from ChatList
+          once it has real data to show) is what makes this disappear. An
+          early return here instead would stop ChatList from ever mounting,
+          which would mean markChatsReady() never fires — every load would
+          then sit through the full 8s timeout below, every single time. */}
+      {!chatsReady && !readyTimedOut && (
+        <SplashScreen message="Loading your chats..." overlay />
+      )}
+
       {!showLetter && isAppLocked && (
         <StrictLock
         onUnlock={() => setIsAppLocked(false)}

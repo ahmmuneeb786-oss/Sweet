@@ -90,41 +90,91 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
     muteAll: false
   });
 
-  const getStorageEstimate = async () => {
-    if (navigator.storage && navigator.storage.estimate) {
-      try {
-        const { usage } = await navigator.storage.estimate();
-        if (usage !== undefined) {
-          // Convert raw bytes to a human-readable format
-          if (usage < 1024 * 1024) {
-            setStorageUsed(`${(usage / 1024).toFixed(1)} KB`);
-          } else {
-            setStorageUsed(`${(usage / (1024 * 1024)).toFixed(1)} MB`);
-          }
-          return;
-        }
-      } catch (err) {
-        console.error("Failed to estimate storage usage:", err);
+  const getBytesOf = async (records: any[]) =>
+    records.reduce((sum, r) => sum + new Blob([JSON.stringify(r)]).size, 0);
+
+  const getCacheStorageBytes = async () => {
+    if (!window.caches) return 0;
+    let total = 0;
+    const cacheNames = await caches.keys();
+    for (const name of cacheNames) {
+      const cache = await caches.open(name);
+      const requests = await cache.keys();
+      for (const req of requests) {
+        const res = await cache.match(req);
+        if (res) total += (await res.blob()).size;
       }
     }
-    setStorageUsed('Unknown');
+    return total;
+  };
+
+  const getStorageEstimate = async () => {
+    try {
+      const [cacheBytes, chats, messages, profiles] = await Promise.all([
+        getCacheStorageBytes(),
+        localDB.chats.toArray(),
+        localDB.messages.toArray(),
+        localDB.profiles.toArray(),
+      ]);
+
+      const clearableProfiles = profiles.filter(p => !p.pending_sync);
+
+      const totalBytes =
+        cacheBytes +
+        (await getBytesOf(chats)) +
+        (await getBytesOf(messages)) +
+        (await getBytesOf(clearableProfiles));
+
+      if (totalBytes < 1024 * 1024) {
+        setStorageUsed(`${(totalBytes / 1024).toFixed(1)} KB`);
+      } else {
+        setStorageUsed(`${(totalBytes / (1024 * 1024)).toFixed(1)} MB`);
+      }
+    } catch (err) {
+      console.error("Failed to estimate storage usage:", err);
+      setStorageUsed('Unknown');
+    }
   };
 
   const handleClearCache = async () => {
     setIsClearing(true);
     try {
-    // Delete all browser cache storage keys (service worker cached assets/images)
+      // 1. Service worker asset cache (images/JS/CSS for offline loading) —
+      // purely disposable, already handled.
       if (window.caches) {
         const cacheNames = await caches.keys();
         await Promise.all(cacheNames.map(name => caches.delete(name)));
       }
-    
-    // Give the browser a moment to update, then recalculate metrics
+
+      // 2. The actual local chat cache — this is the part that was missing,
+      // and where most of the storage usage actually lives. `chats` and
+      // `messages` are pure mirrors of what's already on the server, so
+      // wiping them is safe: the next app open just falls back to a real
+      // network fetch, exactly like a first-ever login.
+      await localDB.messages.clear();
+      await localDB.chats.clear();
+
+      // 3. Profiles cache — only delete entries that are fully synced.
+      // A profile edit made while offline (pending_sync: true) hasn't
+      // reached the server yet. That's real unsaved data, not cache, so
+      // it's deliberately left alone here rather than silently discarded.
+      const allProfiles = await localDB.profiles.toArray();
+      const safeToDeleteIds = allProfiles.filter(p => !p.pending_sync).map(p => p.id);
+      if (safeToDeleteIds.length > 0) {
+        await localDB.profiles.bulkDelete(safeToDeleteIds);
+      }
+
+      // NOTE: localDB.pendingMessages is deliberately NEVER touched by this
+      // button. It's the offline send queue — messages the user actually
+      // tried to send that haven't reached the server yet. That's real user
+      // data, not cache, and clearing it here would silently drop messages.
+
+      // Give the browser a moment to update, then recalculate metrics
       setTimeout(async () => {
         await getStorageEstimate();
         setIsClearing(false);
       }, 600);
-    
+
     } catch (err) {
       console.error("Error clearing application cache:", err);
       setIsClearing(false);
@@ -1030,7 +1080,7 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
     {/* Cozy Helper Text */}
     <div className="bg-pink-50/30 border border-dashed border-pink-200/60 rounded-xl p-3">
       <p className="text-center text-[11px] text-pink-600/70 leading-relaxed">
-        💝 <strong>No worries:</strong> Clearing the cache frees up phone space by freshening up assets. Your beautiful chat logs and profile details stay totally untouched!
+        💝 <strong>No worries:</strong> Your chats live safely on our servers forever — clearing local storage just re-downloads them next time you're online. Messages you're still waiting to send are never touched.
       </p>
     </div>
   </div>

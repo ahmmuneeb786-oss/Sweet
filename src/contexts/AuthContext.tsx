@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
+import { resetChatsReady } from '../hooks/useChatsReady';
 
 interface Profile {
   id: string;
@@ -48,17 +49,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      (async () => {
-        setSession(session);
-        setUser(session?.user ?? null);
-        if (session?.user) {
-          await loadProfile(session.user.id);
-          await updateOnlineStatus(true);
-        } else {
-          setProfile(null);
-        }
-      })();
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      setSession(session);
+
+      // TOKEN_REFRESHED fires constantly — notably on every tab refocus,
+      // since Supabase silently re-validates the session then. It hands us
+      // a brand-new `user` object for the SAME account every time. Keeping
+      // the same reference when the id hasn't changed stops that churn
+      // from cascading into every effect elsewhere that depends on `user`
+      // (this is what was re-triggering the loading screen on tab switch).
+      setUser(prevUser => (prevUser?.id === session?.user?.id ? prevUser : session?.user ?? null));
+
+      if (!session?.user) {
+        setProfile(null);
+        setLoading(false);
+        return;
+      }
+
+      // Only these events represent an actual identity/profile change worth
+      // a re-fetch. Re-loading the whole profile on every token refresh was
+      // wasted network calls AND handed out a new `profile` object each
+      // time, which had its own knock-on re-render effects.
+      if (event === 'SIGNED_IN' || event === 'USER_UPDATED' || event === 'INITIAL_SESSION') {
+        loadProfile(session.user.id);
+        updateOnlineStatus(true);
+      } else {
+        // A no-op event (e.g. TOKEN_REFRESHED) for an already-known session —
+        // nothing changed, so make sure we're not left stuck on `loading`.
+        setLoading(false);
+      }
     });
 
     return () => subscription.unsubscribe();
@@ -188,6 +207,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (user) {
       await updateOnlineStatus(false);
     }
+    resetChatsReady();
     await supabase.auth.signOut();
   }
 

@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase';
 import { FloatingHearts } from './FloatingHearts';
 import { localDB } from '../db';
 import { usePresence } from '../hooks/usePresence';
+import { markChatsReady } from '../hooks/useChatsReady';
 
 interface Chat {
   id: string;
@@ -212,6 +213,7 @@ export function ChatList({ selectedChatId, onSelectChat, onShowProfile, onShowFr
       if (cachedChats.length > 0) {
         setChats(cachedChats.map(toChat).sort(byRecency));
         setLoading(false);
+        markChatsReady();
       } else {
         setLoading(true);
       }
@@ -308,6 +310,7 @@ export function ChatList({ selectedChatId, onSelectChat, onShowProfile, onShowFr
       console.error('Logic Error loading chats:', error);
     } finally {
       setLoading(false);
+      markChatsReady();
     }
   }
 
