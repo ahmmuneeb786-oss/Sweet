@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase';
 import { localDB } from '../db';
 import { useNotify } from '../contexts/NotificationContext';
 import { useConfirm } from '../contexts/ConfirmContext';
+import { usePerformance } from '../contexts/PerformanceContext';
 
 interface ChatMenuProps {
   theme: 'light' | 'dark' | 'sweet'
@@ -16,6 +17,7 @@ export function ChatMenu({ theme, chatId, onClose }: ChatMenuProps) {
   const { user } = useAuth();
   const { showSuccess, showError } = useNotify();
   const confirm = useConfirm();
+  const { isLowPerfMode } = usePerformance();
   const [showMenu, setShowMenu] = useState(false);
   const [muteStatus, setMuteStatus] = useState<'8h' | '1w' | 'forever' | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -168,7 +170,7 @@ export function ChatMenu({ theme, chatId, onClose }: ChatMenuProps) {
         <>
           {/* Background Overlay */}
           <div
-            className="fixed inset-0 z-40 bg-black/20 backdrop-blur-[1px]"
+            className={`fixed inset-0 z-40 bg-black/20 ${isLowPerfMode ? '' : 'backdrop-blur-[1px]'}`}
             onClick={() => { setShowMenu(false); onClose(); }}
           />
           
@@ -248,7 +250,7 @@ export function ChatMenu({ theme, chatId, onClose }: ChatMenuProps) {
       {showSearch && (
         <div className="fixed inset-0 z-[100] flex items-start justify-center p-4 pt-20">
           <div 
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm" 
+            className={`fixed inset-0 bg-black/60 ${isLowPerfMode ? '' : 'backdrop-blur-sm'}`} 
             onClick={() => { setShowSearch(false); onClose(); }} 
           />
           

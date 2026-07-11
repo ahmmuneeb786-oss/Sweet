@@ -3,6 +3,7 @@ import { MoreVertical, Reply, Forward, Copy, Star, Trash2, CreditCard as Edit3, 
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { localDB } from '../db';
+import { usePerformance } from '../contexts/PerformanceContext';
 
 export interface Reaction {
   reaction: string;
@@ -60,6 +61,7 @@ function MessageComponent({
   initialUserMap = EMPTY_USER_MAP,
 }: MessageProps) {
   const { user } = useAuth();
+  const { isLowPerfMode } = usePerformance();
   const [showMenu, setShowMenu] = useState(false);
   const [menuDirection, setMenuDirection] = useState<'up' | 'down'>('down');
   const [showReactions, setShowReactions] = useState(false);
@@ -84,33 +86,36 @@ function MessageComponent({
     setUserReactionMap(new Map(Object.entries(initialUserMap)));
   }, [initialUserMap]);
 
-  useEffect(() => {
-    let isMounted = true;
-    if (message.type === 'voice' && message.media_url) {
+  // Waveform is generated lazily (see loadWaveformIfNeeded, wired to the
+  // play button) instead of eagerly here. Decoding audio via AudioContext
+  // for every voice message the moment it mounts meant opening a chat with
+  // many voice notes fired that many concurrent fetch+decode operations at
+  // once, all for waveforms that might never even be looked at.
+  async function loadWaveformIfNeeded() {
+    if (waveform.length > 0 || message.type !== 'voice' || !message.media_url) return;
+    try {
       const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-      fetch(message.media_url)
-        .then(response => response.arrayBuffer())
-        .then(data => audioContext.decodeAudioData(data))
-        .then(buffer => {
-          if (!isMounted) return;
-          const rawData = buffer.getChannelData(0);
-          const samples = 20;
-          const blockSize = Math.floor(rawData.length / samples);
-          const filteredData = [];
-          for (let i = 0; i < samples; i++) {
-            let blockStart = blockSize * i;
-            let sum = 0;
-            for (let j = 0; j < blockSize; j++) {
-              sum = sum + Math.abs(rawData[blockStart + j]);
-            }
-            filteredData.push(sum / blockSize);
-          }
-          const multiplier = Math.pow(Math.max(...filteredData), -1);
-          setWaveform(filteredData.map(n => n * multiplier));
-        });
+      const response = await fetch(message.media_url);
+      const data = await response.arrayBuffer();
+      const buffer = await audioContext.decodeAudioData(data);
+      const rawData = buffer.getChannelData(0);
+      const samples = 20;
+      const blockSize = Math.floor(rawData.length / samples);
+      const filteredData = [];
+      for (let i = 0; i < samples; i++) {
+        let blockStart = blockSize * i;
+        let sum = 0;
+        for (let j = 0; j < blockSize; j++) {
+          sum = sum + Math.abs(rawData[blockStart + j]);
+        }
+        filteredData.push(sum / blockSize);
+      }
+      const multiplier = Math.pow(Math.max(...filteredData), -1);
+      setWaveform(filteredData.map(n => n * multiplier));
+    } catch (err) {
+      console.error('Waveform decode failed:', err);
     }
-    return () => { isMounted = false; };
-  }, [message.media_url]);
+  }
 
   function formatStickyDate(dateString: string) {
     const date = new Date(dateString);
@@ -254,8 +259,14 @@ function MessageComponent({
   const getMessageClasses = (own: boolean) => {
     const shape = "rounded-[32px]";
     if (theme === 'sweet') {
+      // backdrop-blur-xl is one of the most GPU-expensive CSS properties
+      // that exists — it forces continuous re-sampling of everything behind
+      // every bubble, every frame. In low-perf mode, fall back to a plain
+      // higher-opacity background instead: same visual language, no blur.
       return own
         ? `${shape} bg-gradient-to-br from-[#FF85A1] via-[#FF69B4] to-[#FF1493] text-white shadow-[0_4px_15px_rgba(255,20,147,0.3)] border border-white/20`
+        : isLowPerfMode
+        ? `${shape} bg-white/80 border border-white/60 text-[#8B004B] shadow-[0_4px_10px_rgba(0,0,0,0.05)]`
         : `${shape} bg-white/40 backdrop-blur-xl border border-white/40 text-[#8B004B] shadow-[0_4px_10px_rgba(0,0,0,0.05)]`;
     } else if (theme === 'dark') {
       return own ? `${shape} bg-pink-500 text-white` : `${shape} bg-gray-100 text-gray-900`;
@@ -427,7 +438,14 @@ function MessageComponent({
                 <div className="flex flex-col gap-2 py-2 w-full min-w-[200px] xs:min-w-[240px]">
                   <div className="flex items-center gap-3">
                     <button
-                      onClick={() => isPlaying ? audioRef.current?.pause() : audioRef.current?.play()}
+                      onClick={() => {
+                        if (isPlaying) {
+                          audioRef.current?.pause();
+                        } else {
+                          loadWaveformIfNeeded();
+                          audioRef.current?.play();
+                        }
+                      }}
                       className={`
                         relative flex-shrink-0 w-11 h-11 flex items-center justify-center
                         transition-all duration-500 ease-out active:scale-90 shadow-lg

@@ -2,11 +2,11 @@ import { useState, useEffect } from 'react';
 import { Search, MoreVertical, MessageSquarePlus, Users, User as UserIcon, Settings, Lock, LogOut, Heart } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
-import { FloatingHearts } from './FloatingHearts';
 import { localDB } from '../db';
 import { usePresence } from '../hooks/usePresence';
 import { markChatsReady } from '../hooks/useChatsReady';
 import { useNotify } from '../contexts/NotificationContext';
+import { usePerformance } from '../contexts/PerformanceContext';
 
 interface Chat {
   id: string;
@@ -40,6 +40,7 @@ interface ChatListProps {
 export function ChatList({ selectedChatId, onSelectChat, onShowProfile, onShowFriends, onShowSettings, onShowCreateChat, theme, onShowLockedChats }: ChatListProps) {
   const { user, profile, signOut } = useAuth();
   const { isOnline: isUserOnline } = usePresence(user?.id);
+  const { isLowPerfMode } = usePerformance();
   const { showError } = useNotify();
   const [chats, setChats] = useState<Chat[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -360,9 +361,13 @@ export function ChatList({ selectedChatId, onSelectChat, onShowProfile, onShowFr
   }
 
   return (
-    <div className={`w-full md:w-96 h-full p-4 border-b sticky top-0 z-10 bg-[#FFE4E1]/90 backdrop-blur-md flex-shrink-0 ${theme === 'sweet' ? 'bg-[#FFF0F5] border-[#FFB6C1]' : 'bg-white dark:bg-gray-900 border-gray-200'}`}>
+    <div className={`w-full md:w-96 h-full p-4 border-b sticky top-0 z-10 bg-[#FFE4E1]/90 ${isLowPerfMode ? '' : 'backdrop-blur-md'} flex-shrink-0 ${theme === 'sweet' ? 'bg-[#FFF0F5] border-[#FFB6C1]' : 'bg-white dark:bg-gray-900 border-gray-200'}`}>
       <div className="md:hidden absolute inset-0 overflow-hidden pointer-events-none z-0">
-        <FloatingHearts />
+        {/* FloatingHearts intentionally NOT rendered here — Dashboard (this
+            component's parent, always mounted alongside it) already renders
+            one full-app instance. A second one here used to sit perfectly
+            on top of the first (both effectively full-viewport), silently
+            doubling the animation workload for zero visual difference. */}
       </div>
       <div className={`p-4 border-b ${theme === 'sweet' ? 'border-[#FFB6C1]' : 'border-gray-200 dark:border-gray-700'}`}>
         <div className="flex items-center justify-between mb-4">

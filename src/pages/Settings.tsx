@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ChevronRight, X, Bell, Lock, Palette, HardDrive, LogOut, User, Shield, ShieldCheck, Smile, CheckCircle, AlertCircle, ChevronLeft } from 'lucide-react';
+import { ChevronRight, X, Bell, Lock, Palette, HardDrive, LogOut, User, Shield, ShieldCheck, Smile, CheckCircle, AlertCircle, ChevronLeft, Zap } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { PermissionManager } from '../services/PermissionManager';
@@ -7,9 +7,10 @@ import { StrictLock } from '../components/StrictLock';
 import { localDB } from '../db';
 import { hashSecret } from '../lib/secureHash';
 import { useNotify } from '../contexts/NotificationContext';
+import { usePerformance } from '../contexts/PerformanceContext';
 
 
-type SettingsTab = 'main' | 'account' | 'privacy' | 'notifications' | 'theme' | 'storage' | 'locked' | 'lock';
+type SettingsTab = 'main' | 'account' | 'privacy' | 'notifications' | 'theme' | 'storage' | 'locked' | 'lock' | 'performance';
 
 interface SettingsProps {
   onClose: () => void;
@@ -45,6 +46,7 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
   // 3. Destructure and apply the typecast ('as SecureProfile')
   const { profile: rawProfile, updateProfile, signOut } = useAuth();
   const { showSuccess, showError, showInfo } = useNotify();
+  const { fps, deviceTier, isLowPerfMode, override, setOverride, showOverlay, setShowOverlay } = usePerformance();
   const profile = rawProfile as SecureProfile; // ✨ This instantly cleans up all profile red marks!
 
   const [activeTab, setActiveTab] = useState<SettingsTab>('main');
@@ -418,6 +420,7 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
     { id: 'notifications', label: 'Notification Settings', icon: Bell },
     { id: 'theme', label: 'Theme Settings', icon: Palette },
     { id: 'storage', label: 'Storage & Media', icon: HardDrive },
+    { id: 'performance', label: 'Performance', icon: Zap },
     { id: 'locked', label: 'Locked Chats Settings', icon: Lock }
   ];
 
@@ -1086,6 +1089,85 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
       <p className="text-center text-[11px] text-pink-600/70 leading-relaxed">
         💝 <strong>No worries:</strong> Your chats live safely on our servers forever — clearing local storage just re-downloads them next time you're online. Messages you're still waiting to send are never touched.
       </p>
+    </div>
+  </div>
+)}
+
+{activeTab === 'performance' && (
+  <div className={`p-6 space-y-6 animate-fadeIn transition-colors ${
+    theme === 'sweet' ? 'text-[#4B004B]' : theme === 'dark' ? 'text-gray-200' : 'text-gray-700'
+  }`}>
+    <div className="relative overflow-hidden bg-gradient-to-br from-pink-50 via-purple-50 to-pink-100/50 border border-pink-200/60 p-5 rounded-2xl shadow-sm">
+      <div className="flex items-center gap-2.5 mb-3">
+        <span className="text-base" role="img" aria-label="performance">⚡</span>
+        <p className="text-xs font-bold uppercase tracking-wider text-pink-600/80">
+          App Performance
+        </p>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 mb-3">
+        <div className="bg-white/50 rounded-xl p-3">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-pink-600/60 mb-1">Live FPS</p>
+          <p className={`text-2xl font-black ${fps < 40 ? 'text-red-500' : fps < 55 ? 'text-amber-500' : 'text-green-600'}`}>
+            {fps}
+          </p>
+        </div>
+        <div className="bg-white/50 rounded-xl p-3">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-pink-600/60 mb-1">Device Tier</p>
+          <p className="text-2xl font-black capitalize text-[#4B004B]">{deviceTier}</p>
+        </div>
+      </div>
+
+      <p className="text-[11px] text-pink-600/70 mb-3">
+        {override === 'auto' && isLowPerfMode &&
+          '✨ Auto: currently running reduced effects because we detected low performance.'}
+        {override === 'auto' && !isLowPerfMode &&
+          '✨ Auto: currently running full effects — performance looks good.'}
+        {override === 'force-low' &&
+          'Manually locked to reduced effects, regardless of measured performance.'}
+        {override === 'force-high' &&
+          'Manually locked to full effects, even if performance is measured as poor.'}
+      </p>
+
+      <div className="flex gap-2">
+        {(['auto', 'force-low', 'force-high'] as const).map((opt) => (
+          <button
+            key={opt}
+            onClick={() => setOverride(opt)}
+            className={`flex-1 py-2 rounded-xl text-[11px] font-bold transition-colors ${
+              override === opt
+                ? 'bg-pink-500 text-white'
+                : 'bg-white/60 text-pink-600/70 hover:bg-white'
+            }`}
+          >
+            {opt === 'auto' ? 'Auto' : opt === 'force-low' ? 'Low Effects' : 'Full Effects'}
+          </button>
+        ))}
+      </div>
+    </div>
+
+    {/* On-screen FPS overlay toggle */}
+    <div className="bg-white/50 dark:bg-gray-800/50 border border-pink-200/60 dark:border-gray-700 rounded-2xl p-4 flex items-center justify-between gap-4">
+      <div>
+        <p className="text-sm font-bold">Show FPS on screen</p>
+        <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
+          A small live readout stays visible on every screen, positioned out of the way of your chats.
+        </p>
+      </div>
+      <button
+        onClick={() => setShowOverlay(!showOverlay)}
+        className={`shrink-0 w-12 h-7 rounded-full transition-colors relative ${
+          showOverlay
+            ? (theme === 'sweet' ? 'bg-[#FF1493]' : 'bg-pink-500')
+            : (theme === 'sweet' ? 'bg-[#FFD1DC]' : 'bg-gray-300 dark:bg-gray-600')
+        }`}
+      >
+        <span
+          className={`absolute top-1 left-1 w-5 h-5 rounded-full bg-white shadow transition-transform ${
+            showOverlay ? 'translate-x-5' : 'translate-x-0'
+          }`}
+        />
+      </button>
     </div>
   </div>
 )}
