@@ -15,6 +15,8 @@ import { useHeartbeat } from './hooks/useHeartbeat';
 import { usePresence } from './hooks/usePresence';
 import { useOfflineSync } from './hooks/useOfflineSync';
 import { useChatsReady } from './hooks/useChatsReady';
+import { localDB } from './db';
+import { preloadFaceModels } from './lib/faceModels';
 
 // Define the interface for our GIF objects
 export interface GifItem {
@@ -152,8 +154,29 @@ function AppContent() {
       return;
     }
 
+    // Local first — instant, and works fully offline. This is what makes
+    // face-lock actually usable without a connection: both the descriptor
+    // AND whether it's enabled come from the device, not a network round
+    // trip, so a genuinely offline app open still locks (and unlocks)
+    // correctly instead of silently bypassing the lock because a network
+    // check failed.
+    const cached = await localDB.getFaceLockDataLocally(user.id);
+    if (cached) {
+      if (cached.descriptor) {
+        setSavedDescriptor(cached.descriptor);
+        setIsFaceRegistered(true);
+      }
+      setFaceLockEnabled(cached.enabled);
+      setIsAppLocked(cached.enabled);
+      setProfileSyncLoading(false);
+      if (cached.enabled) preloadFaceModels(); // quietly start downloading in the background
+    }
+
+    // Then quietly reconcile with the server — catches face-lock being
+    // turned on/off from a different device, or a first-ever login on this
+    // one where there's nothing cached yet.
     try {
-      setProfileSyncLoading(true);
+      if (!cached) setProfileSyncLoading(true);
       // maybeSingle(), not single(): right after a fresh signup, a session
       // can exist for a moment before the profile row has actually finished
       // being inserted (completeProfileSetup runs as a separate step after
@@ -170,12 +193,14 @@ function AppContent() {
 
       if (error) throw error;
 
-      if (data?.face_descriptor) {
-        setSavedDescriptor(data.face_descriptor);
+      const descriptor: number[] | null = data?.face_descriptor ?? null;
+      const enabled = !!data?.face_lock_enabled;
+
+      if (descriptor) {
+        setSavedDescriptor(descriptor);
         setIsFaceRegistered(true);
       }
-
-      setFaceLockEnabled(!!data?.face_lock_enabled);
+      setFaceLockEnabled(enabled);
 
       // isAppLocked only ever becomes true here, from a confirmed row that
       // explicitly has it enabled — never as a default, never as a
@@ -186,15 +211,18 @@ function AppContent() {
       // default — this whole check already runs behind the blocking splash
       // screen (profileSyncLoading), so by the time anything renders, this
       // has already resolved to the real value either way.
-      setIsAppLocked(!!data?.face_lock_enabled);
+      setIsAppLocked(enabled);
+
+      // Keep the local cache in sync with whatever the server just said —
+      // covers face-lock being toggled from a different device.
+      await localDB.saveFaceLockDataLocally(user.id, descriptor, enabled);
+
+      if (enabled) preloadFaceModels();
     } catch (err) {
       // A genuine error (network failure, etc.) — as opposed to "no row
-      // found yet", which is handled above and isn't an error at all.
-      // Deliberately does NOT lock the app here: for a returning user with
-      // face lock already on, this is a rare, brief false negative (they
-      // just see their normal chats once instead of the scanner) — a much
-      // better trade than the alternative, which was reliably trapping
-      // brand-new users with no face registered into an unpassable screen.
+      // found yet", which is handled above and isn't an error at all. If
+      // we already applied cached data above, leave it as-is; only affects
+      // the outcome when there was nothing cached to fall back on.
       console.error('Failed to check face lock status:', err);
     }
     finally {
@@ -250,10 +278,15 @@ useEffect(() => {
 
   if (error) throw error;
 
+  // Written to local storage immediately too — not just the database —
+  // so the very next scan (and every one after, including offline) reads
+  // from the device instantly instead of waiting on a network round trip.
+  await localDB.saveFaceLockDataLocally(userId, descriptor, true);
+
   // Without this, savedDescriptor stayed null in memory until the next
   // full reload — meaning toggling face-lock off then on again in the
   // SAME session would incorrectly think no face was registered yet and
-  // re-open the scanner, even though the database already had it.
+  // re-open the scanner, even though local/remote storage already had it.
   setSavedDescriptor(descriptor);
   };
 

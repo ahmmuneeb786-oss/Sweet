@@ -818,6 +818,12 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
         setFaceLockEnabled(faceLockEnabled); // Rollback on failure
         throw error;
       }
+
+      // Keep the local cache in sync too — without this, disabling face
+      // lock here wouldn't be reflected on the next OFFLINE app open,
+      // which would still read the old "enabled" value from local storage
+      // and lock someone who'd already turned it off.
+      await localDB.saveFaceLockDataLocally(user.id, savedDescriptor ?? null, nextState);
     } catch (err) {
       console.error("Failed to save toggle state to cloud:", err);
       showError("Could not update settings. Check network connection.");

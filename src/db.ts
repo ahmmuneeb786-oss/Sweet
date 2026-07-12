@@ -26,6 +26,8 @@ export interface LocalProfile {
   created_at: string | null;
   cached_at: string; // Timestamp to trace database freshness
   pending_sync?: boolean; // true = this copy has edits Supabase doesn't have yet
+  face_descriptor?: number[] | null; // cached locally for instant, offline-capable face-lock scans
+  face_lock_enabled?: boolean; // cached alongside it so the lock itself works offline, not just the scan speed
 }
 
 // A message as cached locally — mirrors MessageType in ChatWindow/Message,
@@ -119,6 +121,44 @@ class OfflineChatDatabase extends Dexie {
 
   async getUserProfile(userId: string): Promise<LocalProfile | undefined> {
     return await this.profiles.get(userId);
+  }
+
+  // Dedicated helpers for face-lock data specifically — deliberately NOT
+  // routed through saveUserProfile/getUserProfile. That method does a full
+  // put() (a complete overwrite); if this went through it without every
+  // other field also being passed in, it would silently wipe
+  // display_name/avatar_url/etc. (or vice versa, wipe face data on an
+  // unrelated profile edit). A targeted update() touches only these two
+  // fields, no matter what else is being saved/edited elsewhere.
+  async saveFaceLockDataLocally(userId: string, descriptor: number[] | null, enabled: boolean) {
+    const updated = await this.profiles.update(userId, {
+      face_descriptor: descriptor,
+      face_lock_enabled: enabled,
+    });
+    if (!updated) {
+      // No cached profile row exists yet for this user at all — create a
+      // minimal one rather than silently losing this data.
+      await this.profiles.put({
+        id: userId,
+        username: '',
+        display_name: '',
+        avatar_url: null,
+        bio: null,
+        created_at: null,
+        cached_at: new Date().toISOString(),
+        face_descriptor: descriptor,
+        face_lock_enabled: enabled,
+      });
+    }
+  }
+
+  async getFaceLockDataLocally(userId: string): Promise<{ descriptor: number[] | null; enabled: boolean } | null> {
+    const profile = await this.profiles.get(userId);
+    if (!profile) return null;
+    return {
+      descriptor: profile.face_descriptor ?? null,
+      enabled: !!profile.face_lock_enabled,
+    };
   }
 }
 

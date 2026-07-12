@@ -39,6 +39,18 @@ export function LockedChatsPanel({ theme, onClose, onSelectChat }: LockedChatsPa
   // locked-chats vault rather than general profile fields.
   const secureProfile = profile as any;
 
+  const [localFaceDescriptor, setLocalFaceDescriptor] = useState<number[] | null>(null);
+  useEffect(() => {
+    if (!user?.id) return;
+    localDB.getFaceLockDataLocally(user.id).then((cached) => {
+      if (cached?.descriptor) setLocalFaceDescriptor(cached.descriptor);
+    });
+  }, [user?.id]);
+
+  // Local cache first (instant, works offline) — falls back to whatever
+  // AuthContext's profile currently has if nothing's cached locally yet.
+  const effectiveFaceDescriptor = localFaceDescriptor ?? secureProfile?.face_descriptor;
+
   function handleOpenLockedChat(chatId: string) {
     const securityType = secureProfile?.chat_security_type || 'none';
 
@@ -49,7 +61,7 @@ export function LockedChatsPanel({ theme, onClose, onSelectChat }: LockedChatsPa
       return;
     }
 
-    if (securityType === 'biometric' && secureProfile?.face_descriptor) {
+    if (securityType === 'biometric' && effectiveFaceDescriptor) {
       // Reuse the same registered face as the app lock — one registration,
       // both places, rather than a second separate enrollment flow.
       setVerifyingChatId(chatId);
@@ -282,7 +294,7 @@ export function LockedChatsPanel({ theme, onClose, onSelectChat }: LockedChatsPa
         <StrictLock
           mode="verify"
           userId={user.id}
-          savedDescriptor={secureProfile?.face_descriptor}
+          savedDescriptor={effectiveFaceDescriptor}
           onSaveDescriptor={async () => {}} // not used in verify mode
           onUnlock={() => {
             const chatId = verifyingChatId;

@@ -3,6 +3,7 @@ import * as faceapi from 'face-api.js';
 import { Lock, Smile, AlertCircle, ShieldCheck, UserPlus } from 'lucide-react';
 import { PermissionManager } from '../services/PermissionManager';
 import { useNotify } from '../contexts/NotificationContext';
+import { preloadFaceModels } from '../lib/faceModels';
 
 interface StrictLockProps {
   onUnlock: () => void;
@@ -40,14 +41,12 @@ export const StrictLock = ({
 
   useEffect(() => {
     const loadModels = async () => {
-      const MODEL_URL = 'https://justadudewhohacks.github.io/face-api.js/models';
       try {
-        await Promise.all([
-          faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
-          faceapi.nets.faceExpressionNet.loadFromUri(MODEL_URL),
-          faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
-          faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL)
-        ]);
+        // Shared with the rest of the app — if App.tsx already started this
+        // in the background when the app opened, this just picks up that
+        // same in-flight (or already-finished) load instead of starting a
+        // second one from a third-party URL.
+        await preloadFaceModels();
         setIsModelLoaded(true);
         startCamera();
       } catch (err) {
