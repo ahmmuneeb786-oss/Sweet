@@ -3,6 +3,7 @@ import { useAuth, AuthProvider } from './contexts/AuthContext';
 import { NotificationProvider, useNotify } from './contexts/NotificationContext';
 import { ConfirmProvider } from './contexts/ConfirmContext';
 import { PerformanceProvider } from './contexts/PerformanceContext';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { Auth } from './pages/Auth';
 import { Dashboard } from './pages/Dashboard';
 import { initializeDictionary } from './predictionService';
@@ -568,14 +569,16 @@ if (loading || profileSyncLoading) {
 
 export default function App() {
   return (
-    <PerformanceProvider>
-      <NotificationProvider>
-        <ConfirmProvider>
-          <AuthProvider>
-            <AppContent />
-          </AuthProvider>
-        </ConfirmProvider>
-      </NotificationProvider>
-    </PerformanceProvider>
+    <ErrorBoundary>
+      <PerformanceProvider>
+        <NotificationProvider>
+          <ConfirmProvider>
+            <AuthProvider>
+              <AppContent />
+            </AuthProvider>
+          </ConfirmProvider>
+        </NotificationProvider>
+      </PerformanceProvider>
+    </ErrorBoundary>
   );
 }

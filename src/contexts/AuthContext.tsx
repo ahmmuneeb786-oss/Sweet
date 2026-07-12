@@ -21,10 +21,13 @@ interface AuthContextType {
   profile: Profile | null;
   session: Session | null;
   loading: boolean;
-  signUp: (email: string, password: string, username: string, displayName: string) => Promise<{
+  signUp: (email: string, password: string) => Promise<{
     data: any;
     error: Error | null 
 }>;
+  verifySignupOtp: (email: string, token: string) => Promise<{ data: any; error: Error | null }>;
+  resendSignupOtp: (email: string) => Promise<{ error: Error | null }>;
+  completeProfileSetup: (username: string, displayName: string) => Promise<{ error: Error | null }>;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
   updateProfile: (updates: Partial<Profile>) => Promise<{ error: Error | null }>;
@@ -118,24 +121,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  async function signUp(email: string, password: string, username: string, displayName: string) {
+  // Phase 1: create the auth account only. With email confirmation enabled,
+  // this does NOT return a session — no writes to `profiles`/etc. can happen
+  // yet, since there's no authenticated JWT for RLS to check against.
+  async function signUp(email: string, password: string) {
     try {
-      const lowerUsername = username.toLowerCase();
-
-      if (!/^[A-Za-z0-9_-]+$/.test(lowerUsername)) {
-        return { data: null, error: new Error('Username can only contain A-Z, a-z, 0-9, - and _') };
-      }
-
-      const { data: existingUser } = await supabase
-        .from('profiles')
-        .select('username')
-        .eq('username', lowerUsername)
-        .maybeSingle();
-
-      if (existingUser) {
-        return { data: null, error: new Error('Username already taken') };
-      }
-
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email,
         password,
@@ -144,14 +134,72 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (authError) throw authError;
       if (!authData.user) throw new Error('Failed to create user');
 
+      return { data: authData, error: null };
+    } catch (error) {
+      return { data: null, error: error as Error };
+    }
+  }
+
+  // Phase 2: verify the 6-digit code the user received by email. On
+  // success this establishes a real session — onAuthStateChange picks it
+  // up automatically (fires SIGNED_IN), no manual state wiring needed here.
+  async function verifySignupOtp(email: string, token: string) {
+    try {
+      const { data, error } = await supabase.auth.verifyOtp({ email, token, type: 'signup' });
+      if (error) throw error;
+      return { data, error: null };
+    } catch (error) {
+      return { data: null, error: error as Error };
+    }
+  }
+
+  async function resendSignupOtp(email: string) {
+    try {
+      const { error } = await supabase.auth.resend({ type: 'signup', email });
+      if (error) throw error;
+      return { error: null };
+    } catch (error) {
+      return { error: error as Error };
+    }
+  }
+
+  // Phase 3: only runs once verifySignupOtp succeeded, so a real session
+  // exists and these inserts are properly authenticated for RLS.
+  async function completeProfileSetup(username: string, displayName: string) {
+    try {
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (!authUser) throw new Error('No authenticated session found. Please try signing in.');
+
+      const lowerUsername = username.toLowerCase().trim();
+
+      if (!/^[A-Za-z0-9_-]+$/.test(lowerUsername)) {
+        throw new Error('Username can only contain A-Z, a-z, 0-9, - and _');
+      }
+
+      // Re-check availability here too — the live check in the signup form
+      // only guards against collisions at the moment of typing; this closes
+      // the (rare) gap where someone else grabs the same name in the few
+      // minutes it takes to receive and enter the OTP code.
+      const { data: existingUser } = await supabase
+        .from('profiles')
+        .select('username')
+        .eq('username', lowerUsername)
+        .maybeSingle();
+
+      if (existingUser) {
+        throw new Error('That username was just taken — please choose another and try again.');
+      }
+
       const { error: profileError } = await supabase
         .from('profiles')
         .insert({
-          id: authData.user.id,
+          id: authUser.id,
           username: lowerUsername,
-          display_name: displayName,
+          display_name: displayName.trim(),
           bio: '',
-          is_online: true
+          is_online: true,
+          theme: 'sweet',
+          face_lock_enabled: false,
         });
 
       if (profileError) throw profileError;
@@ -159,7 +207,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { error: privacyError } = await supabase
         .from('privacy_settings')
         .insert({
-          user_id: authData.user.id
+          user_id: authUser.id
         });
 
       if (privacyError) throw privacyError;
@@ -167,25 +215,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { error: selfChatError } = await supabase
         .from('chats')
         .insert({
-          id: `self-${authData.user.id}`,
+          id: `self-${authUser.id}`,
           type: 'direct',
           name: 'Saved Messages',
-          created_by: authData.user.id
+          created_by: authUser.id
         });
 
       if (!selfChatError) {
         await supabase
           .from('chat_participants')
           .insert({
-            chat_id: `self-${authData.user.id}`,
-            user_id: authData.user.id,
+            chat_id: `self-${authUser.id}`,
+            user_id: authUser.id,
             role: 'admin'
           });
       }
 
-      return { data: authData.user, error: null };
+      return { error: null };
     } catch (error) {
-      return { data: null, error: error as Error };
+      return { error: error as Error };
     }
   }
 
@@ -276,6 +324,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     session,
     loading,
     signUp,
+    verifySignupOtp,
+    resendSignupOtp,
+    completeProfileSetup,
     signIn,
     signOut,
     updateProfile

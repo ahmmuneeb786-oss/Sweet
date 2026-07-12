@@ -54,7 +54,7 @@ export function MobileDashboard({ theme, setTheme, onOpenGifPanel, myGifs, setMy
   }, [user?.id]);
 
   return (
-    <div className={`h-[100dvh] w-full max-w-full overflow-x-hidden overflow-y-hidden flex flex-col relative ${bgClass}`}>
+    <div className={`min-h-screen h-[100dvh] w-full max-w-full overflow-x-hidden overflow-y-hidden flex flex-col relative ${bgClass}`}>
       {theme === 'sweet' && <FloatingHearts />}
       {(showProfile || showFriends || showSettings || showCreateChat) && (
         <div className="fixed inset-0 z-[100] w-full h-full">
