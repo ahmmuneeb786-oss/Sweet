@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import * as faceapi from 'face-api.js';
 import { Lock, Smile, AlertCircle, ShieldCheck, UserPlus } from 'lucide-react';
+import { PermissionManager } from '../services/PermissionManager';
+import { useNotify } from '../contexts/NotificationContext';
 
 interface StrictLockProps {
   onUnlock: () => void;
@@ -28,6 +30,7 @@ export const StrictLock = ({
   onSignOut,
   onCancel
 }: StrictLockProps) => {
+  const { showError } = useNotify();
   const videoRef = useRef<HTMLVideoElement>(null);
   const detectionIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [isModelLoaded, setIsModelLoaded] = useState(false);
@@ -68,6 +71,27 @@ export const StrictLock = ({
   }, []);
 
   const startCamera = async () => {
+    // Route through PermissionManager instead of calling getUserMedia
+    // directly — this checks the CURRENT status first, so an already-denied
+    // permission gets a clear, actionable message instead of just failing.
+    // If status is genuinely undecided ('prompt'), this is what actually
+    // triggers the browser's native permission dialog — that's simply how
+    // getUserMedia works, PermissionManager can't force a prompt any other way.
+    const granted = await PermissionManager.requestPermission('camera');
+
+    if (!granted) {
+      const status = await PermissionManager.checkPermission('camera');
+      if (status === 'denied') {
+        setFeedback('Camera access is blocked');
+        showError('Camera access is blocked for this site. Enable it in your browser\'s site settings, then reload.');
+      } else {
+        setFeedback('Camera access denied');
+        showError('Camera access is needed for face verification.');
+      }
+      setErrorState(true);
+      return;
+    }
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ 
         video: { 
@@ -84,6 +108,7 @@ export const StrictLock = ({
     } catch (err) {
       console.error("Camera Error:", err);
       setFeedback('Camera access denied');
+      showError('Could not start the camera. Please try again.');
       setErrorState(true);
     }
   };

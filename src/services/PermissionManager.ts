@@ -33,7 +33,9 @@ class PermissionManagerService {
     const currentStatus = await this.checkPermission(type);
     if (currentStatus === 'granted') return true;
     if (currentStatus === 'denied') {
-      alert(`Uh oh! It looks like ${type} access is blocked. Please check your device settings to turn it back on! 💕`);
+      // Deliberately no alert() here — a service class shouldn't own UI.
+      // The caller checks this false return and shows its own message via
+      // the shared toast system (see StrictLock's use of this).
       return false;
     }
 

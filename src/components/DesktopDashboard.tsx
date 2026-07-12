@@ -192,21 +192,6 @@ export function DesktopDashboard({ theme, setTheme, onOpenGifPanel, myGifs, setM
           }}
         />
       )}
-{/* 4. SETTINGS MODAL */}
-      {showSettings && (
-        <Settings
-          user={user}
-          theme={theme}
-          setTheme={setTheme}
-          faceLockEnabled={faceLockEnabled}
-          setFaceLockEnabled={setFaceLockEnabled}
-          isFaceRegistered={!!profile?.face_descriptor}
-          onRegisterFace={() => {}}
-          savedDescriptor={profile?.face_descriptor || null}
-          onClose={() => setShowSettings(false)}
-          profile={profile}
-        />
-      )}
 
       {/* 5. LOCKED CHATS SIDEBAR PANEL 🔒 */}
       {showLockedPanel && (

@@ -112,7 +112,10 @@ function AppContent() {
   const [mailStage, setMailStage] = useState<'box-arrival' | 'box-idle' | 'envelope-reveal' | 'letter-unfold'>('box-arrival');
   const [faceLockEnabled, setFaceLockEnabled] = useState(false);
   const [profileSyncLoading, setProfileSyncLoading] = useState(true);
-  const [isAppLocked, setIsAppLocked] = useState(true);
+  // isAppLocked only ever becomes true from a confirmed profile row that
+  // explicitly has face_lock_enabled — never as a default, never as a
+  // fail-safe guess. See the fetchFaceDescriptor effect below for why.
+  const [isAppLocked, setIsAppLocked] = useState(false);
   const chatsReady = useChatsReady();
   const [readyTimedOut, setReadyTimedOut] = useState(false);
 
@@ -151,29 +154,47 @@ function AppContent() {
 
     try {
       setProfileSyncLoading(true);
+      // maybeSingle(), not single(): right after a fresh signup, a session
+      // can exist for a moment before the profile row has actually finished
+      // being inserted (completeProfileSetup runs as a separate step after
+      // the session is created). single() throws when no row is found yet,
+      // which is exactly what was locking brand-new accounts — with no face
+      // ever registered — into an unpassable scanner. maybeSingle() just
+      // returns null in that case instead, which we treat as "not locked"
+      // below, since a user with no profile yet can't have this enabled.
       const { data, error } = await supabase
         .from('profiles')
         .select('face_descriptor, face_lock_enabled')
         .eq('id', user.id)
-        .single();
+        .maybeSingle();
 
       if (error) throw error;
 
-      if (data) {
-        if (data.face_descriptor) {
+      if (data?.face_descriptor) {
         setSavedDescriptor(data.face_descriptor);
         setIsFaceRegistered(true);
       }
-      setFaceLockEnabled(!!data.face_lock_enabled);
-      setIsAppLocked(!!data.face_lock_enabled);
-   }
-    if (!data.face_lock_enabled) {
-      setIsAppLocked(false);
-    }
+
+      setFaceLockEnabled(!!data?.face_lock_enabled);
+
+      // isAppLocked only ever becomes true here, from a confirmed row that
+      // explicitly has it enabled — never as a default, never as a
+      // fail-safe guess. This is what actually fixes the flash for
+      // everyone: the old code started locked by default and had to
+      // "correct itself" back to false on every load for the ~everyone who
+      // never turned this on. There's no real trade-off in dropping that
+      // default — this whole check already runs behind the blocking splash
+      // screen (profileSyncLoading), so by the time anything renders, this
+      // has already resolved to the real value either way.
+      setIsAppLocked(!!data?.face_lock_enabled);
     } catch (err) {
-      // Fail-safe, not fail-open: if we can't confirm whether face lock is
-      // enabled (network error, etc.), stay locked rather than letting
-      // someone in because a status check happened to fail.
+      // A genuine error (network failure, etc.) — as opposed to "no row
+      // found yet", which is handled above and isn't an error at all.
+      // Deliberately does NOT lock the app here: for a returning user with
+      // face lock already on, this is a rare, brief false negative (they
+      // just see their normal chats once instead of the scanner) — a much
+      // better trade than the alternative, which was reliably trapping
+      // brand-new users with no face registered into an unpassable screen.
       console.error('Failed to check face lock status:', err);
     }
     finally {
@@ -228,6 +249,12 @@ useEffect(() => {
     .eq('id', userId);
 
   if (error) throw error;
+
+  // Without this, savedDescriptor stayed null in memory until the next
+  // full reload — meaning toggling face-lock off then on again in the
+  // SAME session would incorrectly think no face was registered yet and
+  // re-open the scanner, even though the database already had it.
+  setSavedDescriptor(descriptor);
   };
 
   // --- GIF LOGIC ---
@@ -424,17 +451,21 @@ if (loading || profileSyncLoading) {
 
   return (
     <div className={theme === 'dark' ? 'dark' : theme === 'sweet' ? 'sweet-theme' : ''}>
-      {/* Lock screen always wins: if the app is locked, that's the only
-          thing that should be visible — showing "Loading your chats..."
-          on top of (or racing against) the lock screen was the flash. */}
-      {!showLetter && isAppLocked ? (
+      {/* Lock screen always wins over the chats-loading splash — showing
+          "Loading your chats..." on top of (or racing against) a lock
+          screen was the original flash bug. Overlay, not a blocking early
+          return: Dashboard/ChatList still mount and load underneath,
+          otherwise markChatsReady() would never fire and every load would
+          sit through the full readyTimedOut window, every single time. */}
+      {isAppLocked ? (
         <StrictLock
-        onUnlock={() => setIsAppLocked(false)}
-        mode="verify"
-        userId={user.id}
-        onSaveDescriptor={updateFaceDescriptor}
-        savedDescriptor={savedDescriptor}
-        onSignOut={signOut}/>
+          onUnlock={() => setIsAppLocked(false)}
+          mode="verify"
+          userId={user.id}
+          onSaveDescriptor={updateFaceDescriptor}
+          savedDescriptor={savedDescriptor}
+          onSignOut={signOut}
+        />
       ) : (
         !chatsReady && !readyTimedOut && (
           <SplashScreen message="Loading your chats..." overlay />
