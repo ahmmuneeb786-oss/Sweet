@@ -168,8 +168,15 @@ function AppContent() {
       }
       setFaceLockEnabled(cached.enabled);
       setIsAppLocked(cached.enabled);
+
+      if (cached.enabled) {
+        // Don't release the splash yet — StrictLock (face-api.js) still
+        // needs a beat to actually load. Releasing here let Dashboard
+        // paint underneath first, which is exactly the ~2s flash. Hold a
+        // little longer so the scanner is ready the instant the splash lifts.
+        await preloadFaceModels();
+      }
       setProfileSyncLoading(false);
-      if (cached.enabled) preloadFaceModels(); // quietly start downloading in the background
     }
 
     // Then quietly reconcile with the server — catches face-lock being
@@ -217,7 +224,15 @@ function AppContent() {
       // covers face-lock being toggled from a different device.
       await localDB.saveFaceLockDataLocally(user.id, descriptor, enabled);
 
-      if (enabled) preloadFaceModels();
+      if (enabled) {
+        // Same reasoning as the cached branch above: don't let `finally`
+        // release the splash until models are actually ready. This branch
+        // was the other half of the bug — it fired preloadFaceModels()
+        // without awaiting it, so the splash still closed early for anyone
+        // whose local cache came back empty (new device, cleared storage,
+        // or a write that hadn't landed yet).
+        await preloadFaceModels();
+      }
     } catch (err) {
       // A genuine error (network failure, etc.) — as opposed to "no row
       // found yet", which is handled above and isn't an error at all. If
