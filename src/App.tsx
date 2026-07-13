@@ -155,35 +155,35 @@ function AppContent() {
     }
 
     // Local first — instant, and works fully offline. This is what makes
-    // face-lock actually usable without a connection: both the descriptor
-    // AND whether it's enabled come from the device, not a network round
-    // trip, so a genuinely offline app open still locks (and unlocks)
-    // correctly instead of silently bypassing the lock because a network
-    // check failed.
+    // face-lock actually usable without a connection.
+    //
+    // Deliberately asymmetric: we only fast-release the splash when cache
+    // says LOCKED — that's safe to trust immediately (worst case, a stale
+    // "locked" shows the scanner once for someone who actually disabled it
+    // elsewhere, harmless). "Unlocked" is exactly the value that can be
+    // wrong or stale (e.g. corrupted by an unrelated cache write, which is
+    // what caused this bug the first time), so we deliberately do NOT fast
+    // release on it — we wait for server confirmation instead. Fail-locked,
+    // not fail-open.
     const cached = await localDB.getFaceLockDataLocally(user.id);
-    if (cached) {
+    if (cached?.enabled) {
       if (cached.descriptor) {
         setSavedDescriptor(cached.descriptor);
         setIsFaceRegistered(true);
       }
-      setFaceLockEnabled(cached.enabled);
-      setIsAppLocked(cached.enabled);
-
-      if (cached.enabled) {
-        // Don't release the splash yet — StrictLock (face-api.js) still
-        // needs a beat to actually load. Releasing here let Dashboard
-        // paint underneath first, which is exactly the ~2s flash. Hold a
-        // little longer so the scanner is ready the instant the splash lifts.
-        await preloadFaceModels();
-      }
+      setFaceLockEnabled(true);
+      setIsAppLocked(true);
+      // Still need models ready before it's safe to show the scanner.
+      await preloadFaceModels();
       setProfileSyncLoading(false);
     }
 
-    // Then quietly reconcile with the server — catches face-lock being
-    // turned on/off from a different device, or a first-ever login on this
-    // one where there's nothing cached yet.
+    // Then quietly reconcile with the server — this is the ONLY path that
+    // ever releases the splash when the cache said "unlocked" (or there
+    // was no cache at all), and it's also what corrects a stale/corrupted
+    // "unlocked" cache before anything gets a chance to render.
     try {
-      if (!cached) setProfileSyncLoading(true);
+      if (!cached?.enabled) setProfileSyncLoading(true);
       // maybeSingle(), not single(): right after a fresh signup, a session
       // can exist for a moment before the profile row has actually finished
       // being inserted (completeProfileSetup runs as a separate step after

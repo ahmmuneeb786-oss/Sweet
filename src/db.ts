@@ -107,6 +107,13 @@ class OfflineChatDatabase extends Dexie {
   // something here worth pushing up on reconnect. Omit it (or pass false)
   // when just mirroring the server's own data locally.
   async saveUserProfile(userId: string, profileData: any, options?: { pendingSync?: boolean }) {
+    // put() REPLACES the entire record — without reading the existing row
+    // first, any save that doesn't explicitly pass face_descriptor/
+    // face_lock_enabled (which is every caller except the dedicated face
+    // helpers below) would silently wipe them back to nothing. This was
+    // firing on essentially every app load via ChatList's hydrateMyProfile,
+    // which is what caused the face-lock splash timing bug.
+    const existing = await this.profiles.get(userId);
     return await this.profiles.put({
       id: userId,
       username: profileData.username || '',
@@ -115,7 +122,9 @@ class OfflineChatDatabase extends Dexie {
       bio: profileData.bio || null,
       created_at: profileData.created_at || null,
       cached_at: new Date().toISOString(),
-      pending_sync: options?.pendingSync ?? false
+      pending_sync: options?.pendingSync ?? false,
+      face_descriptor: existing?.face_descriptor ?? null,
+      face_lock_enabled: existing?.face_lock_enabled ?? false,
     });
   }
 
