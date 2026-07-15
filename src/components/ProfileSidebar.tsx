@@ -2,9 +2,10 @@ import { useState, useEffect, useRef } from 'react';
 import { X, Camera, Save, CreditCard as Edit3, CloudOff } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
-import { localDB } from '../db'; // 🌸 Integrated our fast offline Dexie store
+import { localDB } from '../db';
 import { subscribeToProfileSyncEvents } from '../hooks/useOfflineSync';
 import { useNotify } from '../contexts/NotificationContext';
+import { ImageViewerModal } from './ImageViewerModal';
 
 interface ProfileSidebarProps {
   onClose: () => void;
@@ -27,6 +28,7 @@ export function ProfileSidebar({ onClose, theme, user }: ProfileSidebarProps) {
 
   // Reference to the hidden input
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [showImageViewer, setShowImageViewer] = useState(false);
 
   // Monitor network state adjustments seamlessly
   useEffect(() => {
@@ -269,28 +271,40 @@ export function ProfileSidebar({ onClose, theme, user }: ProfileSidebarProps) {
         {/* CONTAINER CONTENT */}
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
           <div className="flex flex-col items-center space-y-4">
-            <div className="relative group">
+            <div className="relative">
               {avatarUrl ? (
                 <img
                   src={avatarUrl}
                   alt={displayName}
-                  className="w-32 h-32 rounded-full object-cover border-4 border-pink-200 shadow-md"
+                  onClick={() => setShowImageViewer(true)}
+                  className="w-32 h-32 rounded-full object-cover border-4 border-pink-200 shadow-md cursor-pointer active:scale-95 transition-transform"
                 />
               ) : (
-                <div className="w-32 h-32 rounded-full bg-gradient-to-br from-pink-400 to-purple-500 flex items-center justify-center text-white font-bold text-4xl uppercase shadow-lg">
+                <div
+                  onClick={() => avatarUrl && setShowImageViewer(true)}
+                  className="w-32 h-32 rounded-full bg-gradient-to-br from-pink-400 to-purple-500 flex items-center justify-center text-white font-bold text-4xl uppercase shadow-lg"
+                >
                   {displayName?.[0] || username?.[0] || 'U'}
                 </div>
               )}
-              
+
               {isEditing && (
-                <button 
+                <button
                   onClick={() => fileInputRef.current?.click()}
-                  className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                  className="absolute bottom-1 right-1 w-10 h-10 rounded-full bg-pink-500 hover:bg-pink-600 border-4 border-white shadow-lg flex items-center justify-center transition-colors active:scale-90"
                 >
-                  <Camera className="w-8 h-8 text-white" />
+                  <Camera className="w-4 h-4 text-white" />
                 </button>
               )}
             </div>
+
+            {showImageViewer && avatarUrl && (
+              <ImageViewerModal
+                src={avatarUrl}
+                alt={displayName}
+                onClose={() => setShowImageViewer(false)}
+              />
+            )}
 
             {!isEditing && (
               <button

@@ -5,6 +5,7 @@ import LocationPicker from './LocationPicker';
 import { supabase } from '../lib/supabase';
 import { Message, type Reaction, type MessageReactionState } from './Message';
 import { ChatMenu } from './ChatMenu';
+import { UserProfileView } from './UserProfileView';
 import { SweetKeyboard } from './SweetKeyboard';
 import { learnFromMessage } from '../predictionService';
 import { GifItem } from '../App';
@@ -89,6 +90,7 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
   const [newMessage, setNewMessage] = useState('');
   const [isOtherTyping, setIsOtherTyping] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [showProfileView, setShowProfileView] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   // Throttle typing broadcasts — fire at most once per 2500ms
@@ -467,27 +469,39 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
   async function loadMessages() {
     if (!chatInfo?.id) return;
 
+    // Loading every message ever sent, unbounded, was the real source of lag
+    // in long-running chats: unbounded network payload AND unbounded DOM
+    // nodes, with every small state change (new message, reaction, typing
+    // indicator) forcing React to re-reconcile the entire history instead of
+    // a bounded recent window. Capping to the most recent page fixes both at
+    // once, no virtualization library needed for a window this size.
+    const MESSAGE_PAGE_SIZE = 60;
+
     try {
       const localMessages = await localDB.messages
         .where('chat_id')
         .equals(chatInfo.id)
         .sortBy('created_at');
 
-      if (localMessages.length > 0) {
-        setMessages(localMessages);
-        loadAllReactions(localMessages);
+      const recentLocal = localMessages.slice(-MESSAGE_PAGE_SIZE);
+
+      if (recentLocal.length > 0) {
+        setMessages(recentLocal);
+        loadAllReactions(recentLocal);
       }
 
       const { data, error } = await supabase
         .from('messages')
         .select('*, profiles(display_name, avatar_url, username)')
         .eq('chat_id', chatInfo.id)
-        .order('created_at', { ascending: true });
+        .order('created_at', { ascending: false })
+        .limit(MESSAGE_PAGE_SIZE);
 
       if (!error && data) {
-        setMessages(data);
-        await localDB.messages.bulkPut(data);
-        loadAllReactions(data);
+        const recent = [...data].reverse(); // back to ascending for display
+        setMessages(recent);
+        await localDB.messages.bulkPut(recent);
+        loadAllReactions(recent);
       }
     } catch (error) {
       console.error('Error loading messages offline:', error);
@@ -1075,7 +1089,10 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
             </button>
 
             {chatInfo.type === 'direct' && chatInfo.otherUser ? (
-              <>
+              <button
+                onClick={() => setShowProfileView(true)}
+                className="flex items-center gap-2 md:gap-3 min-w-0 text-left rounded-xl hover:bg-white/10 transition-colors px-1 -mx-1 py-1"
+              >
                 <div className="relative">
                   {chatInfo.otherUser.avatar_url ? (
                     <img
@@ -1104,7 +1121,7 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
                     )}
                   </p>
                 </div>
-              </>
+              </button>
             ) : (
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center text-white border-2 border-white">
@@ -1129,7 +1146,7 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
               className="hidden sm:flex p-2 hover:bg-white/20 backdrop-blur-sm rounded-full transition-colors">
               <Video className="w-5 h-5 text-white" />
             </button>
-            <ChatMenu chatId={chatInfo.id} onClose={() => { }} theme={theme} />
+            <ChatMenu chatId={chatInfo.id} onClose={() => { }} theme={theme} onViewProfile={() => setShowProfileView(true)} />
           </div>
         </div>
       </div>
@@ -1444,6 +1461,14 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
               content: `__CALL_SIGNAL__:${activeCall.type}:ended:${user?.id}`, type: 'text'
             });
           }}
+        />
+      )}
+
+      {showProfileView && chatInfo?.otherUser && (
+        <UserProfileView
+          userId={chatInfo.otherUser.id}
+          theme={theme}
+          onClose={() => setShowProfileView(false)}
         />
       )}
     </div>

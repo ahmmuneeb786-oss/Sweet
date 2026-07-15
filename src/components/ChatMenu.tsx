@@ -11,9 +11,10 @@ interface ChatMenuProps {
   theme: 'light' | 'dark' | 'sweet'
   chatId: string;
   onClose: () => void;
+  onViewProfile?: () => void;
 }
 
-export function ChatMenu({ theme, chatId, onClose }: ChatMenuProps) {
+export function ChatMenu({ theme, chatId, onClose, onViewProfile }: ChatMenuProps) {
   const { user } = useAuth();
   const { showSuccess, showError } = useNotify();
   const confirm = useConfirm();
@@ -146,7 +147,7 @@ export function ChatMenu({ theme, chatId, onClose }: ChatMenuProps) {
 
   const menuItems = [
     { icon: Search, label: 'Search Messages', action: () => setShowSearch(true) },
-    { icon: Eye, label: 'View Profile', action: () => {} },
+    { icon: Eye, label: 'View Profile', action: () => onViewProfile?.() },
     { icon: muteStatus ? BellOff : Bell, label: muteStatus ? 'Unmute Chat' : 'Mute Chat', action: () => {} },
     { icon: isLocked ? Unlock : Lock, 
       label: isLocked ? 'Unlock Chat' : 'Lock Chat', 
