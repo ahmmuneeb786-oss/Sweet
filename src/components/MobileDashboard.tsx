@@ -10,6 +10,7 @@ import { GifItem } from '../App';
 import { StrictLock } from './StrictLock';
 import { PermissionManager } from '../services/PermissionManager';
 import { LockedChatsPanel } from './LockedChatsPanel';
+import { useBackableState } from '../hooks/useBackableState';
 
 interface MobileDashboardProps {
   onOpenGifPanel: () => void;
@@ -35,6 +36,13 @@ export function MobileDashboard({ theme, setTheme, onOpenGifPanel, myGifs, setMy
   const [faceLockEnabled, setFaceLockEnabled] = useState(false);
   const [showLockedPanel, setShowLockedPanel] = useState(false);
   const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
+
+  useBackableState(!!selectedChatId, () => setSelectedChatId(null));
+  useBackableState(showProfile, () => setShowProfile(false));
+  useBackableState(showFriends, () => setShowFriends(false));
+  useBackableState(showSettings, () => setShowSettings(false));
+  useBackableState(showCreateChat, () => setShowCreateChat(false));
+  useBackableState(showLockedPanel, () => setShowLockedPanel(false));
 
   // Helper for background colors based on theme
   const bgClass = 

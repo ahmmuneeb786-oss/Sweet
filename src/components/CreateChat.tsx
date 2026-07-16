@@ -3,6 +3,8 @@ import { X, Search, MessageCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { localDB } from '../db';
+import { useNotify } from '../contexts/NotificationContext';
+import { usePresence } from '../hooks/usePresence';
 
 interface CreateChatProps {
   theme: 'light' | 'dark' | 'sweet';
@@ -20,6 +22,8 @@ interface Friend {
 
 export function CreateChat({ theme, onClose, onChatCreated }: CreateChatProps) {
   const { user } = useAuth();
+  const { showError } = useNotify();
+  const { isOnline } = usePresence(user?.id);
   const [friends, setFriends] = useState<Friend[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(false);
@@ -142,22 +146,22 @@ export function CreateChat({ theme, onClose, onChatCreated }: CreateChatProps) {
         existingChat = newChat;
       }
 
-      // 🛑 STEP B: PASTE THIS BLOCK RIGHT HERE (Before your view callbacks execute)
-      // This tells your phone's memory to cache the conversation layout row
-      await (localDB.chats as any).put({
+      // This tells your phone's memory to cache the conversation layout row.
+      // Flattened to match LocalChat — a nested `otherUser` object here
+      // silently corrupts this exact cache, same bug pattern found and
+      // fixed in ChatWindow/ChatList/LockedChatsPanel earlier.
+      await localDB.chats.put({
         id: consistentRoomId,
         type: 'direct',
         name: existingChat.name || (targetedFriend ? targetedFriend.display_name : 'Chat'),
+        avatar_url: existingChat.avatar_url || targetedFriend?.avatar_url || null,
         theme: existingChat.theme || 'light',
-        last_message_content: "No messages yet... 👋", 
+        last_message_content: "No messages yet... 👋",
         last_message_time: new Date().toISOString(),
-        otherUser: targetedFriend ? {
-          id: targetedFriend.id,
-          display_name: targetedFriend.display_name,
-          avatar_url: targetedFriend.avatar_url,
-          is_online: targetedFriend.is_online,
-          last_seen: new Date().toISOString()
-        } : undefined
+        other_user_id: targetedFriend?.id,
+        other_user_name: targetedFriend?.display_name,
+        other_user_avatar: targetedFriend?.avatar_url,
+        other_user_last_seen: new Date().toISOString(),
       });
 
       // This is your original code that follows right after:
@@ -165,6 +169,7 @@ export function CreateChat({ theme, onClose, onChatCreated }: CreateChatProps) {
       onClose();
     } catch (error) {
       console.error('Error creating chat:', error);
+      showError("Couldn't start this chat. Please try again.");
     }
   }
 
@@ -242,7 +247,7 @@ export function CreateChat({ theme, onClose, onChatCreated }: CreateChatProps) {
         {friend.display_name[0]}
       </div>
     )}
-    {friend.is_online && (
+    {isOnline(friend.id) && (
       <div className={`absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 rounded-full ${
         theme === 'sweet' ? 'border-[#FFF0F5]' : 'border-white'
       }`} />

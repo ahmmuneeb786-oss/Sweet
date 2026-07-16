@@ -12,6 +12,7 @@ import { GifItem } from '../App';
 import { localDB } from '../db';
 import { CallOverlay } from './CallOverlay';
 import { usePresence } from '../hooks/usePresence';
+import { useBackableState } from '../hooks/useBackableState';
 import { queuePendingMessage, retryPendingMessage, subscribeToSyncEvents } from '../hooks/useOfflineSync';
 import { useNotify } from '../contexts/NotificationContext';
 
@@ -91,6 +92,7 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
   const [isOtherTyping, setIsOtherTyping] = useState(false);
   const [loading, setLoading] = useState(true);
   const [showProfileView, setShowProfileView] = useState(false);
+  useBackableState(showProfileView, () => setShowProfileView(false));
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   // Throttle typing broadcasts — fire at most once per 2500ms

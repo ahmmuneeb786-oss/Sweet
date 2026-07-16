@@ -2,10 +2,11 @@ import { useState, useEffect, useRef } from 'react';
 import { X, Camera, Save, CreditCard as Edit3, CloudOff } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
-import { localDB } from '../db';
+import { localDB } from '../db'; // 🌸 Integrated our fast offline Dexie store
 import { subscribeToProfileSyncEvents } from '../hooks/useOfflineSync';
 import { useNotify } from '../contexts/NotificationContext';
 import { ImageViewerModal } from './ImageViewerModal';
+import { useBackableState } from '../hooks/useBackableState';
 
 interface ProfileSidebarProps {
   onClose: () => void;
@@ -29,6 +30,7 @@ export function ProfileSidebar({ onClose, theme, user }: ProfileSidebarProps) {
   // Reference to the hidden input
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [showImageViewer, setShowImageViewer] = useState(false);
+  useBackableState(showImageViewer, () => setShowImageViewer(false));
 
   // Monitor network state adjustments seamlessly
   useEffect(() => {

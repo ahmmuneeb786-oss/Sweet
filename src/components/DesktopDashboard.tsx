@@ -10,6 +10,7 @@ import { GifItem } from '../App';
 import { StrictLock } from './StrictLock';
 import { PermissionManager } from '../services/PermissionManager';
 import { LockedChatsPanel } from './LockedChatsPanel';
+import { useBackableState } from '../hooks/useBackableState';
 
 
 interface DashboardProps {
@@ -36,6 +37,13 @@ export function DesktopDashboard({ theme, setTheme, onOpenGifPanel, myGifs, setM
   const [showLockedPanel, setShowLockedPanel] = useState(false);
   const [isRegistering, setIsRegistering] = useState(false);
   const [faceLockEnabled, setFaceLockEnabled] = useState(false);
+
+  useBackableState(!!selectedChatId, () => setSelectedChatId(null));
+  useBackableState(showProfile, () => setShowProfile(false));
+  useBackableState(showFriends, () => setShowFriends(false));
+  useBackableState(showSettings, () => setShowSettings(false));
+  useBackableState(showCreateChat, () => setShowCreateChat(false));
+  useBackableState(showLockedPanel, () => setShowLockedPanel(false));
 
   useEffect(() => {
       if (user?.id) {

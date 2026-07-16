@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 import { usePresence } from '../hooks/usePresence';
 import { ImageViewerModal } from './ImageViewerModal';
 import { usePerformance } from '../contexts/PerformanceContext';
+import { useBackableState } from '../hooks/useBackableState';
 
 interface UserProfileViewProps {
   userId: string;
@@ -42,6 +43,7 @@ export function UserProfileView({ userId, theme, onClose }: UserProfileViewProps
   const [profile, setProfile] = useState<ViewedProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [showImageViewer, setShowImageViewer] = useState(false);
+  useBackableState(showImageViewer, () => setShowImageViewer(false));
   const { isOnline } = usePresence(userId);
   const { isLowPerfMode } = usePerformance();
 
