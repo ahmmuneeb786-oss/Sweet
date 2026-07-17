@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { Paperclip, Delete, Heart, ImageIcon, MapPin, FileText, ArrowUpCircle, Clipboard, Video, Smile, Keyboard, Search, ArrowLeft, Plus, Trash2, X } from 'lucide-react';
 import { getSuggestions } from '../predictionService';
+import { usePerformance } from '../contexts/PerformanceContext';
 
 interface GifItem {
   url: string;
@@ -106,6 +107,7 @@ KeyboardMatrix.displayName = 'KeyboardMatrix';
 
 // ─── MAIN KEYBOARD WRAPPER ────────────────────────────────────────────────────
 export const SweetKeyboard = ({ onInput, onDelete, onDocsClick, newMessage, onOpenGifPanel, myGifs = [], setMyGifs }: SweetKeyboardProps) => {
+  const { isLowPerfMode } = usePerformance();
   const [shiftState, setShiftState] = useState<ShiftState>('off');
   const [showSymbols, setShowSymbols] = useState(false);
   const [showMediaBar, setShowMediaBar] = useState(false);
@@ -257,7 +259,7 @@ export const SweetKeyboard = ({ onInput, onDelete, onDocsClick, newMessage, onOp
   };
 
   return (
-    <div className="w-full bg-[#FFE4E1]/90 backdrop-blur-2xl border-t border-[#FFB6C1] p-2 pb-6 select-none transition-all duration-300">
+    <div className={`w-full bg-[#FFE4E1]/90 ${isLowPerfMode ? '' : 'backdrop-blur-2xl'} border-t border-[#FFB6C1] p-2 pb-6 select-none transition-all duration-300`}>
       <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={(e) => {
         const file = e.target.files?.[0];
         if (file) { onInput(file); setShowMediaBar(false); }
@@ -387,7 +389,7 @@ export const SweetKeyboard = ({ onInput, onDelete, onDocsClick, newMessage, onOp
                             >
                               <img src={url} className="w-full h-auto block" loading="lazy" />
                               {longPressedUrl === url && (
-                                <div className="absolute inset-0 bg-pink-500/40 backdrop-blur-[2px] flex items-center justify-center animate-in zoom-in-50">
+                                <div className={`absolute inset-0 bg-pink-500/40 ${isLowPerfMode ? '' : 'backdrop-blur-[2px]'} flex items-center justify-center animate-in zoom-in-50`}>
                                   <button onClick={(e) => { e.stopPropagation(); handleRemoveGif(url); }} className="bg-white p-2 rounded-full text-pink-600 shadow-xl scale-110 active:scale-90"><Trash2 className="w-5 h-5" /></button>
                                   <button onClick={(e) => { e.stopPropagation(); setLongPressedUrl(null); }} className="absolute top-1 right-1 bg-white/80 p-1 rounded-full text-gray-500"><X className="w-3 h-3" /></button>
                                 </div>

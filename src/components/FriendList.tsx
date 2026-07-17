@@ -3,6 +3,9 @@ import { X, Search, UserPlus, Check, X as XIcon, MessageCircle } from 'lucide-re
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { localDB } from '../db';
+import { useNotify } from '../contexts/NotificationContext';
+import { useConfirm } from '../contexts/ConfirmContext';
+import { usePresence } from '../hooks/usePresence';
 
 interface FriendListProps {
   theme: 'light' | 'dark' | 'sweet';
@@ -34,6 +37,9 @@ interface FriendRequest {
 
 export function FriendList({ theme, onClose, onSelectUser, setActiveChatId }: FriendListProps) {
   const { user } = useAuth();
+  const { showSuccess, showError } = useNotify();
+  const confirm = useConfirm();
+  const { isOnline } = usePresence(user?.id);
   const [activeTab, setActiveTab] = useState<'friends' | 'requests' | 'search'>('friends');
   const [friends, setFriends] = useState<Friend[]>([]);
   const [friendRequests, setFriendRequests] = useState<FriendRequest[]>([]);
@@ -66,14 +72,18 @@ export function FriendList({ theme, onClose, onSelectUser, setActiveChatId }: Fr
       // 1. ALWAYS LOAD LOCAL DEVICE CACHE FIRST (Instant & Works Offline!)
       const localProfiles = await localDB.profiles.toArray();
       if (localProfiles && localProfiles.length > 0) {
-        setFriends(localProfiles.map(p => ({
-          id: p.id,
-          username: p.username,
-          display_name: p.display_name,
-          avatar_url: p.avatar_url,
-          is_online: false, // Default to offline when device is offline
-          last_seen: new Date().toISOString()
-        })));
+        setFriends(
+          localProfiles
+            .filter((p) => p.id !== user.id) // own cached profile isn't a friend
+            .map((p) => ({
+              id: p.id,
+              username: p.username,
+              display_name: p.display_name,
+              avatar_url: p.avatar_url,
+              is_online: false, // Default to offline when device is offline
+              last_seen: new Date().toISOString()
+            }))
+        );
       }
 
       // 2. ONLINE REFRESH: If connected, get fresh updates from Supabase
@@ -102,9 +112,13 @@ export function FriendList({ theme, onClose, onSelectUser, setActiveChatId }: Fr
 
           setFriends(friendsList);
 
-          // 3. Keep local cache up-to-date for future offline sessions
-          // Clear old profiles tracking to prevent ghost data, then bulk save the current list
-          await localDB.profiles.clear();
+          // 3. Keep local cache up-to-date for future offline sessions.
+          // Deliberately NOT clearing the table first — profiles.clear()
+          // wipes EVERY cached profile, including the current user's own
+          // (face_descriptor/face_lock_enabled live in this same table),
+          // every single time this panel loaded online. Just upsert the
+          // current friends instead; a removed friend lingering briefly in
+          // cache is a much smaller issue than silently wiping own face data.
           for (const friend of friendsList) {
             await localDB.saveUserProfile(friend.id, {
               username: friend.username,
@@ -188,11 +202,11 @@ export function FriendList({ theme, onClose, onSelectUser, setActiveChatId }: Fr
 
       if (error) throw error;
 
-      alert("Request sent successfully!");
+      showSuccess("Request sent successfully!");
       loadFriendRequests();
     } catch (error: any) {
       console.error('Error sending friend request:', error);
-      alert(error.message || "Failed to send request");
+      showError(error.message || "Failed to send request");
     }
   }
 
@@ -216,9 +230,9 @@ export function FriendList({ theme, onClose, onSelectUser, setActiveChatId }: Fr
       await loadFriends();
       await loadFriendRequests();
 
-      alert("Friendship confirmed!");
+      showSuccess("Friendship confirmed!");
     } catch (error: any) {
-      alert("Error: " + error.message);
+      showError("Error: " + error.message);
     }
   }
 
@@ -237,6 +251,13 @@ export function FriendList({ theme, onClose, onSelectUser, setActiveChatId }: Fr
 
   async function removeFriend(friendId: string) {
     if (!user) return;
+    const confirmed = await confirm({
+      title: 'Remove friend?',
+      message: "You'll need to send a new friend request to reconnect.",
+      confirmLabel: 'Remove',
+      danger: true,
+    });
+    if (!confirmed) return;
     try {
       await supabase
         .from('friends')
@@ -247,6 +268,7 @@ export function FriendList({ theme, onClose, onSelectUser, setActiveChatId }: Fr
       loadFriends();
     } catch (error) {
       console.error('Error removing friend:', error);
+      showError("Couldn't remove this friend. Please try again.");
     }
   }
 
@@ -274,8 +296,12 @@ export function FriendList({ theme, onClose, onSelectUser, setActiveChatId }: Fr
         name: targetFriend?.display_name || 'Direct Chat',
         avatar_url: targetFriend?.avatar_url || null,
         theme: 'sweet',
-        last_message_content: "No messages yet... 👋", // Added to satisfy LocalChat requirements
-        last_message_time: new Date().toISOString()   // 🌟 FIXED: Changed from updated_at to last_message_time
+        last_message_content: "No messages yet... 👋",
+        last_message_time: new Date().toISOString(),
+        other_user_id: targetFriend?.id,
+        other_user_name: targetFriend?.display_name,
+        other_user_avatar: targetFriend?.avatar_url,
+        other_user_last_seen: targetFriend?.last_seen,
       });
 
       // Navigate into the chat window immediately

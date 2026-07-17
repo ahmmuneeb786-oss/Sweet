@@ -71,8 +71,7 @@ function formatLastSeen(lastSeenTimestamp: string | null | undefined): string {
   const now = new Date();
   const diff = now.getTime() - date.getTime();
   const diffInSeconds = Math.abs(now.getTime() - date.getTime()) / 1000;
-  if (diffInSeconds <= 60) return 'online';
-  if (diffInSeconds > 60 && diffInSeconds <= 300) return 'last seen just now';
+  if (diffInSeconds <= 300) return 'last seen just now';
   const hours = Math.floor(diff / (1000 * 60 * 60));
   const days = Math.floor(hours / 24);
   if (hours < 1) return `last seen ${Math.floor(diff / (1000 * 60))}m ago`;
@@ -1005,6 +1004,18 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
     handleSendMessage(new Event('submit') as any);
   }, [handleSendMessage]);
 
+  // The virtual keyboard writes into newMessage via pure state updates, never
+  // real keystroke events — so the textarea's native caret has nothing to
+  // track from and stops rendering/blinking. Re-focusing and explicitly
+  // placing the selection at the end after every change keeps it genuinely
+  // synced and visible, the same way it would after a real keypress.
+  useEffect(() => {
+    if (showSweetKeyboard && textareaRef.current) {
+      textareaRef.current.focus();
+      textareaRef.current.setSelectionRange(newMessage.length, newMessage.length);
+    }
+  }, [newMessage, showSweetKeyboard]);
+
   if (loading || !chatInfo) {
     return (
       <div className="flex-1 flex items-center justify-center">
@@ -1363,7 +1374,7 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
                   placeholder="Spread love..."
                   rows={1}
                   className={`w-full pl-4 pr-10 py-2.5 border rounded-2xl focus:outline-none focus:ring-2 resize-none transition-all text-sm md:text-base scrollbar-none md:scrollbar-hidden
-                    ${theme === 'sweet' ? 'bg-white border-[#FFB6C1] text-[#4B004B] focus:ring-[#FF69B4]' : 'bg-gray-50 border-gray-300 focus:ring-pink-400'}`}
+                    ${theme === 'sweet' ? 'bg-white border-[#FFB6C1] text-[#4B004B] caret-[#FF69B4] focus:ring-[#FF69B4]' : 'bg-gray-50 border-gray-300 caret-current focus:ring-pink-400'}`}
                   style={{ maxHeight: '150px', minHeight: '44px', lineHeight: '1.5' }}
                 />
                 {newMessage.length > 0 && (
