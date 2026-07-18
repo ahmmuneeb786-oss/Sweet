@@ -61,9 +61,12 @@ export interface PendingMessage {
   chat_id: string;
   sender_id: string;
   content: string | null;
-  message_type: string; // 'text' | 'image' | 'voice' | 'file' | 'video'
+  message_type: string; // 'text' | 'image' | 'voice' | 'file' | 'video' | 'gif'
   media_blob?: Blob;
   media_file_name?: string;
+  // Already-hosted media (e.g. a picked GIF) that needs no upload at all —
+  // just re-insert with this URL once we're back online.
+  media_url?: string | null;
   created_at: string;
   attempts: number;
   last_error?: string | null;

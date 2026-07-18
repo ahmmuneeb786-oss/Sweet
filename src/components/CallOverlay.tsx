@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Phone, Video, PhoneOff, Mic, MicOff, VideoOff, Volume2 } from 'lucide-react';
 
 interface CallOverlayProps {
@@ -7,6 +7,8 @@ interface CallOverlayProps {
   userName: string;
   userAvatar: string | null;
   theme: 'light' | 'dark' | 'sweet';
+  localStream: MediaStream | null;
+  remoteStream: MediaStream | null;
   onReject: () => void;
   onAccept?: () => void;
   onHangUp: () => void;
@@ -18,6 +20,8 @@ export function CallOverlay({
   userName,
   userAvatar,
   theme,
+  localStream,
+  remoteStream,
   onReject,
   onAccept,
   onHangUp,
@@ -25,6 +29,24 @@ export function CallOverlay({
   const [isMuted, setIsMuted] = useState(false);
   const [isCamOff, setIsCamOff] = useState(false);
   const [callDuration, setCallDuration] = useState(0);
+
+  const localVideoRef = useRef<HTMLVideoElement>(null);
+  const remoteVideoRef = useRef<HTMLVideoElement>(null);
+  const remoteAudioRef = useRef<HTMLAudioElement>(null);
+
+  // Bind the live MediaStreams to their elements — this is the actual
+  // audio/video transfer; everything else here is just call-state UI.
+  useEffect(() => {
+    if (localVideoRef.current) localVideoRef.current.srcObject = localStream;
+  }, [localStream]);
+
+  useEffect(() => {
+    if (remoteVideoRef.current) remoteVideoRef.current.srcObject = remoteStream;
+  }, [remoteStream]);
+
+  useEffect(() => {
+    if (remoteAudioRef.current) remoteAudioRef.current.srcObject = remoteStream;
+  }, [remoteStream]);
 
   // Simple call duration timer once connected
   useEffect(() => {
@@ -41,6 +63,18 @@ export function CallOverlay({
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
+  const handleToggleMute = () => {
+    const next = !isMuted;
+    localStream?.getAudioTracks().forEach((track) => { track.enabled = !next; });
+    setIsMuted(next);
+  };
+
+  const handleToggleCam = () => {
+    const next = !isCamOff;
+    localStream?.getVideoTracks().forEach((track) => { track.enabled = !next; });
+    setIsCamOff(next);
+  };
+
   // Dynamic backgrounds based on app theme
   const bgStyles = {
     dark: 'bg-slate-950 text-slate-100',
@@ -50,7 +84,13 @@ export function CallOverlay({
 
   return (
     <div className={`fixed inset-0 z-50 flex flex-col items-center justify-between p-8 backdrop-blur-xl bg-opacity-95 ${bgStyles[theme] || bgStyles.dark}`}>
-      
+
+      {/* Remote audio always plays, even for audio-only calls where no
+          <video> element exists to carry it. For video calls the remote
+          <video> below already plays the audio track, so this stays silent
+          to avoid doubling it up. */}
+      {type === 'audio' && <audio ref={remoteAudioRef} autoPlay className="hidden" />}
+
       {/* Top Section: Status Label */}
       <div className="text-center mt-12 animate-fade-in">
         <span className="text-xs uppercase tracking-widest font-bold opacity-60">
@@ -60,19 +100,40 @@ export function CallOverlay({
         <p className="text-sm mt-2 opacity-80 font-medium">
           {direction === 'outgoing' && 'Ringing...'}
           {direction === 'incoming' && 'Incoming Call'}
-          {direction === 'connected' && `Connected • ${formatTime(callDuration)}`}
+          {direction === 'connected' && !remoteStream && type === 'video' && 'Connecting...'}
+          {direction === 'connected' && (remoteStream || type === 'audio') && `Connected • ${formatTime(callDuration)}`}
         </p>
       </div>
 
       {/* Middle Section: Big Pulsing Avatar / Video Feeds */}
       <div className="flex flex-col items-center justify-center my-auto relative">
-        {type === 'video' && direction === 'connected' && !isCamOff ? (
+        {type === 'video' && direction === 'connected' ? (
           <div className="w-64 h-96 rounded-2xl bg-black border border-white/10 flex items-center justify-center shadow-2xl overflow-hidden relative">
+            {remoteStream ? (
+              <video
+                ref={remoteVideoRef}
+                autoPlay
+                playsInline
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <Video className="w-12 h-12 opacity-20 animate-pulse" />
+            )}
+
             <div className="absolute text-xs bottom-4 left-4 bg-black/60 px-2 py-1 rounded text-white">
               {userName}
             </div>
-            {/* Real WebRTC tracks go here later, for now structural mockup */}
-            <Video className="w-12 h-12 opacity-20 animate-pulse" />
+
+            {/* Self-view PIP — muted so we never hear our own mic back */}
+            {!isCamOff && localStream && (
+              <video
+                ref={localVideoRef}
+                autoPlay
+                playsInline
+                muted
+                className="absolute top-3 right-3 w-20 h-28 object-cover rounded-lg border border-white/30 shadow-lg bg-black"
+              />
+            )}
           </div>
         ) : (
           <div className="relative">
@@ -95,20 +156,20 @@ export function CallOverlay({
 
       {/* Bottom Section: Action Control Panel */}
       <div className="mb-12 w-full max-w-sm flex flex-col gap-6 items-center">
-        
+
         {/* Toggle tools inside connected calls */}
         {direction === 'connected' && (
           <div className="flex items-center gap-6 mb-2">
             <button
-              onClick={() => setIsMuted(!isMuted)}
+              onClick={handleToggleMute}
               className={`p-3 rounded-full border transition ${isMuted ? 'bg-red-500 border-red-500 text-white' : 'bg-transparent border-current/20 hover:bg-current/10'}`}
             >
               {isMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
             </button>
-            
+
             {type === 'video' && (
               <button
-                onClick={() => setIsCamOff(!isCamOff)}
+                onClick={handleToggleCam}
                 className={`p-3 rounded-full border transition ${isCamOff ? 'bg-red-500 border-red-500 text-white' : 'bg-transparent border-current/20 hover:bg-current/10'}`}
               >
                 {isCamOff ? <VideoOff className="w-5 h-5" /> : <Video className="w-5 h-5" />}

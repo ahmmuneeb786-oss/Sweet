@@ -21,10 +21,21 @@ const stack: CloseHandler[] = [];
 
 let listenerAttached = false;
 
+// popBackLayer()'s own history.back() call below fires this same popstate
+// listener asynchronously — without suppressing it, closing a layer via its
+// own close button pops the stack TWICE (once here, once explicitly),
+// closing whatever layer was underneath it too. This counts how many
+// upcoming popstate events were self-triggered so they can be no-ops.
+let suppressCount = 0;
+
 function ensureListener() {
   if (listenerAttached) return;
   listenerAttached = true;
   window.addEventListener('popstate', () => {
+    if (suppressCount > 0) {
+      suppressCount--;
+      return;
+    }
     const handler = stack.pop();
     if (handler) handler();
   });
@@ -40,6 +51,7 @@ export function pushBackLayer(onClose: CloseHandler) {
 export function popBackLayer() {
   if (stack.length > 0) {
     stack.pop();
+    suppressCount++;
     window.history.back();
   }
 }

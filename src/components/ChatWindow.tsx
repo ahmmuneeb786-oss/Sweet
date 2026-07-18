@@ -11,10 +11,12 @@ import { learnFromMessage } from '../predictionService';
 import { GifItem } from '../App';
 import { localDB } from '../db';
 import { CallOverlay } from './CallOverlay';
+import { ImageViewerModal } from './ImageViewerModal';
 import { usePresence } from '../hooks/usePresence';
 import { useBackableState } from '../hooks/useBackableState';
 import { queuePendingMessage, retryPendingMessage, subscribeToSyncEvents } from '../hooks/useOfflineSync';
 import { useNotify } from '../contexts/NotificationContext';
+import { useCall } from '../hooks/useCall';
 
 interface ChatWindowProps {
   onOpenGifPanel: () => void;
@@ -65,6 +67,8 @@ const REACTIONS_EMOJIS = ['💖', '🥰', '😍', '💋', '😂'] as const;
 const EMPTY_REACTIONS: Reaction[] = [];
 const EMPTY_USER_MAP: Record<string, string> = {};
 
+const TEXTAREA_MAX_HEIGHT = 150;
+
 function formatLastSeen(lastSeenTimestamp: string | null | undefined): string {
   if (!lastSeenTimestamp) return 'last seen long time ago';
   const date = new Date(lastSeenTimestamp);
@@ -92,13 +96,17 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
   const [loading, setLoading] = useState(true);
   const [showProfileView, setShowProfileView] = useState(false);
   useBackableState(showProfileView, () => setShowProfileView(false));
+  const [mediaViewer, setMediaViewer] = useState<{ urls: string[]; index: number } | null>(null);
+  useBackableState(mediaViewer !== null, () => setMediaViewer(null));
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   // Throttle typing broadcasts — fire at most once per 2500ms
   const lastTypingBroadcast = useRef<number>(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [isTextareaOverflowing, setIsTextareaOverflowing] = useState(false);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedGif, setSelectedGif] = useState<string | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const mediaRecorder = useRef<MediaRecorder | null>(null);
   const audioChunks = useRef<Blob[]>([]);
@@ -115,10 +123,7 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
   const [showLocationPicker, setShowLocationPicker] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedDoc, setSelectedDoc] = useState<File | null>(null);
-  const [activeCall, setActiveCall] = useState<{
-    type: 'audio' | 'video';
-    direction: 'incoming' | 'outgoing' | 'connected';
-  } | null>(null);
+  const { activeCall, localStream, remoteStream, startCall, acceptCall, rejectCall, hangUp } = useCall(chatId, user?.id);
 
   // ─── Centralized reaction state for all messages in this room ───────────────
   // Shape: { [messageId]: { reactions: Reaction[], userMap: Record<string,string> } }
@@ -452,18 +457,11 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
 
   const handleInitiateCall = async (type: 'audio' | 'video') => {
     if (!chatInfo?.otherUser || !user) return;
-    setActiveCall({ type, direction: 'outgoing' });
     try {
-      await supabase.from('messages').insert({
-        chat_id: chatId,
-        sender_id: user.id,
-        content: `__CALL_SIGNAL__:${type}:initiated:${user.id}`,
-        type: 'text'
-      });
+      await startCall(type);
     } catch (err) {
-      console.error("Failed to broadcast call initiation:", err);
-      showError("Couldn't start the call. Check your connection.");
-      setActiveCall(null);
+      console.error('Failed to start call:', err);
+      showError("Couldn't start the call. Check camera/microphone permissions.");
     }
   };
 
@@ -535,24 +533,6 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
         },
         async (payload) => {
           const rawNewRecord = payload.new as any;
-
-          if (rawNewRecord.content && rawNewRecord.content.startsWith('__CALL_SIGNAL__')) {
-            const [_, callType, status, senderId] = rawNewRecord.content.split(':');
-            if (senderId !== user?.id) {
-              if (status === 'initiated') {
-                setActiveCall({ type: callType as 'audio' | 'video', direction: 'incoming' });
-              } else if (status === 'rejected' || status === 'ended') {
-                setActiveCall(null);
-              } else if (status === 'accepted') {
-                setActiveCall((prev) => (prev ? { ...prev, direction: 'connected' } : null));
-              }
-            } else {
-              if (status === 'rejected' || status === 'ended') {
-                setActiveCall(null);
-              }
-            }
-            return;
-          }
 
           const { data, error } = await supabase
             .from('messages')
@@ -660,7 +640,7 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
 
     const messageContent = newMessage.trim();
     if (messageContent) learnFromMessage(messageContent);
-    if ((!messageContent && !selectedFile && !audioBlob && !selectedVideo && !selectedDoc) || !user || !chatInfo) return;
+    if ((!messageContent && !selectedFile && !audioBlob && !selectedVideo && !selectedDoc && !selectedGif) || !user || !chatInfo) return;
 
     const videoToUpload = selectedVideo;
     const videoUrlPreview = videoPreview;
@@ -669,14 +649,15 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
     const voiceToUpload = audioBlob;
     const voicePreview = recordedAudioUrl;
     const docToUpload = doc || selectedDoc;
+    const gifToSend = selectedGif;
 
     const tempMessage: MessageType = {
       id: tempId,
       chat_id: chatInfo.id,
       sender_id: user.id,
       content: docToUpload ? docToUpload.name : (voiceToUpload ? "Voice Note" : (messageContent || null)),
-      type: videoToUpload ? "video" : voiceToUpload ? "voice" : docToUpload ? "file" : (fileToUpload ? "image" : "text"),
-      media_url: videoToUpload ? videoUrlPreview : voiceToUpload ? voicePreview : imagePreview,
+      type: gifToSend ? "gif" : videoToUpload ? "video" : voiceToUpload ? "voice" : docToUpload ? "file" : (fileToUpload ? "image" : "text"),
+      media_url: gifToSend ? gifToSend : videoToUpload ? videoUrlPreview : voiceToUpload ? voicePreview : imagePreview,
       reply_to_id: null,
       is_edited: false,
       is_deleted: false,
@@ -697,6 +678,7 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
     setVideoPreview(null);
     setSelectedVideo(null);
     setSelectedDoc(null);
+    setSelectedGif(null);
 
     if (textareaRef.current) textareaRef.current.style.height = 'auto';
 
@@ -704,7 +686,7 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
     // the app closes mid-send, before we know whether it'll succeed.
     await localDB.messages.put(tempMessage);
 
-    const messageType = videoToUpload ? "video" : voiceToUpload ? "voice" : docToUpload ? "file" : (fileToUpload ? "image" : "text");
+    const messageType = gifToSend ? "gif" : videoToUpload ? "video" : voiceToUpload ? "voice" : docToUpload ? "file" : (fileToUpload ? "image" : "text");
     const mediaBlob: Blob | undefined = docToUpload || fileToUpload || voiceToUpload || videoToUpload || undefined;
     const mediaFileName =
       docToUpload?.name ||
@@ -722,6 +704,7 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
         message_type: messageType,
         media_blob: mediaBlob,
         media_file_name: mediaFileName,
+        media_url: gifToSend || undefined,
         created_at: tempMessage.created_at,
         attempts: 0,
         last_error: null,
@@ -739,9 +722,12 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
     }
 
     try {
-      let finalMediaUrl = null;
+      // Already-hosted media — no upload step needed, just send the URL.
+      let finalMediaUrl: string | null = gifToSend;
 
-      if (docToUpload) {
+      if (gifToSend) {
+        // nothing to upload
+      } else if (docToUpload) {
         const fileName = `${user.id}/docs/${Date.now()}_${docToUpload.name}`;
         const { error: uploadError } = await supabase.storage.from('chat-docs').upload(fileName, docToUpload);
         if (uploadError) throw uploadError;
@@ -795,7 +781,7 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
       // automatically, and the user can also tap it to retry manually.
       await queueForLater(error);
     }
-  }, [newMessage, selectedFile, audioBlob, selectedVideo, selectedDoc, user, chatInfo, videoPreview, recordedAudioUrl, imagePreview]);
+  }, [newMessage, selectedFile, audioBlob, selectedVideo, selectedDoc, selectedGif, user, chatInfo, videoPreview, recordedAudioUrl, imagePreview]);
 
    useEffect(() => {
   // Ensure subscription definitions stay completely unconditional
@@ -869,6 +855,16 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
       showError("Could not delete message.");
     }
   }, [user?.id]);
+
+  // Opens the shared gallery viewer scoped to every image/gif in this chat
+  // (in message order), starting at whichever one was tapped — same
+  // prev/next browsing as the profile photo viewer.
+  const handleViewMedia = useCallback((messageId: string) => {
+    const mediaMessages = messages.filter((m) => (m.type === 'image' || m.type === 'gif') && m.media_url);
+    const index = mediaMessages.findIndex((m) => m.id === messageId);
+    if (index === -1) return;
+    setMediaViewer({ urls: mediaMessages.map((m) => m.media_url as string), index });
+  }, [messages]);
 
   // Throttled typing broadcast — fires at most once per 2500ms
   const handleTyping = useCallback(async () => {
@@ -973,6 +969,10 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
     }
     if (input === 'LOCATION_START') { shareLocation(); return; }
     if (input === 'VIDEO_START') { setIsRecordingVideoNote(true); return; }
+    if (typeof input === 'string' && input.startsWith('GIF_SELECT:')) {
+      setSelectedGif(input.slice('GIF_SELECT:'.length));
+      return;
+    }
     if (input instanceof Blob || input instanceof File) {
       if (input.type.includes('video')) {
         setSelectedVideo(input);
@@ -987,18 +987,11 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
     }
     setNewMessage(prev => prev + input);
     handleTyping();
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
-      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 150)}px`;
-    }
   }, [handleTyping]);
 
   const handleKeyboardDelete = useCallback(() => {
     setNewMessage(prev => prev.slice(0, -1));
-    if (newMessage.length <= 1 && textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
-    }
-  }, [newMessage.length]);
+  }, []);
 
   const handleKeyboardSend = useCallback(() => {
     handleSendMessage(new Event('submit') as any);
@@ -1015,6 +1008,21 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
       textareaRef.current.setSelectionRange(newMessage.length, newMessage.length);
     }
   }, [newMessage, showSweetKeyboard]);
+
+  // Single source of truth for the textarea's height, driven off the actual
+  // message content rather than duplicated in every place that can change it
+  // (typing, virtual keyboard input/delete, clearing). Runs after React has
+  // committed the new value to the DOM, so scrollHeight is always accurate —
+  // unlike measuring it synchronously right after a setState call, which
+  // would still see the pre-update value.
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    const fullHeight = el.scrollHeight;
+    el.style.height = `${Math.min(fullHeight, TEXTAREA_MAX_HEIGHT)}px`;
+    setIsTextareaOverflowing(fullHeight > TEXTAREA_MAX_HEIGHT);
+  }, [newMessage]);
 
   if (loading || !chatInfo) {
     return (
@@ -1151,12 +1159,12 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
           <div className="flex items-center gap-1 md:gap-2">
             <button
               onClick={() => handleInitiateCall('audio')}
-              className="hidden sm:flex p-2 hover:bg-white/20 backdrop-blur-sm rounded-full transition-colors">
+              className="flex p-2 hover:bg-white/20 backdrop-blur-sm rounded-full transition-colors">
               <Phone className="w-5 h-5 text-white" />
             </button>
             <button
               onClick={() => handleInitiateCall('video')}
-              className="hidden sm:flex p-2 hover:bg-white/20 backdrop-blur-sm rounded-full transition-colors">
+              className="flex p-2 hover:bg-white/20 backdrop-blur-sm rounded-full transition-colors">
               <Video className="w-5 h-5 text-white" />
             </button>
             <ChatMenu chatId={chatInfo.id} onClose={() => { }} theme={theme} onViewProfile={() => setShowProfileView(true)} />
@@ -1191,6 +1199,7 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
                 reactions={REACTIONS_EMOJIS as unknown as string[]}
                 theme={theme}
                 onDelete={handleDeleteMessage}
+                onViewMedia={handleViewMedia}
                 initialDbReactions={reactionState?.reactions ?? EMPTY_REACTIONS}
                 initialUserMap={reactionState?.userMap ?? EMPTY_USER_MAP}
               />
@@ -1271,6 +1280,24 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
           </div>
         )}
 
+        {selectedGif && (
+          <div className="relative inline-block mb-3 animate-in zoom-in-95 duration-200">
+            <div className="relative rounded-2xl overflow-hidden border-2 border-pink-400 shadow-lg bg-black/5">
+              <img src={selectedGif} alt="GIF preview" className="max-h-32 w-auto object-cover" />
+              <span className="absolute bottom-1 left-1 px-1.5 py-0.5 bg-black/60 rounded-md text-white text-[9px] font-black uppercase tracking-widest">
+                Gif
+              </span>
+              <button
+                type="button"
+                onClick={() => setSelectedGif(null)}
+                className="absolute top-1 right-1 p-1 bg-black/50 hover:bg-black/70 rounded-full text-white transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
+
         {imagePreview && (
           <div className="relative inline-block mb-3 animate-in zoom-in-95 duration-200">
             <div className="relative rounded-2xl overflow-hidden border-2 border-pink-400 shadow-lg">
@@ -1321,9 +1348,9 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
             <div className="relative" />
           </div>
 
-          <div className="flex-1 min-w-0 relative flex items-center h-12 overflow-hidden">
+          <div className="flex-1 min-w-0 relative flex items-end">
             {isRecording ? (
-              <div className="flex-1 flex items-center justify-between px-4 h-full rounded-2xl relative bg-gradient-to-r from-[#FFE4E1] to-[#FFC0CB] border border-[#FFB6C1] shadow-inner animate-in fade-in zoom-in-95 duration-300">
+              <div className="flex-1 flex items-center justify-between px-4 h-12 rounded-2xl relative bg-gradient-to-r from-[#FFE4E1] to-[#FFC0CB] border border-[#FFB6C1] shadow-inner overflow-hidden animate-in fade-in zoom-in-95 duration-300">
                 <div className="flex items-center gap-3 z-10">
                   <div className="relative flex items-center justify-center">
                     <span className="text-2xl animate-heartbeat inline-block drop-shadow-sm">❤️</span>
@@ -1341,7 +1368,7 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
                 </div>
               </div>
             ) : recordedAudioUrl ? (
-              <div className="flex-1 flex items-center gap-2 px-2 h-full rounded-2xl border-2 animate-in slide-in-from-left-2 duration-300"
+              <div className="flex-1 flex items-center gap-2 px-2 h-12 rounded-2xl border-2 overflow-hidden animate-in slide-in-from-left-2 duration-300"
                 style={{ backgroundColor: '#FFE4E1', borderColor: '#FFB6C1' }}>
                 <button
                   type="button"
@@ -1362,8 +1389,6 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
                   onChange={(e) => {
                     setNewMessage(e.target.value);
                     handleTyping();
-                    e.target.style.height = 'auto';
-                    e.target.style.height = `${Math.min(e.target.scrollHeight, 150)}px`;
                   }}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && !e.shiftKey) {
@@ -1373,17 +1398,22 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
                   }}
                   placeholder="Spread love..."
                   rows={1}
-                  className={`w-full pl-4 pr-10 py-2.5 border rounded-2xl focus:outline-none focus:ring-2 resize-none transition-all text-sm md:text-base scrollbar-none md:scrollbar-hidden
+                  className={`w-full pl-4 py-2.5 border rounded-2xl focus:outline-none focus:ring-2 resize-none transition-all
+                    ${isTextareaOverflowing ? 'pr-5 overflow-y-auto' : 'pr-4 overflow-y-hidden scrollbar-hide'}
                     ${theme === 'sweet' ? 'bg-white border-[#FFB6C1] text-[#4B004B] caret-[#FF69B4] focus:ring-[#FF69B4]' : 'bg-gray-50 border-gray-300 caret-current focus:ring-pink-400'}`}
-                  style={{ maxHeight: '150px', minHeight: '44px', lineHeight: '1.5' }}
+                  style={{ maxHeight: `${TEXTAREA_MAX_HEIGHT}px`, minHeight: '44px', lineHeight: '1.5', fontSize: '16px' }}
                 />
                 {newMessage.length > 0 && (
                   <button
                     type="button"
                     onClick={() => setNewMessage('')}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1"
+                    className={`absolute -top-2 -right-2 z-10 w-6 h-6 flex items-center justify-center rounded-full bg-white shadow-sm transition-colors ${
+                      theme === 'sweet'
+                        ? 'border-2 border-[#FF69B4] text-[#FF69B4] hover:bg-pink-50'
+                        : 'border-2 border-pink-400 text-pink-400 hover:bg-pink-50'
+                    }`}
                   >
-                    <X className="w-4 h-4" />
+                    <X className="w-3.5 h-3.5" />
                   </button>
                 )}
               </>
@@ -1412,9 +1442,9 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
 
             <button
               type="submit"
-              disabled={(!newMessage.trim() && !selectedFile && !audioBlob && !selectedDoc && !selectedVideo) || isRecording}
+              disabled={(!newMessage.trim() && !selectedFile && !audioBlob && !selectedDoc && !selectedVideo && !selectedGif) || isRecording}
               className={`p-3 rounded-full transition-all active:scale-95 flex-shrink-0 ${
-                (newMessage.trim() || selectedFile || audioBlob || selectedDoc || selectedVideo)
+                (newMessage.trim() || selectedFile || audioBlob || selectedDoc || selectedVideo || selectedGif)
                   ? `bg-gradient-to-r from-[#FF69B4] to-[#FF1493] text-white shadow-md`
                   : 'bg-gray-200 text-gray-400'
               }`}
@@ -1453,27 +1483,18 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
           userName={chatInfo.otherUser.display_name}
           userAvatar={chatInfo.otherUser.avatar_url}
           theme={theme}
+          localStream={localStream}
+          remoteStream={remoteStream}
           onAccept={async () => {
-            setActiveCall({ ...activeCall, direction: 'connected' });
-            await supabase.from('messages').insert({
-              chat_id: chatId, sender_id: user?.id,
-              content: `__CALL_SIGNAL__:${activeCall.type}:accepted:${user?.id}`, type: 'text'
-            });
+            try {
+              await acceptCall();
+            } catch (err) {
+              console.error('Failed to accept call:', err);
+              showError("Couldn't join the call. Check camera/microphone permissions.");
+            }
           }}
-          onReject={async () => {
-            setActiveCall(null);
-            await supabase.from('messages').insert({
-              chat_id: chatId, sender_id: user?.id,
-              content: `__CALL_SIGNAL__:${activeCall.type}:rejected:${user?.id}`, type: 'text'
-            });
-          }}
-          onHangUp={async () => {
-            setActiveCall(null);
-            await supabase.from('messages').insert({
-              chat_id: chatId, sender_id: user?.id,
-              content: `__CALL_SIGNAL__:${activeCall.type}:ended:${user?.id}`, type: 'text'
-            });
-          }}
+          onReject={rejectCall}
+          onHangUp={hangUp}
         />
       )}
 
@@ -1482,6 +1503,14 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
           userId={chatInfo.otherUser.id}
           theme={theme}
           onClose={() => setShowProfileView(false)}
+        />
+      )}
+
+      {mediaViewer && (
+        <ImageViewerModal
+          images={mediaViewer.urls}
+          initialIndex={mediaViewer.index}
+          onClose={() => setMediaViewer(null)}
         />
       )}
     </div>

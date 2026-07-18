@@ -40,6 +40,8 @@ interface MessageProps {
   theme: 'light' | 'dark' | 'sweet';
   /** Stable handler — Message calls it with its own id */
   onDelete?: (id: string) => void;
+  /** Opens the shared full-screen gallery viewer, browsable across every image/gif in this chat */
+  onViewMedia?: (messageId: string) => void;
   /** Reaction data fed down from ChatWindow's centralized subscription */
   initialDbReactions?: Reaction[];
   initialUserMap?: Record<string, string>;
@@ -56,6 +58,7 @@ function MessageComponent({
   reactions,
   theme,
   onDelete,
+  onViewMedia,
   showDateSeparator,
   initialDbReactions = EMPTY_REACTIONS,
   initialUserMap = EMPTY_USER_MAP,
@@ -74,7 +77,6 @@ function MessageComponent({
   const [currentTime, setCurrentTime] = useState(0);
   const audioRef = useRef<HTMLAudioElement>(null);
   const [waveform, setWaveform] = useState<number[]>([]);
-  const [isZoomed, setIsZoomed] = useState(false);
   const lastActionTime = useRef<number>(0);
 
   // Sync local reaction state when ChatWindow's centralized subscription pushes updates
@@ -343,7 +345,24 @@ function MessageComponent({
                 break-words [word-break:break-word] overflow-hidden
               `}
             >
-              {message.type === 'image' && message.media_url ? (
+              {message.type === 'gif' && message.media_url ? (
+                <div
+                  className="-mx-5 -my-3 overflow-hidden rounded-[28px] relative cursor-pointer"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onViewMedia?.(message.id);
+                  }}
+                >
+                  <img
+                    src={message.media_url}
+                    alt="GIF"
+                    className="max-h-64 w-full object-cover"
+                  />
+                  <span className="absolute top-2 left-2 px-1.5 py-0.5 bg-black/60 rounded-md text-white text-[9px] font-black uppercase tracking-widest">
+                    Gif
+                  </span>
+                </div>
+              ) : message.type === 'image' && message.media_url ? (
                 <div
                   className="-mx-5 -my-3 overflow-hidden rounded-[28px] relative transition-all duration-300 active:scale-95"
                   style={{
@@ -351,7 +370,7 @@ function MessageComponent({
                   }}
                   onClick={(e) => {
                     e.stopPropagation();
-                    setIsZoomed(true);
+                    onViewMedia?.(message.id);
                   }}
                 >
                   <img
@@ -664,34 +683,6 @@ function MessageComponent({
         </div>
       </div>
 
-      {isZoomed && message.media_url && (
-        <div
-          className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-black/95 backdrop-blur-xl p-4 touch-none"
-          onClick={(e) => {
-            e.stopPropagation();
-            setIsZoomed(false);
-          }}
-        >
-          <button className="absolute top-12 right-6 text-white/70 bg-white/10 p-2 rounded-full">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-          </button>
-          <img
-            src={message.media_url}
-            className="max-w-full max-h-[70vh] rounded-2xl shadow-2xl object-contain animate-in zoom-in-95 duration-300"
-            alt="Full view"
-          />
-          {message.content && (
-            <div className="mt-6 max-w-xs text-center">
-              <p className="text-white text-base font-medium bg-white/10 px-6 py-3 rounded-2xl backdrop-blur-md border border-white/10">
-                {message.content}
-              </p>
-            </div>
-          )}
-          <p className="mt-8 text-white/30 text-[10px] uppercase tracking-[4px] font-bold animate-pulse">
-            Tap anywhere to close
-          </p>
-        </div>
-      )}
     </>
   );
 }

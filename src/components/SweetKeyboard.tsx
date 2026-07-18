@@ -22,7 +22,71 @@ interface SweetKeyboardProps {
 type KeyboardMode = 'abc' | 'emoji' | 'gif';
 type ShiftState = 'off' | 'shift' | 'caps';
 
-const EMOJIS = ['❤️', '✨', '🔥', '😂', '🥰', '😊', '😭', '💀', '🥺', '🙌', '👍', '🍦', '🌸', '🎀', '🍭', '🧸', '⚡', '💯', '👋', '🦄'];
+const CLIP_HISTORY_LIMIT = 25;
+const CLIP_HISTORY_STORAGE_KEY = 'sweet_clip_history';
+
+const RECENT_EMOJIS_LIMIT = 30;
+const RECENT_EMOJIS_STORAGE_KEY = 'sweet_recent_emojis';
+
+interface EmojiCategoryDef {
+  key: string;
+  label: string;
+  icon: string;
+  emojis: string[];
+}
+
+const EMOJI_CATEGORIES: EmojiCategoryDef[] = [
+  {
+    key: 'smileys', label: 'Smileys', icon: '😀',
+    emojis: ['😀', '😃', '😄', '😁', '😆', '😅', '🤣', '😂', '🙂', '🙃', '😉', '😊', '😇', '🥰', '😍', '🤩', '😘', '😗', '😙', '😚', '😋', '😛', '😝', '😜', '🤪', '🤑', '🤗', '🤭', '🤫', '🤔', '🤐', '🤨', '😐', '😑', '😶', '😏', '😒', '🙄', '😬', '😌', '😔', '😪', '🤤', '😴', '😷', '🤒', '🤕', '🤢', '🤮', '🥵', '🥶', '😵', '🤯', '🥳', '😎', '🤓', '🧐', '😕', '🙁', '😮', '😲'],
+  },
+  {
+    key: 'love', label: 'Love', icon: '❤️',
+    emojis: ['❤️', '🧡', '💛', '💚', '💙', '💜', '🖤', '🤍', '🤎', '💔', '❣️', '💕', '💞', '💓', '💗', '💖', '💘', '💝', '💟', '💌', '💋', '😍', '🥰', '😘'],
+  },
+  {
+    key: 'people', label: 'People', icon: '👋',
+    emojis: ['👋', '🤚', '🖐️', '✋', '🖖', '👌', '🤏', '✌️', '🤞', '🤟', '🤘', '🤙', '👈', '👉', '👆', '🖕', '👇', '☝️', '👍', '👎', '✊', '👊', '👏', '🙌', '👐', '🤲', '🙏', '💪', '👂', '👃', '🧠', '👀', '👄', '👶', '🧒', '👦', '👧', '🧑', '👨', '👩', '👴', '👵', '🙋', '🤦', '🤷', '💃', '🕺', '🧘'],
+  },
+  {
+    key: 'animals', label: 'Animals', icon: '🐶',
+    emojis: ['🐶', '🐱', '🐭', '🐹', '🐰', '🦊', '🐻', '🐼', '🐨', '🐯', '🦁', '🐮', '🐷', '🐸', '🐵', '🙈', '🙉', '🙊', '🐔', '🐧', '🐦', '🐤', '🦆', '🦅', '🦉', '🦇', '🐺', '🐗', '🐴', '🦄', '🐝', '🐛', '🦋', '🐌', '🐞', '🐢', '🐍', '🦎', '🐙', '🦑', '🦀', '🐠', '🐟', '🐬', '🐳', '🐋', '🦈', '🐊', '🦓', '🐘', '🦒', '🦘', '🐐', '🦌', '🐕', '🐈', '🐓', '🦃', '🐇', '🦔', '🌵', '🌲', '🌴', '🌱', '🌿', '🍀', '🍁', '🌷', '🌹', '🌺', '🌸', '🌼', '🌻', '🌞', '🌙', '⭐', '🌟', '✨', '🔥', '🌈', '☀️', '☁️', '⛄', '❄️', '💧', '🌊'],
+  },
+  {
+    key: 'food', label: 'Food', icon: '🍔',
+    emojis: ['🍏', '🍎', '🍐', '🍊', '🍋', '🍌', '🍉', '🍇', '🍓', '🫐', '🍈', '🍒', '🍑', '🥭', '🍍', '🥥', '🥝', '🍅', '🍆', '🥑', '🥦', '🥕', '🌽', '🥔', '🍠', '🥐', '🍞', '🧀', '🥚', '🍳', '🥞', '🥓', '🍗', '🍖', '🌭', '🍔', '🍟', '🍕', '🌮', '🌯', '🥗', '🍝', '🍜', '🍲', '🍣', '🍱', '🍤', '🍙', '🍚', '🍦', '🍧', '🍨', '🍩', '🍪', '🎂', '🍰', '🍫', '🍬', '🍭', '🍿', '☕'],
+  },
+  {
+    key: 'activities', label: 'Activities', icon: '⚽',
+    emojis: ['⚽', '🏀', '🏈', '⚾', '🎾', '🏐', '🏉', '🎱', '🏓', '🏸', '🏒', '🏑', '🏏', '🥅', '⛳', '🎣', '🥊', '🥋', '🎽', '🛹', '🎿', '🏋️', '🤼', '🤸', '🏌️', '🏇', '🏄', '🏊', '🚣', '🚴', '🏆', '🥇', '🥈', '🥉', '🏅', '🎮', '🎲', '🎯', '🎳', '🎨', '🎬', '🎤', '🎧', '🎼', '🎹', '🎸', '🎻', '🎺'],
+  },
+  {
+    key: 'travel', label: 'Travel', icon: '✈️',
+    emojis: ['🚗', '🚕', '🚙', '🚌', '🚎', '🏎️', '🚓', '🚑', '🚒', '🚐', '🚚', '🚛', '🚜', '🚲', '🛵', '🏍️', '✈️', '🚀', '🚁', '⛵', '🚤', '🚢', '⚓', '🚦', '🗺️', '🗽', '🗼', '🏰', '🏟️', '🎡', '🎢', '⛲', '🏖️', '🏝️', '🌋', '⛰️', '🏔️', '⛺', '🏠', '🏢', '🏥', '🏦', '🏨', '🏫', '⛪', '🕌', '🕋', '🛕'],
+  },
+  {
+    key: 'objects', label: 'Objects', icon: '💡',
+    emojis: ['⌚', '📱', '💻', '⌨️', '🖥️', '🖨️', '🖱️', '📷', '📹', '🎥', '📞', '☎️', '📺', '📻', '🔋', '🔌', '💡', '🔦', '🕯️', '💰', '💳', '💎', '🔧', '🔨', '🛠️', '🔩', '⚙️', '🔫', '💣', '🔪', '💊', '💉', '🧪', '🧹', '🚽', '🛁', '🧼', '🪒', '🧴', '🎁', '📦', '✉️', '📧', '📅', '📖', '🔖', '🔗', '📎', '📐', '📌', '✂️', '🔍', '🔒', '🔓', '🔔'],
+  },
+  {
+    key: 'symbols', label: 'Symbols', icon: '❗',
+    emojis: ['❗', '❓', '‼️', '⁉️', '✅', '❌', '⭕', '🚫', '💯', '💢', '💥', '💫', '💦', '💨', '💬', '💭', '♻️', '⚠️', '🔞', '📵', '🚭', '⬆️', '⬇️', '⬅️', '➡️', '🔄', '🔀', '🔁', '🔂', '▶️', '⏸️', '⏹️', '⏭️', '⏮️', '🔊', '🔇', '📢', '📣', '🔟', '#️⃣'],
+  },
+  {
+    key: 'flags', label: 'Flags', icon: '🏳️',
+    emojis: ['🏳️', '🏴', '🏁', '🚩', '🎌', '🏳️‍🌈', '🇺🇸', '🇬🇧', '🇨🇦', '🇦🇺', '🇫🇷', '🇩🇪', '🇮🇹', '🇪🇸', '🇯🇵', '🇰🇷', '🇨🇳', '🇮🇳', '🇧🇷', '🇵🇰'],
+  },
+];
+
+function loadRecentEmojis(): string[] {
+  try {
+    const saved = localStorage.getItem(RECENT_EMOJIS_STORAGE_KEY);
+    if (saved) return JSON.parse(saved);
+  } catch {
+    // corrupted/unavailable storage — fall back to no recents
+  }
+  return [];
+}
 
 // ─── OPTIMIZED KEYBOARD MATRIX ───────────────────────────────────────────────
 // Handlers are guaranteed stable via useCallback in the parent.
@@ -124,12 +188,51 @@ export const SweetKeyboard = ({ onInput, onDelete, onDocsClick, newMessage, onOp
   const deleteDelayRef = useRef<NodeJS.Timeout | null>(null);
   const deleteIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const [longPressedUrl, setLongPressedUrl] = useState<string | null>(null);
-  const [clipHistory, setClipHistory] = useState<string[]>([
-    'Hey sweetie! 💕',
-    "Let's meet at our sweet spot! 🍦",
-    '(❁´◡`❁)'
-  ]);
+  const [clipHistory, setClipHistory] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem(CLIP_HISTORY_STORAGE_KEY);
+      if (saved) return JSON.parse(saved);
+    } catch {
+      // corrupted/unavailable storage — fall through to the sample defaults
+    }
+    return [
+      'Hey sweetie! 💕',
+      "Let's meet at our sweet spot! 🍦",
+      '(❁´◡`❁)'
+    ];
+  });
   const [pasteStatus, setPasteStatus] = useState<'idle' | 'success' | 'denied'>('idle');
+  const [showClipPanel, setShowClipPanel] = useState(false);
+
+  useEffect(() => {
+    localStorage.setItem(CLIP_HISTORY_STORAGE_KEY, JSON.stringify(clipHistory));
+  }, [clipHistory]);
+
+  const [recentEmojis, setRecentEmojis] = useState<string[]>(loadRecentEmojis);
+  const [emojiCategory, setEmojiCategory] = useState<string>(() => (
+    loadRecentEmojis().length > 0 ? 'recent' : EMOJI_CATEGORIES[0].key
+  ));
+
+  useEffect(() => {
+    localStorage.setItem(RECENT_EMOJIS_STORAGE_KEY, JSON.stringify(recentEmojis));
+  }, [recentEmojis]);
+
+  const visibleEmojiCategories = useMemo(() => (
+    recentEmojis.length > 0
+      ? [{ key: 'recent', label: 'Recent', icon: '🕓', emojis: recentEmojis }, ...EMOJI_CATEGORIES]
+      : EMOJI_CATEGORIES
+  ), [recentEmojis]);
+
+  const activeEmojiList = useMemo(() => {
+    if (emojiCategory === 'recent') return recentEmojis;
+    return EMOJI_CATEGORIES.find(c => c.key === emojiCategory)?.emojis ?? EMOJI_CATEGORIES[0].emojis;
+  }, [emojiCategory, recentEmojis]);
+
+  const handleEmojiPick = useCallback((emoji: string) => {
+    onInput(emoji);
+    setRecentEmojis(prev => [emoji, ...prev.filter(e => e !== emoji)].slice(0, RECENT_EMOJIS_LIMIT));
+    if (typeof window !== 'undefined' && navigator.vibrate) navigator.vibrate(8);
+  }, [onInput]);
 
   // ─── Ref mirror of shiftState so handleKey never recreates ───────────────────
   // This is the key fix: KeyboardMatrix handlers depend only on stable refs,
@@ -209,26 +312,45 @@ export const SweetKeyboard = ({ onInput, onDelete, onDocsClick, newMessage, onOp
     }
   };
 
-  const handleSweetPaste = async () => {
+  // Tapping the paste button opens the clipboard history panel (like
+  // Windows' Win+V) instead of blindly pasting the most recent item.
+  // Browsers give no way to observe clipboard changes in the background, so
+  // the only point we can legally sample it (one user-gesture-triggered
+  // readText() call) is right here, on open — that's what feeds new entries
+  // into the history over time.
+  const handleOpenClipPanel = async () => {
+    const opening = !showClipPanel;
+    setShowClipPanel(opening);
+    if (!opening) return;
+
     try {
       if (typeof window === 'undefined' || !navigator.clipboard) return;
       const text = await navigator.clipboard.readText();
-      if (text && text.trim() !== '') {
-        onInput(text);
-        setClipHistory(prev => {
-          const filtered = prev.filter(item => item !== text);
-          return [text, ...filtered].slice(0, 5);
-        });
-        if (navigator.vibrate) navigator.vibrate([10, 40]);
+      if (text && text.trim() !== '' && text !== clipHistory[0]) {
+        setClipHistory(prev => [text, ...prev.filter(item => item !== text)].slice(0, CLIP_HISTORY_LIMIT));
         setPasteStatus('success');
-        setTimeout(() => setPasteStatus('idle'), 1200);
+        setTimeout(() => setPasteStatus('idle'), 900);
       }
     } catch (err) {
       console.warn("Clipboard access denied or unavailable", err);
       setPasteStatus('denied');
-      setTimeout(() => setPasteStatus('idle'), 1200);
+      setTimeout(() => setPasteStatus('idle'), 900);
     }
   };
+
+  const handlePickClip = (text: string) => {
+    onInput(text);
+    setClipHistory(prev => [text, ...prev.filter(item => item !== text)].slice(0, CLIP_HISTORY_LIMIT));
+    if (typeof window !== 'undefined' && navigator.vibrate) navigator.vibrate([10, 40]);
+    setShowClipPanel(false);
+  };
+
+  const handleDeleteClipItem = (text: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setClipHistory(prev => prev.filter(item => item !== text));
+  };
+
+  const handleClearClipHistory = () => setClipHistory([]);
 
   useEffect(() => {
     if (mode === 'gif' && gifSubTab === 'discover') fetchGifs(gifSearch || 'trending');
@@ -254,12 +376,73 @@ export const SweetKeyboard = ({ onInput, onDelete, onDocsClick, newMessage, onOp
 
   const handleGifSend = (url: string) => {
     if (longPressedUrl) return;
-    onInput(url);
+    // Sentinel string, same pattern as VIDEO_START/LOCATION_START — lets
+    // ChatWindow show a real GIF preview (and later send it as its own
+    // message type) instead of dropping the raw URL into the text as if it
+    // were something the user typed.
+    onInput(`GIF_SELECT:${url}`);
     setMyGifs(prev => [{ url, packName: 'Recent' }, ...prev.filter(item => item.url !== url)].slice(0, 100));
   };
 
   return (
-    <div className={`w-full bg-[#FFE4E1]/90 ${isLowPerfMode ? '' : 'backdrop-blur-2xl'} border-t border-[#FFB6C1] p-2 pb-6 select-none transition-all duration-300`}>
+    <div className={`relative w-full bg-[#FFE4E1]/90 ${isLowPerfMode ? '' : 'backdrop-blur-2xl'} border-t border-[#FFB6C1] p-2 pb-6 select-none transition-all duration-300`}>
+      {showClipPanel && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setShowClipPanel(false)} />
+          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 z-50 w-72 max-w-[calc(100vw-2rem)] max-h-80 flex flex-col bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-[#FFB6C1] overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-200">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-pink-100 shrink-0">
+              <div className="flex items-center gap-2">
+                <Clipboard className="w-4 h-4 text-pink-500" />
+                <span className="text-xs font-black text-[#4B004B] uppercase tracking-widest">Clipboard</span>
+              </div>
+              <div className="flex items-center gap-1">
+                {clipHistory.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleClearClipHistory}
+                    className="text-[9px] font-black text-pink-400 uppercase px-2 py-1 rounded-full hover:bg-pink-50 active:scale-95 transition-all"
+                  >
+                    Clear all
+                  </button>
+                )}
+                <button type="button" onClick={() => setShowClipPanel(false)} className="p-1 rounded-full text-pink-400 hover:bg-pink-50">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto scrollbar-hide px-2 py-2 space-y-1">
+              {clipHistory.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-8 text-center px-4">
+                  <Clipboard className="w-8 h-8 text-pink-200 mb-2" />
+                  <p className="text-[10px] font-black text-[#8B004B]/50 uppercase">Nothing copied yet</p>
+                  <p className="text-[9px] text-pink-300 mt-1">Copy some text, then tap paste again</p>
+                </div>
+              ) : (
+                clipHistory.map((item, i) => (
+                  <div
+                    key={`${item}-${i}`}
+                    onClick={() => handlePickClip(item)}
+                    className="flex items-center gap-2 px-3 py-2.5 rounded-xl hover:bg-pink-50 active:bg-pink-100 cursor-pointer transition-colors"
+                  >
+                    <p className="flex-1 text-xs text-[#4B004B] font-medium line-clamp-2 break-words text-left">
+                      {item}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={(e) => handleDeleteClipItem(item, e)}
+                      className="p-1 rounded-full text-pink-300 hover:bg-pink-100 hover:text-pink-500 active:scale-90 transition-all shrink-0"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </>
+      )}
+
       <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={(e) => {
         const file = e.target.files?.[0];
         if (file) { onInput(file); setShowMediaBar(false); }
@@ -279,15 +462,16 @@ export const SweetKeyboard = ({ onInput, onDelete, onDocsClick, newMessage, onOp
                   <div className="p-2 bg-white/80 rounded-full text-pink-500"><Video className="w-4 h-4" /></div>
                   <span className="text-[9px] font-black text-pink-600 uppercase">Video</span>
                 </button>
-                <button type="button" onClick={handleSweetPaste} className="flex flex-col items-center gap-1 active:scale-90 transition-transform relative">
+                <button type="button" onClick={handleOpenClipPanel} className="flex flex-col items-center gap-1 active:scale-90 transition-transform relative">
                   <div className={`p-2 rounded-full transition-all duration-300 ${
                     pasteStatus === 'success' ? 'bg-green-400 text-white scale-110' :
-                    pasteStatus === 'denied' ? 'bg-rose-400 text-white scale-110' : 'bg-white/80 text-pink-500'
+                    pasteStatus === 'denied' ? 'bg-rose-400 text-white scale-110' :
+                    showClipPanel ? 'bg-pink-500 text-white scale-110' : 'bg-white/80 text-pink-500'
                   }`}>
                     <Clipboard className="w-4 h-4" />
                   </div>
                   <span className="text-[9px] font-black text-pink-600 uppercase">
-                    {pasteStatus === 'success' ? 'Pasted!' : pasteStatus === 'denied' ? 'Blocked' : 'Paste'}
+                    {pasteStatus === 'success' ? 'Synced!' : pasteStatus === 'denied' ? 'Blocked' : 'Paste'}
                   </span>
                 </button>
                 <button type="button" onClick={() => onInput('LOCATION_START')} className="flex flex-col items-center gap-1 active:scale-90 group">
@@ -334,7 +518,20 @@ export const SweetKeyboard = ({ onInput, onDelete, onDocsClick, newMessage, onOp
                   </button>
                 </>
               ) : (
-                <span className="flex-1 text-center text-[10px] font-black text-pink-500 uppercase tracking-[0.2em]">Emojis</span>
+                <div className="flex-1 flex items-center gap-1 overflow-x-auto scrollbar-hide">
+                  {visibleEmojiCategories.map(cat => (
+                    <button
+                      key={cat.key}
+                      type="button"
+                      onClick={() => setEmojiCategory(cat.key)}
+                      className={`shrink-0 w-8 h-8 flex items-center justify-center rounded-lg text-base transition-all ${
+                        emojiCategory === cat.key ? 'bg-pink-500 shadow-md scale-105' : 'opacity-50'
+                      }`}
+                    >
+                      {cat.icon}
+                    </button>
+                  ))}
+                </div>
               )}
             </div>
             <button onClick={() => setMode(mode === 'emoji' ? 'gif' : 'abc')} className="w-14 h-full bg-gradient-to-tr from-pink-400 to-rose-500 rounded-xl flex items-center justify-center text-white shadow-lg active:scale-95">
@@ -358,9 +555,16 @@ export const SweetKeyboard = ({ onInput, onDelete, onDocsClick, newMessage, onOp
             onDeleteStop={stopDelete}
           />
         ) : mode === 'emoji' ? (
-          <div className="grid grid-cols-5 gap-2 h-full overflow-y-auto scrollbar-hide pr-1 pb-4">
-            {EMOJIS.map(emoji => (
-              <button key={emoji} onPointerDown={(e) => { e.preventDefault(); onInput(emoji); }} className="text-2xl h-12 bg-white/40 rounded-xl flex items-center justify-center active:bg-pink-100">{emoji}</button>
+          <div className="grid grid-cols-7 gap-1.5 h-full overflow-y-auto scrollbar-hide pr-1 pb-4 content-start">
+            {activeEmojiList.map((emoji, i) => (
+              <button
+                key={`${emoji}-${i}`}
+                type="button"
+                onPointerDown={(e) => { e.preventDefault(); handleEmojiPick(emoji); }}
+                className="text-xl h-9 bg-white/40 rounded-lg flex items-center justify-center active:bg-pink-100"
+              >
+                {emoji}
+              </button>
             ))}
           </div>
         ) : (

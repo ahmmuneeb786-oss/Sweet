@@ -233,7 +233,7 @@ export function LockedChatsPanel({ theme, onClose, onSelectChat }: LockedChatsPa
       />
 
       {/* Sliding Sidebar Body Panel */}
-      <div className={`fixed top-0 left-0 bottom-0 z-50 w-full max-w-sm h-full flex flex-col shadow-2xl border-r animate-in slide-in-from-left duration-300 ${
+      <div className={`fixed top-0 left-0 bottom-0 z-50 w-full md:max-w-sm h-full flex flex-col shadow-2xl border-r animate-in slide-in-from-left duration-300 ${
         theme === 'sweet' ? 'bg-[#FFF0F5] border-[#FFB6C1]' : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800'
       }`}>
         {/* Header */}

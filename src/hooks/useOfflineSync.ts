@@ -49,6 +49,9 @@ const BUCKET_BY_TYPE: Record<string, string> = {
 };
 
 async function uploadPendingMedia(pending: PendingMessage): Promise<string | null> {
+  // Already-hosted media (e.g. a GIF picked from the keyboard) — nothing to
+  // upload, the URL is already good to insert as-is.
+  if (pending.media_url) return pending.media_url;
   if (!pending.media_blob) return null;
 
   const bucket = BUCKET_BY_TYPE[pending.message_type] || 'chat-media';

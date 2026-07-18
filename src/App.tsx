@@ -330,11 +330,16 @@ useEffect(() => {
 const handleGifAction = async (input: string) => {
   if (!input.trim()) return;
 
-  const isUrl = input.match(/\.(jpeg|jpg|gif|png|webp)$/i) || input.includes('giphy.com/media');
+  // Extension check tolerates a trailing query string (`...giphy.gif?cid=abc`),
+  // since real Giphy/Tenor share links almost always have one appended.
+  const isUrl = /\.(jpeg|jpg|gif|png|webp)(\?.*)?$/i.test(input) || input.includes('giphy.com/media');
 
   if (isUrl) {
-    // For direct links, "Recent" is fine as a default
-    setMyGifs(prev => [{ url: input, packName: 'Recent' }, ...prev]);
+    // Route it through the same preview grid a search result would use, so
+    // the user actually sees the gif that was parsed before it's saved,
+    // instead of it vanishing straight into the library with no confirmation.
+    setPreviewGifs([input]);
+    setLastSearchQuery('Recent');
     setGifSearch('');
   } else {
     const API_KEY = 'JX6l9HNPFvbDyvn5Uazj0xboLaLtd2ev';

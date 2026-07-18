@@ -29,8 +29,12 @@ export function ProfileSidebar({ onClose, theme, user }: ProfileSidebarProps) {
 
   // Reference to the hidden input
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [showImageViewer, setShowImageViewer] = useState(false);
-  useBackableState(showImageViewer, () => setShowImageViewer(false));
+  const [viewerIndex, setViewerIndex] = useState<number | null>(null);
+  useBackableState(viewerIndex !== null, () => setViewerIndex(null));
+  const [photos, setPhotos] = useState<string[]>([]);
+  // Gallery viewer needs a full array — legacy accounts with only the old
+  // single avatar_url and no profile_photos rows yet still get a 1-photo view.
+  const galleryPhotos = photos.length > 0 ? photos : (avatarUrl ? [avatarUrl] : []);
 
   // Monitor network state adjustments seamlessly
   useEffect(() => {
@@ -92,6 +96,19 @@ export function ProfileSidebar({ onClose, theme, user }: ProfileSidebarProps) {
     hydrateProfile();
   }, [user?.id, isOnline]); // 🌸 Removed profile reference to stop the crash loop
 
+  useEffect(() => {
+    async function loadPhotos() {
+      if (!user?.id || !isOnline) return;
+      const { data, error } = await supabase
+        .from('profile_photos')
+        .select('url')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+      if (!error && data) setPhotos(data.map((row) => row.url));
+    }
+    loadPhotos();
+  }, [user?.id, isOnline]);
+
   // If a profile edit made while offline finishes syncing while this
   // sidebar happens to be open, reflect that instead of leaving a stale
   // "saved locally, will sync" message up.
@@ -150,7 +167,16 @@ export function ProfileSidebar({ onClose, theme, user }: ProfileSidebarProps) {
 
         await updateProfile({ avatar_url: publicUrl });
         setAvatarUrl(publicUrl);
-        
+
+        // Adds to the gallery rather than replacing it — the newest photo
+        // also becomes avatar_url above, so every other screen in the app
+        // (chat headers, friend lists, etc.) keeps showing the latest one
+        // automatically without needing any changes there.
+        const { error: photoError } = await supabase
+          .from('profile_photos')
+          .insert({ user_id: user.id, url: publicUrl });
+        if (!photoError) setPhotos((prev) => [publicUrl, ...prev]);
+
         await localDB.saveUserProfile(user.id, {
           display_name: displayName,
           bio: bio,
@@ -166,6 +192,69 @@ export function ProfileSidebar({ onClose, theme, user }: ProfileSidebarProps) {
         setLoading(false);
       }
     };
+  }
+
+  async function handleRemovePhoto(index: number) {
+    const url = galleryPhotos[index];
+    if (!user?.id || !url) return;
+
+    const { error } = await supabase
+      .from('profile_photos')
+      .delete()
+      .eq('user_id', user.id)
+      .eq('url', url);
+
+    if (error) {
+      showError('Failed to remove photo.');
+      return;
+    }
+
+    const remaining = photos.filter((u) => u !== url);
+    setPhotos(remaining);
+
+    // Removing the current main photo promotes whichever one is next in
+    // line — falls back to nothing if that was the very last photo.
+    if (avatarUrl === url) {
+      const newMain = remaining[0] || null;
+      await updateProfile({ avatar_url: newMain });
+      setAvatarUrl(newMain);
+      await localDB.saveUserProfile(user.id, {
+        display_name: displayName,
+        bio,
+        avatar_url: newMain,
+        username,
+        created_at: createdAt
+      }, { pendingSync: false });
+    }
+
+    showSuccess('Photo removed.');
+  }
+
+  async function handleSetMainPhoto(index: number) {
+    const url = galleryPhotos[index];
+    if (!user?.id || !url || url === avatarUrl) return;
+
+    // No separate "position" column — bumping created_at is what naturally
+    // moves this row to the front of the created_at-DESC ordered gallery.
+    await supabase
+      .from('profile_photos')
+      .update({ created_at: new Date().toISOString() })
+      .eq('user_id', user.id)
+      .eq('url', url);
+
+    await updateProfile({ avatar_url: url });
+    setAvatarUrl(url);
+    setPhotos((prev) => [url, ...prev.filter((u) => u !== url)]);
+
+    await localDB.saveUserProfile(user.id, {
+      display_name: displayName,
+      bio,
+      avatar_url: url,
+      username,
+      created_at: createdAt
+    }, { pendingSync: false });
+
+    showSuccess('Set as main profile photo! ✨');
   }
 
   async function handleSave() {
@@ -278,12 +367,11 @@ export function ProfileSidebar({ onClose, theme, user }: ProfileSidebarProps) {
                 <img
                   src={avatarUrl}
                   alt={displayName}
-                  onClick={() => setShowImageViewer(true)}
+                  onClick={() => setViewerIndex(0)}
                   className="w-32 h-32 rounded-full object-cover border-4 border-pink-200 shadow-md cursor-pointer active:scale-95 transition-transform"
                 />
               ) : (
                 <div
-                  onClick={() => avatarUrl && setShowImageViewer(true)}
                   className="w-32 h-32 rounded-full bg-gradient-to-br from-pink-400 to-purple-500 flex items-center justify-center text-white font-bold text-4xl uppercase shadow-lg"
                 >
                   {displayName?.[0] || username?.[0] || 'U'}
@@ -300,11 +388,14 @@ export function ProfileSidebar({ onClose, theme, user }: ProfileSidebarProps) {
               )}
             </div>
 
-            {showImageViewer && avatarUrl && (
+            {viewerIndex !== null && galleryPhotos.length > 0 && (
               <ImageViewerModal
-                src={avatarUrl}
+                images={galleryPhotos}
+                initialIndex={viewerIndex}
                 alt={displayName}
-                onClose={() => setShowImageViewer(false)}
+                onClose={() => setViewerIndex(null)}
+                onRemove={handleRemovePhoto}
+                onSetMain={handleSetMainPhoto}
               />
             )}
 
