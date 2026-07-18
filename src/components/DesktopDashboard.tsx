@@ -46,7 +46,10 @@ export function DesktopDashboard({ theme, setTheme, onOpenGifPanel, myGifs, setM
   useBackableState(showLockedPanel, () => setShowLockedPanel(false));
 
   useEffect(() => {
-      if (user?.id) {
+      // iOS Safari/WKWebView has no window.Notification at all — referencing
+      // the bare identifier there throws "Can't find variable: Notification"
+      // and crashes the whole tree, so this has to be feature-detected first.
+      if (user?.id && 'Notification' in window) {
         // If the browser already has permission, this silently registers/syncs the worker to Supabase
         Notification.requestPermission().then((permission) => {
           if (permission === 'granted') {
