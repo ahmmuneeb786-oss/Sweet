@@ -176,7 +176,8 @@ export function DesktopDashboard({ theme, setTheme, onOpenGifPanel, myGifs, setM
             setSelectedChatId(selectedUser.id); 
             setShowFriends(false);
           }}
-          setActiveChatId={setSelectedChatId} 
+          setActiveChatId={setSelectedChatId}
+          initialTab="search"
         />
       )}
       {showSettings && (

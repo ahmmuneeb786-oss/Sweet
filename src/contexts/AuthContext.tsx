@@ -1,7 +1,7 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
-import { resetChatsReady } from '../hooks/useChatsReady';
+import { resetChatsReady, markChatsReady } from '../hooks/useChatsReady';
 
 interface Profile {
   id: string;
@@ -40,6 +40,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  // Guards against a stale profile fetch clobbering a newer one. During
+  // signup two loadProfile() calls race: the SIGNED_IN one (fires before the
+  // profile row exists → returns null) and the one completeProfileSetup runs
+  // after inserting the row (returns real data). Only the latest-issued call
+  // is allowed to write state, so the real profile always wins regardless of
+  // which network response lands last.
+  const profileLoadSeq = useRef(0);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -87,6 +94,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   async function loadProfile(userId: string) {
+    const seq = ++profileLoadSeq.current;
     try {
       const { data, error } = await supabase
         .from('profiles')
@@ -95,11 +103,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .maybeSingle();
 
       if (error) throw error;
-      setProfile(data);
+      // Only apply if this is still the most recent load — a slower, older
+      // fetch (e.g. the pre-insert SIGNED_IN one that returns null) must not
+      // overwrite a newer real profile that already landed.
+      if (seq === profileLoadSeq.current) setProfile(data);
     } catch (error) {
       console.error('Error loading profile:', error);
     } finally {
-      setLoading(false);
+      if (seq === profileLoadSeq.current) setLoading(false);
     }
   }
 
@@ -198,7 +209,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           display_name: displayName.trim(),
           bio: '',
           is_online: true,
-          theme: 'sweet',
           face_lock_enabled: false,
         });
 
@@ -230,6 +240,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             role: 'admin'
           });
       }
+
+      // A brand-new account has nothing worth waiting on ChatList's network
+      // round trip for — at most the self-chat above, which will simply
+      // appear once it lands. Signal readiness immediately instead of
+      // leaving the user staring at "Loading your chats..." for however long
+      // that fetch takes (or the 8s fallback), waiting on a signal that a
+      // fresh, cache-less account has no fast local path to.
+      markChatsReady();
+
+      // Now that the profile row actually exists, fetch it into state. The
+      // earlier SIGNED_IN load ran before this insert and came back null,
+      // which is the "ghost account" (no name/avatar) a fresh user would
+      // otherwise see until a full reload. Doing it here, still behind the
+      // splash, means the app only reveals once real profile data is loaded.
+      await loadProfile(authUser.id);
 
       return { error: null };
     } catch (error) {

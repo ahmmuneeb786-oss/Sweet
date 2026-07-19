@@ -71,11 +71,12 @@ export function MobileDashboard({ theme, setTheme, onOpenGifPanel, myGifs, setMy
         <div className="fixed inset-0 z-[100] w-full h-full">
           {showProfile && <ProfileSidebar onClose={() => setShowProfile(false)} theme={theme} user={user}/>}
           {showFriends && (
-            <FriendList 
-              theme={theme} 
-              onClose={() => setShowFriends(false)} 
+            <FriendList
+              theme={theme}
+              onClose={() => setShowFriends(false)}
               onSelectUser={(user) => { setSelectedChatId(user.id); setShowFriends(false); }}
-              setActiveChatId={setSelectedChatId} 
+              setActiveChatId={setSelectedChatId}
+              initialTab="search"
             />
           )}
           {showSettings && 

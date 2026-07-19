@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, Search, UserPlus, Check, X as XIcon, MessageCircle } from 'lucide-react';
+import { X, Search, UserPlus, Check, X as XIcon, MessageCircle, Inbox, Users, Heart } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { localDB } from '../db';
@@ -12,6 +12,9 @@ interface FriendListProps {
   onClose: () => void;
   onSelectUser: (user: any) => void;
   setActiveChatId: (id: string) => void;
+  /** Which tab to open on. The chat list's "Friends" button opens 'search'
+   *  so users can immediately look someone up to add. */
+  initialTab?: 'friends' | 'requests' | 'search';
 }
 
 interface Friend {
@@ -35,12 +38,53 @@ interface FriendRequest {
   };
 }
 
-export function FriendList({ theme, onClose, onSelectUser, setActiveChatId }: FriendListProps) {
+// Shared sweet empty-state — same silhouette across tabs (soft gradient
+// badge, heading, subtitle) but each tab passes its own icon/copy so the
+// three read as distinct moods rather than the same "person +" everywhere.
+function EmptyState({
+  icon: Icon,
+  accent,
+  title,
+  subtitle,
+  theme,
+}: {
+  icon: typeof UserPlus;
+  accent: React.ReactNode;
+  title: string;
+  subtitle: string;
+  theme: 'light' | 'dark' | 'sweet';
+}) {
+  return (
+    <div className="flex-1 flex flex-col items-center justify-center min-h-[16rem] text-center px-6 animate-in fade-in duration-300">
+      <div className="relative mb-4">
+        <div className={`w-20 h-20 rounded-[28px] flex items-center justify-center rotate-3 ${
+          theme === 'sweet'
+            ? 'bg-gradient-to-br from-[#FFD1DC] to-[#FF9EC0] shadow-lg shadow-pink-200/60'
+            : 'bg-gradient-to-br from-pink-400 to-rose-500 shadow-lg'
+        }`}>
+          <Icon className="w-9 h-9 text-white" strokeWidth={1.75} />
+        </div>
+        {/* Little floating accent for extra sweetness */}
+        <div className="absolute -top-1.5 -right-1.5 w-7 h-7 rounded-full bg-white shadow-md flex items-center justify-center">
+          {accent}
+        </div>
+      </div>
+      <h3 className={`font-bold text-base ${theme === 'sweet' ? 'text-[#4B004B]' : 'text-gray-800 dark:text-white'}`}>
+        {title}
+      </h3>
+      <p className="text-sm text-gray-400 mt-1 max-w-[230px] leading-relaxed">
+        {subtitle}
+      </p>
+    </div>
+  );
+}
+
+export function FriendList({ theme, onClose, onSelectUser, setActiveChatId, initialTab = 'friends' }: FriendListProps) {
   const { user } = useAuth();
   const { showSuccess, showError } = useNotify();
   const confirm = useConfirm();
   const { isOnline } = usePresence(user?.id);
-  const [activeTab, setActiveTab] = useState<'friends' | 'requests' | 'search'>('friends');
+  const [activeTab, setActiveTab] = useState<'friends' | 'requests' | 'search'>(initialTab);
   const [friends, setFriends] = useState<Friend[]>([]);
   const [friendRequests, setFriendRequests] = useState<FriendRequest[]>([]);
   const [sentRequests, setSentRequests] = useState<FriendRequest[]>([]);
@@ -362,14 +406,14 @@ export function FriendList({ theme, onClose, onSelectUser, setActiveChatId }: Fr
 
           <div className={`flex gap-2 p-1 rounded-xl ${theme === 'sweet' ? 'bg-[#FFC0CB]/40' : 'bg-gray-100 dark:bg-gray-800'}`}>
             <button
-              onClick={() => setActiveTab('friends')}
+              onClick={() => setActiveTab('search')}
               className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-all ${
-                activeTab === 'friends'
+                activeTab === 'search'
                   ? (theme === 'sweet' ? 'bg-[#FFF0F5] text-[#8B004B] shadow-sm' : 'bg-white text-pink-600 shadow-sm')
                   : (theme === 'sweet' ? 'text-[#8B004B]/60 hover:text-[#8B004B]' : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white')
               }`}
             >
-              Friends ({friends.length})
+              Search
             </button>
             <button
               onClick={() => setActiveTab('requests')}
@@ -387,14 +431,14 @@ export function FriendList({ theme, onClose, onSelectUser, setActiveChatId }: Fr
               )}
             </button>
             <button
-              onClick={() => setActiveTab('search')}
+              onClick={() => setActiveTab('friends')}
               className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-all ${
-                activeTab === 'search'
+                activeTab === 'friends'
                   ? (theme === 'sweet' ? 'bg-[#FFF0F5] text-[#8B004B] shadow-sm' : 'bg-white text-pink-600 shadow-sm')
                   : (theme === 'sweet' ? 'text-[#8B004B]/60 hover:text-[#8B004B]' : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white')
               }`}
             >
-              Search
+              Friends ({friends.length})
             </button>
           </div>
 
@@ -412,9 +456,9 @@ export function FriendList({ theme, onClose, onSelectUser, setActiveChatId }: Fr
           )}
         </div>
 
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 min-h-0 overflow-y-auto">
           {activeTab === 'friends' && (
-            <div>
+            <div className="min-h-full flex flex-col">
               {user && (
                 <div
                   className={`p-4 border-b cursor-pointer transition-colors flex items-center gap-3 ${
@@ -462,11 +506,13 @@ export function FriendList({ theme, onClose, onSelectUser, setActiveChatId }: Fr
               )}
 
               {friends.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-64 text-center px-4">
-                  <UserPlus className="w-16 h-16 text-gray-300 mb-3" />
-                  <p className="text-gray-500 font-medium">No friends yet</p>
-                  <p className="text-gray-400 text-sm mt-1">Search for users to add as friends</p>
-                </div>
+                <EmptyState
+                  icon={Users}
+                  accent={<Heart className="w-3.5 h-3.5 text-pink-500 fill-pink-500" />}
+                  title="Your circle is empty"
+                  subtitle="Add friends to start sharing sweet moments together."
+                  theme={theme}
+                />
               ) : (
                 friends.map((friend) => {
                   return (
@@ -527,12 +573,15 @@ export function FriendList({ theme, onClose, onSelectUser, setActiveChatId }: Fr
           )}
 
           {activeTab === 'requests' && (
-            <div>
+            <div className="min-h-full flex flex-col">
               {friendRequests.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-64 text-center px-4">
-                  <UserPlus className="w-16 h-16 text-gray-300 mb-3" />
-                  <p className="text-gray-500 font-medium">No friend requests</p>
-                </div>
+                <EmptyState
+                  icon={Inbox}
+                  accent={<span className="text-[13px] leading-none">💌</span>}
+                  title="No requests yet"
+                  subtitle="When someone wants to connect, their friend request will land right here."
+                  theme={theme}
+                />
               ) : (
                 friendRequests.map((request) => (
                   <div
@@ -585,19 +634,27 @@ export function FriendList({ theme, onClose, onSelectUser, setActiveChatId }: Fr
           )}
 
           {activeTab === 'search' && (
-            <div>
+            <div className="min-h-full flex flex-col">
               {loading ? (
                 <div className="flex items-center justify-center h-32">
                   <div className="w-8 h-8 border-3 border-pink-500 border-t-transparent rounded-full animate-spin" />
                 </div>
               ) : searchResults.length === 0 && searchQuery ? (
-                <div className="flex flex-col items-center justify-center h-64 text-center px-4">
+                <div className="flex-1 flex flex-col items-center justify-center min-h-[16rem] text-center px-4">
                   <Search className="w-16 h-16 text-gray-300 mb-3" />
                   <p className="text-gray-500 font-medium">No users found</p>
                   <p className="text-gray-400 text-sm mt-1">
                     Try searching with a different username
                   </p>
                 </div>
+              ) : searchResults.length === 0 ? (
+                <EmptyState
+                  icon={UserPlus}
+                  accent={<Search className="w-3.5 h-3.5 text-pink-500" />}
+                  title="Find your connections"
+                  subtitle="Search any user in the app by their username to add them as a friend."
+                  theme={theme}
+                />
               ) : (
                 searchResults.map((result) => {
                   return (

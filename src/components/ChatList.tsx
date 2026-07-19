@@ -361,7 +361,7 @@ export function ChatList({ selectedChatId, onSelectChat, onShowProfile, onShowFr
   }
 
   return (
-    <div className={`w-full md:w-96 h-full p-4 border-b sticky top-0 z-10 bg-[#FFE4E1]/90 ${isLowPerfMode ? '' : 'backdrop-blur-md'} flex-shrink-0 ${theme === 'sweet' ? 'bg-[#FFF0F5] border-[#FFB6C1]' : 'bg-white dark:bg-gray-900 border-gray-200'}`}>
+    <div className={`w-full md:w-96 h-full p-4 border-b sticky top-0 z-10 flex flex-col bg-[#FFE4E1]/90 ${isLowPerfMode ? '' : 'backdrop-blur-md'} flex-shrink-0 ${theme === 'sweet' ? 'bg-[#FFF0F5] border-[#FFB6C1]' : 'bg-white dark:bg-gray-900 border-gray-200'}`}>
       <div className="md:hidden absolute inset-0 overflow-hidden pointer-events-none z-0">
         {/* FloatingHearts intentionally NOT rendered here — Dashboard (this
             component's parent, always mounted alongside it) already renders
@@ -503,7 +503,7 @@ export function ChatList({ selectedChatId, onSelectChat, onShowProfile, onShowFr
             className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-gradient-to-r from-pink-500 to-rose-500 text-white rounded-xl hover:from-pink-600 hover:to-rose-600 transition-all"
           >
             <Users className="w-4 h-4" />
-            <span className="text-sm font-medium">Friends</span>
+            <span className="text-sm font-medium">Find Friends</span>
           </button>
           <button
             onClick={onShowCreateChat}
@@ -518,7 +518,7 @@ export function ChatList({ selectedChatId, onSelectChat, onShowProfile, onShowFr
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 min-h-0 overflow-y-auto">
         {loading ? (
           <div className="flex items-center justify-center h-32">
             <div className="w-8 h-8 border-3 border-pink-500 border-t-transparent rounded-full animate-spin" />

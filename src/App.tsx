@@ -46,7 +46,7 @@ export function useAnonymousVisitTracker() {
   }, []);
 }
 
-function SplashScreen({ message, overlay = false }: { message: string; overlay?: boolean }) {
+function SplashScreen({ message, overlay = false, showReloadHint = false }: { message: string; overlay?: boolean; showReloadHint?: boolean }) {
   return (
     <div className={
       overlay
@@ -86,6 +86,23 @@ function SplashScreen({ message, overlay = false }: { message: string; overlay?:
             <div className="h-full bg-gradient-to-r from-pink-400 to-rose-400 w-1/2 rounded-full animate-[loading_1.5s_infinite_ease-in-out]"></div>
           </div>
         </div>
+
+        {/* Only appears if loading drags on unusually long — a gentle,
+            neutral nudge rather than an error, since a stuck load is almost
+            always cleared by a simple reload. */}
+        {showReloadHint && (
+          <div className="mt-6 flex flex-col items-center gap-3 animate-in fade-in duration-500">
+            <p className="text-pink-400/70 text-[11px] font-medium max-w-[220px] text-center leading-relaxed">
+              This is taking longer than usual. If it doesn't clear, try reloading the app.
+            </p>
+            <button
+              onClick={() => window.location.reload()}
+              className="px-5 py-2 rounded-full bg-pink-500 hover:bg-pink-600 text-white text-xs font-bold uppercase tracking-widest transition-colors active:scale-95"
+            >
+              Reload App
+            </button>
+          </div>
+        )}
       </div>
 
       <style>{`
@@ -99,7 +116,7 @@ function SplashScreen({ message, overlay = false }: { message: string; overlay?:
 }
 
 function AppContent() { 
-  const { user, loading, signOut } = useAuth(); 
+  const { user, profile, loading, signOut } = useAuth(); 
   const { showSuccess } = useNotify();
   useAnonymousVisitTracker();
   useHeartbeat(user?.id);
@@ -113,13 +130,27 @@ function AppContent() {
   const [hasOpened, setHasOpened] = useState(false);
   const [mailStage, setMailStage] = useState<'box-arrival' | 'box-idle' | 'envelope-reveal' | 'letter-unfold'>('box-arrival');
   const [faceLockEnabled, setFaceLockEnabled] = useState(false);
-  const [profileSyncLoading, setProfileSyncLoading] = useState(true);
+  // Which user id we've finished the profile/face-lock check for. Deriving
+  // profileSyncLoading from this (instead of a lagging boolean set inside an
+  // effect) is what actually kills the flash: the instant `user` becomes
+  // non-null, this still holds the OLD id (or null), so profileSyncLoading is
+  // already `true` DURING that same render — there is no frame where `user`
+  // is set but the splash gate is open. A boolean flipped in an effect can't
+  // do this, because effects run after the (already-flashed) render commits.
+  const [profileSyncedFor, setProfileSyncedFor] = useState<string | null>(null);
+  // Also hold the splash until `profile` is actually loaded — otherwise a
+  // brand-new signup could reveal the app (face check done) while the
+  // profile row fetch is still in flight, flashing a "ghost account" with no
+  // name/avatar for a beat. If profile genuinely can't load, the 6s reload
+  // hint below is the escape hatch rather than an indefinite hang.
+  const profileSyncLoading = !!user && (profileSyncedFor !== user.id || !profile);
   // isAppLocked only ever becomes true from a confirmed profile row that
   // explicitly has face_lock_enabled — never as a default, never as a
   // fail-safe guess. See the fetchFaceDescriptor effect below for why.
   const [isAppLocked, setIsAppLocked] = useState(false);
   const chatsReady = useChatsReady();
   const [readyTimedOut, setReadyTimedOut] = useState(false);
+  const [showSlowHint, setShowSlowHint] = useState(false);
 
   // Safety net: if ChatList never reports ready for any reason (a bug, a
   // stalled request, whatever), don't trap the user on the splash forever.
@@ -128,6 +159,16 @@ function AppContent() {
     const timer = setTimeout(() => setReadyTimedOut(true), 8000);
     return () => clearTimeout(timer);
   }, [chatsReady]);
+
+  // Whenever we're sitting on ANY loading screen, arm a timer that surfaces a
+  // neutral "try reloading" hint if it drags past ~6s. Cleared the moment
+  // loading resolves, so a normal fast load never shows it.
+  const isSplashUp = loading || profileSyncLoading || (!isAppLocked && !chatsReady && !readyTimedOut);
+  useEffect(() => {
+    if (!isSplashUp) { setShowSlowHint(false); return; }
+    const timer = setTimeout(() => setShowSlowHint(true), 6000);
+    return () => clearTimeout(timer);
+  }, [isSplashUp]);
   const [showLetter, setShowLetter] = useState(() => {
   const hasSeenWelcome = localStorage.getItem('has_seen_welcome');
   return !hasSeenWelcome;
@@ -149,10 +190,10 @@ function AppContent() {
 
   useEffect(() => {
   const fetchFaceDescriptor = async () => {
-    if (!user?.id) {
-      setProfileSyncLoading(false);
-      return;
-    }
+    if (!user?.id) return;
+    // Capture the id up front so every "we're done syncing THIS user"
+    // signal below records the right one even if `user` changes mid-flight.
+    const uid = user.id;
 
     // Local first — instant, and works fully offline. This is what makes
     // face-lock actually usable without a connection.
@@ -165,7 +206,7 @@ function AppContent() {
     // what caused this bug the first time), so we deliberately do NOT fast
     // release on it — we wait for server confirmation instead. Fail-locked,
     // not fail-open.
-    const cached = await localDB.getFaceLockDataLocally(user.id);
+    const cached = await localDB.getFaceLockDataLocally(uid);
     if (cached?.enabled) {
       if (cached.descriptor) {
         setSavedDescriptor(cached.descriptor);
@@ -175,7 +216,7 @@ function AppContent() {
       setIsAppLocked(true);
       // Still need models ready before it's safe to show the scanner.
       await preloadFaceModels();
-      setProfileSyncLoading(false);
+      setProfileSyncedFor(uid);
     }
 
     // Then quietly reconcile with the server — this is the ONLY path that
@@ -183,7 +224,6 @@ function AppContent() {
     // was no cache at all), and it's also what corrects a stale/corrupted
     // "unlocked" cache before anything gets a chance to render.
     try {
-      if (!cached?.enabled) setProfileSyncLoading(true);
       // maybeSingle(), not single(): right after a fresh signup, a session
       // can exist for a moment before the profile row has actually finished
       // being inserted (completeProfileSetup runs as a separate step after
@@ -195,7 +235,7 @@ function AppContent() {
       const { data, error } = await supabase
         .from('profiles')
         .select('face_descriptor, face_lock_enabled')
-        .eq('id', user.id)
+        .eq('id', uid)
         .maybeSingle();
 
       if (error) throw error;
@@ -222,7 +262,7 @@ function AppContent() {
 
       // Keep the local cache in sync with whatever the server just said —
       // covers face-lock being toggled from a different device.
-      await localDB.saveFaceLockDataLocally(user.id, descriptor, enabled);
+      await localDB.saveFaceLockDataLocally(uid, descriptor, enabled);
 
       if (enabled) {
         // Same reasoning as the cached branch above: don't let `finally`
@@ -241,15 +281,22 @@ function AppContent() {
       console.error('Failed to check face lock status:', err);
     }
     finally {
-      setProfileSyncLoading(false);
+      // Mark this user's profile check complete — this is what flips the
+      // derived profileSyncLoading to false and reveals the app. Even on
+      // error we release (fail-open on the splash), so a network blip can't
+      // trap the user on "Preparing your inbox" forever.
+      setProfileSyncedFor(uid);
     }
   };
 
   if (!loading && user) {
     fetchFaceDescriptor();
-  }
-  else {
-    setProfileSyncLoading(false);
+  } else if (!user) {
+    // Cleared on logout so a later login (even the same account in the same
+    // tab) always re-shows the splash and re-runs the face-lock check from
+    // scratch, instead of the derived gate skipping straight through on a
+    // stale "already synced this id" value. No-op when already null.
+    setProfileSyncedFor(null);
   }
   // Depending on user?.id (a stable primitive) instead of the whole `user`
   // object was the second half of the tab-refocus splash bug: Supabase
@@ -358,14 +405,14 @@ const handleGifAction = async (input: string) => {
 };
 
 if (loading || profileSyncLoading) {
-  return <SplashScreen message="Preparing your inbox..." />;
+  return <SplashScreen message="Preparing your inbox..." showReloadHint={showSlowHint} />;
 }
 
   if (!user) {
     return (
       <div className={theme === 'dark' ? 'dark' : ''}>
         <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
-          <Auth setProfileSyncLoading={setProfileSyncLoading} />
+          <Auth />
         </div>
       </div>
     );
@@ -521,7 +568,7 @@ if (loading || profileSyncLoading) {
         />
       ) : (
         !chatsReady && !readyTimedOut && (
-          <SplashScreen message="Loading your chats..." overlay />
+          <SplashScreen message="Loading your chats..." overlay showReloadHint={showSlowHint} />
         )
       )}
 

@@ -31,7 +31,7 @@ function isValidEmailFormat(emailToCheck: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailToCheck.trim());
 }
 
-export function Auth({ setProfileSyncLoading }: { setProfileSyncLoading: (loading: boolean) => void }) {
+export function Auth() {
   const { signIn, signUp, verifySignupOtp, resendSignupOtp, completeProfileSetup } = useAuth();
   const { showSuccess, showError, showInfo } = useNotify();
   const { isLowPerfMode } = usePerformance();
@@ -211,13 +211,10 @@ useEffect(() => {
           }
           throw error;
         }
-        // Only NOW, after a real successful sign-in, hand off to the app's
-        // own splash — it covers fetching the profile/face-lock settings.
-        // Setting this before we knew the outcome (the old behavior) meant
-        // any early-return failure path (e.g. the domain check below) left
-        // the app permanently stuck on that splash, since nothing else was
-        // ever going to flip it back off.
-        setProfileSyncLoading(true);
+        // Nothing to do here anymore — App derives its "Preparing your inbox"
+        // splash directly from `user` becoming set (see profileSyncLoading in
+        // App.tsx), so the hand-off happens automatically the instant the
+        // session propagates, with no flash to guard against manually.
       } else if (mode === 'signup') {
         if (password !== confirmPassword) {
           throw new Error('Passwords do not match');
@@ -266,7 +263,6 @@ useEffect(() => {
             throw new Error(`Account created, but profile setup failed: ${profileError.message}. Please try signing up again.`);
           }
           showSuccess('Welcome to Sweet! Your account is ready. 💕');
-          setProfileSyncLoading(true);
           return;
         }
 
@@ -296,8 +292,8 @@ useEffect(() => {
         }
 
         showSuccess('Welcome to Sweet! Your account is ready. 💕');
-        // Real session + profile now exist — hand off to the app.
-        setProfileSyncLoading(true);
+        // Real session + profile now exist — App's derived splash takes over
+        // automatically once the session propagates.
       } else if (mode === 'forgot') {
         const { error } = await supabase.auth.resetPasswordForEmail(email, {
           redirectTo: window.location.origin + '/reset-password',
