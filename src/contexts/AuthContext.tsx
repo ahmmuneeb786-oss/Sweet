@@ -93,6 +93,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => subscription.unsubscribe();
   }, []);
 
+  // Re-pull the user's own profile the moment the connection returns —
+  // Supabase auth events don't reliably fire on a plain network reconnect, so
+  // without this a profile edited elsewhere (or a stale local one) wouldn't
+  // refresh until the next sign-in. Pairs with ChatList/ChatWindow's own
+  // reconnect refetches so the whole app catches up on reconnect.
+  useEffect(() => {
+    if (!user?.id) return;
+    const onReconnect = () => {
+      loadProfile(user.id);
+      updateOnlineStatus(true);
+    };
+    window.addEventListener('online', onReconnect);
+    return () => window.removeEventListener('online', onReconnect);
+  }, [user?.id]);
+
   async function loadProfile(userId: string) {
     const seq = ++profileLoadSeq.current;
     try {

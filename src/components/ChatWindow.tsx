@@ -130,6 +130,11 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
   // Set once the authoritative load has committed, so the initial-position
   // layout effect doesn't fire off the (possibly-stale) cache render.
   const initialReadyRef = useRef(false);
+  // Whether the view should keep pinning to the bottom. True on open and while
+  // the user is at/near the bottom; turned off once they scroll up. This is
+  // what keeps us at the newest message even as avatars/images load in and
+  // grow the content after the first paint.
+  const stickToBottomRef = useRef(true);
   const [newMessage, setNewMessage] = useState('');
   // When set, the composer is editing an existing message instead of sending
   // a new one. Holds the message id being edited.
@@ -185,6 +190,7 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
       loadingOlderRef.current = false;
       didInitialScrollRef.current = false;
       initialReadyRef.current = false;
+      stickToBottomRef.current = true;
       prevLastIdRef.current = null;
       setReplyParents({});
       setHighlightedMessageId(null);
@@ -246,6 +252,12 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
   //    top-to-bottom animation),
   //  - after that, smooth-scroll to the bottom only for genuinely NEW messages
   //    appended at the end (not edits, reconciles, or reaction updates).
+  // Jump the scroll to the very bottom instantly.
+  const pinToBottom = useCallback(() => {
+    const c = messagesContainerRef.current;
+    if (c) c.scrollTop = c.scrollHeight;
+  }, []);
+
   useLayoutEffect(() => {
     const container = messagesContainerRef.current;
     if (justPrependedRef.current && container) {
@@ -254,27 +266,37 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
       return;
     }
 
-    // One-time instant positioning when a chat opens (after the authoritative
-    // load, signalled by initialReadyRef): jump straight to the bottom (most
-    // recent messages). No animation — this is what removes the top-to-bottom
-    // scroll on open. The "Unread messages" divider still marks where new
-    // messages begin; the user scrolls up to it.
+    // One-time positioning when a chat opens (after the authoritative load):
+    // land at the very bottom (newest messages), no animation. We pin now AND
+    // across the next few frames/timeouts because avatars and image/gif
+    // bubbles finish loading a moment later and grow the content — without the
+    // repeated pins, that late growth would leave the view stranded up top
+    // (which was the bug). onLoadCapture on the container keeps pinning too.
     if (!didInitialScrollRef.current) {
       if (!initialReadyRef.current || messages.length === 0 || !container) return;
       didInitialScrollRef.current = true;
-      container.scrollTop = container.scrollHeight;
+      stickToBottomRef.current = true;
+      // Later pins bail if the user has since scrolled up (stick turned off),
+      // so we don't yank them back to the bottom.
+      const pinIfSticking = () => { if (stickToBottomRef.current) pinToBottom(); };
+      pinToBottom();
+      requestAnimationFrame(pinIfSticking);
+      setTimeout(pinIfSticking, 100);
+      setTimeout(pinIfSticking, 300);
+      setTimeout(pinIfSticking, 600);
       prevLastIdRef.current = messages[messages.length - 1]?.id ?? null;
       return;
     }
 
-    // After the initial open, smooth-scroll to the bottom only for a genuinely
-    // NEW message appended at the end — not edits, reconciles, or reactions.
+    // After the initial open, scroll to the bottom for a genuinely NEW message
+    // at the end — but only if the user is currently at the bottom (don't yank
+    // them down while they're reading history higher up).
     const lastId = messages.length ? messages[messages.length - 1].id : null;
-    if (lastId && lastId !== prevLastIdRef.current) {
+    if (lastId && lastId !== prevLastIdRef.current && stickToBottomRef.current) {
       scrollToBottom();
     }
     prevLastIdRef.current = lastId;
-  }, [messages]);
+  }, [messages, pinToBottom]);
 
   useEffect(() => {
     if (!chatInfo?.otherUser?.id) return;
@@ -556,12 +578,15 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
   async function loadMessages() {
     if (!chatInfo?.id) return;
 
-    // Loading every message ever sent, unbounded, was the real source of lag
-    // in long-running chats: unbounded network payload AND unbounded DOM
-    // nodes, with every small state change (new message, reaction, typing
-    // indicator) forcing React to re-reconcile the entire history instead of
-    // a bounded recent window. Capping to the most recent page fixes both at
-    // once; older pages are pulled in on demand by loadOlderMessages().
+    // Stage 4 — opening a chat is a LOCAL read. localDB is kept continuously
+    // current by the app-wide message sync (useMessageSync), the launch/
+    // reconnect catch-up (awaited behind the splash on launch, silent on
+    // reconnect), and this chat's own realtime subscription. So tapping a chat
+    // you already have opens instantly with NO network fetch. We only hit the
+    // network the FIRST time a chat is opened on this device (nothing cached
+    // yet) to download its recent history once — after that it stays local.
+    // Older pages still load on scroll-up (loadOlderMessages); reconnect
+    // reconciles the recent window.
     const hidden = loadHiddenMessageIds();
     // First received message not yet marked read = where the "Unread messages"
     // divider goes. Computed BEFORE markMessagesAsRead flips them all to read.
@@ -577,8 +602,23 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
       const recentLocal = localMessages.slice(-MESSAGE_PAGE_SIZE).filter((m) => !hidden.has(m.id));
 
       if (recentLocal.length > 0) {
+        // Have it locally → pure local open, no network round trip.
         setMessages(recentLocal);
         loadAllReactions(recentLocal);
+        // If the cache holds a full page or more, there may be older pages;
+        // loadOlderMessages self-corrects (and can still reach the network) if
+        // it turns out there aren't.
+        hasMoreOlderRef.current = localMessages.length >= MESSAGE_PAGE_SIZE;
+        setUnreadDividerId(firstUnreadId(recentLocal));
+        initialReadyRef.current = true;
+        return;
+      }
+
+      // Nothing cached for this chat yet — first-ever open on this device.
+      // Download the recent window once; from here on it's served from cache.
+      if (!navigator.onLine) {
+        initialReadyRef.current = true; // nothing to show offline; don't block positioning
+        return;
       }
 
       const { data, error } = await supabase
@@ -593,19 +633,13 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
         setMessages(recent);
         await localDB.messages.bulkPut(recent);
         loadAllReactions(recent);
-        // A full page back means there may be older pages; fewer means we've
-        // reached the very first message.
         hasMoreOlderRef.current = data.length === MESSAGE_PAGE_SIZE;
-        // Server data is authoritative for read state — position on it.
         setUnreadDividerId(firstUnreadId(recent));
-        initialReadyRef.current = true;
-      } else if (recentLocal.length > 0) {
-        // Offline / no server data — fall back to the cache for positioning.
-        setUnreadDividerId(firstUnreadId(recentLocal));
-        initialReadyRef.current = true;
       }
+      initialReadyRef.current = true;
     } catch (error) {
-      console.error('Error loading messages offline:', error);
+      console.error('Error loading messages:', error);
+      initialReadyRef.current = true;
     }
   }
 
@@ -942,6 +976,49 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
     };
   }, [chatInfo?.id, chatInfo?.otherUser?.id]);
 
+  // Reconnect catch-up for the OPEN chat. Supabase realtime does NOT replay
+  // messages missed during a disconnect, so when the connection returns we
+  // reconcile the recent window — picking up messages sent, edited, or deleted
+  // while we were offline — merged into the current list (older paginated
+  // messages and unsent optimistic ones preserved) without disturbing scroll.
+  useEffect(() => {
+    if (!chatInfo?.id) return;
+    const chatId = chatInfo.id;
+
+    const reconcile = async () => {
+      if (!navigator.onLine) return;
+      try {
+        const { data, error } = await supabase
+          .from('messages')
+          .select('*, profiles(display_name, avatar_url, username)')
+          .eq('chat_id', chatId)
+          .order('created_at', { ascending: false })
+          .limit(MESSAGE_PAGE_SIZE);
+        if (error || !data) return;
+
+        const hidden = loadHiddenMessageIds();
+        const recent = ([...data].reverse() as unknown as MessageType[]).filter((m) => !hidden.has(m.id));
+        if (recent.length === 0) return;
+
+        await localDB.messages.bulkPut(recent);
+        setMessages((prev) => {
+          const map = new Map(prev.map((m) => [m.id, m]));
+          for (const m of recent) map.set(m.id, { ...map.get(m.id), ...m });
+          return Array.from(map.values()).sort(
+            (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+          );
+        });
+        loadAllReactions(recent);
+        markMessagesAsRead();
+      } catch (err) {
+        console.error('Reconnect reconcile failed:', err);
+      }
+    };
+
+    window.addEventListener('online', reconcile);
+    return () => window.removeEventListener('online', reconcile);
+  }, [chatInfo?.id, loadAllReactions]);
+
   // Live-update message bubbles when the offline outbox resolves one of
   // this chat's queued sends (e.g. connection comes back while this
   // ChatWindow happens to be open).
@@ -1148,7 +1225,13 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
   }, [chatInfo?.id, loadAllReactions]);
 
   const handleMessagesScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
-    if (e.currentTarget.scrollTop < 120 && hasMoreOlderRef.current && !loadingOlderRef.current) {
+    const el = e.currentTarget;
+    // Track "am I at the bottom?" so late content-growth (image loads) and new
+    // messages only auto-scroll when the user actually wants to follow along.
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    stickToBottomRef.current = distanceFromBottom < 100;
+
+    if (el.scrollTop < 120 && hasMoreOlderRef.current && !loadingOlderRef.current) {
       loadOlderMessages();
     }
   }, [loadOlderMessages]);
@@ -1510,6 +1593,10 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
       <div
         ref={messagesContainerRef}
         onScroll={handleMessagesScroll}
+        // Every avatar/image/gif that finishes loading grows the content; while
+        // we're meant to be pinned to the bottom, re-pin so that growth doesn't
+        // strand the view up top. (load doesn't bubble, so we capture it.)
+        onLoadCapture={() => { if (stickToBottomRef.current && !justPrependedRef.current) pinToBottom(); }}
         onClick={() => setShowSweetKeyboard(false)}
         className={`relative flex-1 overflow-y-auto p-4 md:p-6 space-y-4 transition-colors duration-300 overscroll-behavior-y-contain ${
           theme === 'dark' ? 'bg-gray-900' : theme === 'sweet' ? 'bg-[#FFE4E1]/30' : 'bg-gray-50'

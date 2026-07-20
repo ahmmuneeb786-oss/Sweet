@@ -14,6 +14,7 @@ import { supabase } from './lib/supabase';
 import { useHeartbeat } from './hooks/useHeartbeat';
 import { usePresence } from './hooks/usePresence';
 import { useOfflineSync } from './hooks/useOfflineSync';
+import { useMessageSync, catchUpMessages, waitAtMost } from './hooks/useMessageSync';
 import { useChatsReady } from './hooks/useChatsReady';
 import { localDB } from './db';
 import { preloadFaceModels } from './lib/faceModels';
@@ -122,6 +123,7 @@ function AppContent() {
   useHeartbeat(user?.id);
   usePresence(user?.id);
   useOfflineSync();
+  useMessageSync(user?.id);
   const [showGifPanel, setShowGifPanel] = useState(false);
   const [gifSearch, setGifSearch] = useState('');
   const [theme, setTheme] = useState<'light' | 'dark' | 'sweet'>('sweet');
@@ -194,6 +196,14 @@ function AppContent() {
     // Capture the id up front so every "we're done syncing THIS user"
     // signal below records the right one even if `user` changes mid-flight.
     const uid = user.id;
+
+    // Kick off the launch message catch-up in parallel with the face-lock
+    // check, and await it below before releasing the splash — so the app
+    // reveals already up to date (no flash of stale content, then a pop-in of
+    // whatever arrived while the app was closed). Runs behind the loading
+    // screen exactly as requested; the reconnect catch-up (in useMessageSync)
+    // runs silently instead.
+    const catchUpPromise = catchUpMessages(uid);
 
     // Local first — instant, and works fully offline. This is what makes
     // face-lock actually usable without a connection.
@@ -273,6 +283,12 @@ function AppContent() {
         // or a write that hadn't landed yet).
         await preloadFaceModels();
       }
+
+      // Don't reveal the app until the launch catch-up has landed, so the
+      // first thing the user sees is already current — but wait at most 6s so
+      // a slow network can't hang the splash. The catch-up keeps running and
+      // finishes its localDB write even if we stop waiting.
+      await waitAtMost(catchUpPromise, 6000);
     } catch (err) {
       // A genuine error (network failure, etc.) — as opposed to "no row
       // found yet", which is handled above and isn't an error at all. If
