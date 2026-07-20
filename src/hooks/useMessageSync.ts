@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { localDB } from '../db';
+import { emitMessageStored } from './messageBus';
 
 /**
  * App-wide message sync. Mount ONCE at the app root (alongside useOfflineSync).
@@ -99,7 +100,13 @@ export function useMessageSync(userId: string | undefined) {
               .select('*, profiles(display_name, avatar_url, username)')
               .eq('id', row.id)
               .single();
-            if (!error && data) await localDB.messages.put(data as any);
+            if (!error && data) {
+              await localDB.messages.put(data as any);
+              // Push it into the open ChatWindow (if this chat is open) so a
+              // message that landed just before the chat was opened still shows
+              // without a reload.
+              emitMessageStored((data as any).chat_id, data);
+            }
           } catch (err) {
             console.warn('Message sync (insert) failed:', err);
           }
@@ -121,6 +128,8 @@ export function useMessageSync(userId: string | undefined) {
               delivery_status: row.delivery_status,
               media_url: row.media_url,
             });
+            // Reflect the edit/delete/status change in the open ChatWindow live.
+            emitMessageStored(row.chat_id, row);
           } catch (err) {
             console.warn('Message sync (update) failed:', err);
           }

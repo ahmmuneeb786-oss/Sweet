@@ -19,6 +19,7 @@ import { useNotify } from '../contexts/NotificationContext';
 import { useCall } from '../hooks/useCall';
 import { loadHiddenMessageIds, hideMessageLocally } from '../lib/hiddenMessages';
 import { requestChatListRefresh } from '../hooks/chatListRefresh';
+import { onMessageStored } from '../hooks/messageBus';
 import { formatMessagePreview } from '../lib/messagePreview';
 
 interface ChatWindowProps {
@@ -135,6 +136,16 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
   // what keeps us at the newest message even as avatars/images load in and
   // grow the content after the first paint.
   const stickToBottomRef = useRef(true);
+  // When a chat opens WITH unread messages, we anchor the "Unread messages"
+  // divider near the middle of the screen (instead of the bottom) during the
+  // brief settle window while content/images load. Holds that message id; null
+  // otherwise.
+  const openUnreadAnchorRef = useRef<string | null>(null);
+  // True while WE are programmatically scrolling, so the scroll handler ignores
+  // those events (doesn't mistake them for the user scrolling and cancel the
+  // anchor / trigger load-older).
+  const isAutoScrollingRef = useRef(false);
+  const autoScrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [newMessage, setNewMessage] = useState('');
   // When set, the composer is editing an existing message instead of sending
   // a new one. Holds the message id being edited.
@@ -191,6 +202,8 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
       didInitialScrollRef.current = false;
       initialReadyRef.current = false;
       stickToBottomRef.current = true;
+      openUnreadAnchorRef.current = null;
+      isAutoScrollingRef.current = false;
       prevLastIdRef.current = null;
       setReplyParents({});
       setHighlightedMessageId(null);
@@ -252,11 +265,30 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
   //    top-to-bottom animation),
   //  - after that, smooth-scroll to the bottom only for genuinely NEW messages
   //    appended at the end (not edits, reconciles, or reaction updates).
+  // Flag our own scrolls so the scroll handler doesn't treat them as the user
+  // scrolling. Held for a short window so the resulting scroll event is caught.
+  const markAutoScroll = useCallback(() => {
+    isAutoScrollingRef.current = true;
+    if (autoScrollTimerRef.current) clearTimeout(autoScrollTimerRef.current);
+    autoScrollTimerRef.current = setTimeout(() => { isAutoScrollingRef.current = false; }, 120);
+  }, []);
+
   // Jump the scroll to the very bottom instantly.
   const pinToBottom = useCallback(() => {
     const c = messagesContainerRef.current;
-    if (c) c.scrollTop = c.scrollHeight;
-  }, []);
+    if (c) { markAutoScroll(); c.scrollTop = c.scrollHeight; }
+  }, [markAutoScroll]);
+
+  // Center the currently-anchored unread divider in the viewport.
+  const centerOnUnread = useCallback(() => {
+    const c = messagesContainerRef.current;
+    const id = openUnreadAnchorRef.current;
+    if (!c || !id) return;
+    const el = document.getElementById(`msg-${id}`);
+    if (!el) return;
+    markAutoScroll();
+    c.scrollTop = Math.max(0, el.offsetTop - c.clientHeight / 2);
+  }, [markAutoScroll]);
 
   useLayoutEffect(() => {
     const container = messagesContainerRef.current;
@@ -266,24 +298,40 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
       return;
     }
 
-    // One-time positioning when a chat opens (after the authoritative load):
-    // land at the very bottom (newest messages), no animation. We pin now AND
-    // across the next few frames/timeouts because avatars and image/gif
-    // bubbles finish loading a moment later and grow the content — without the
-    // repeated pins, that late growth would leave the view stranded up top
-    // (which was the bug). onLoadCapture on the container keeps pinning too.
+    // One-time positioning when a chat opens (after the authoritative load), no
+    // animation. We (re)apply it now AND across the next few frames/timeouts
+    // because avatars and image/gif bubbles finish loading a moment later and
+    // grow the content — without the repeats, that late growth would strand the
+    // view. onLoadCapture on the container keeps re-applying too.
     if (!didInitialScrollRef.current) {
       if (!initialReadyRef.current || messages.length === 0 || !container) return;
       didInitialScrollRef.current = true;
-      stickToBottomRef.current = true;
-      // Later pins bail if the user has since scrolled up (stick turned off),
-      // so we don't yank them back to the bottom.
-      const pinIfSticking = () => { if (stickToBottomRef.current) pinToBottom(); };
-      pinToBottom();
-      requestAnimationFrame(pinIfSticking);
-      setTimeout(pinIfSticking, 100);
-      setTimeout(pinIfSticking, 300);
-      setTimeout(pinIfSticking, 600);
+
+      const hasUnread = !!(unreadDividerId && document.getElementById(`msg-${unreadDividerId}`));
+      if (hasUnread) {
+        // Land the "Unread messages" divider around the middle of the screen —
+        // some read context above, the new messages below — instead of at the
+        // very bottom.
+        stickToBottomRef.current = false;
+        openUnreadAnchorRef.current = unreadDividerId!;
+        centerOnUnread();
+        requestAnimationFrame(centerOnUnread);
+        setTimeout(centerOnUnread, 100);
+        setTimeout(centerOnUnread, 300);
+        setTimeout(centerOnUnread, 600);
+        // Stop holding the anchor once content has settled (or the user scrolls,
+        // handled in the scroll listener).
+        setTimeout(() => { openUnreadAnchorRef.current = null; }, 1200);
+      } else {
+        // No unread → land at the very bottom (newest messages).
+        stickToBottomRef.current = true;
+        const pinIfSticking = () => { if (stickToBottomRef.current) pinToBottom(); };
+        pinToBottom();
+        requestAnimationFrame(pinIfSticking);
+        setTimeout(pinIfSticking, 100);
+        setTimeout(pinIfSticking, 300);
+        setTimeout(pinIfSticking, 600);
+      }
       prevLastIdRef.current = messages[messages.length - 1]?.id ?? null;
       return;
     }
@@ -296,7 +344,7 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
       scrollToBottom();
     }
     prevLastIdRef.current = lastId;
-  }, [messages, pinToBottom]);
+  }, [messages, unreadDividerId, pinToBottom, centerOnUnread]);
 
   useEffect(() => {
     if (!chatInfo?.otherUser?.id) return;
@@ -602,7 +650,7 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
       const recentLocal = localMessages.slice(-MESSAGE_PAGE_SIZE).filter((m) => !hidden.has(m.id));
 
       if (recentLocal.length > 0) {
-        // Have it locally → pure local open, no network round trip.
+        // Have it locally → render instantly from cache (no history refetch).
         setMessages(recentLocal);
         loadAllReactions(recentLocal);
         // If the cache holds a full page or more, there may be older pages;
@@ -611,6 +659,14 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
         hasMoreOlderRef.current = localMessages.length >= MESSAGE_PAGE_SIZE;
         setUnreadDividerId(firstUnreadId(recentLocal));
         initialReadyRef.current = true;
+        // Guaranteed top-up: the local cache is shown immediately, but a
+        // message that arrived moments before opening (while on the chat list)
+        // may not have been written to localDB yet by the background sync — and
+        // this chat's realtime subscription can't replay it. So fetch ONLY
+        // messages newer than our newest cached one and append them. This is
+        // not a history refetch (it returns nothing in the common case); it's
+        // the deterministic guarantee that opening a chat is never stale.
+        topUpNewerMessages(recentLocal[recentLocal.length - 1]?.created_at ?? null);
         return;
       }
 
@@ -640,6 +696,38 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
     } catch (error) {
       console.error('Error loading messages:', error);
       initialReadyRef.current = true;
+    }
+  }
+
+  // Fetch only messages NEWER than `since` for the open chat and append them.
+  // Deterministically catches a message that arrived just before opening (which
+  // the local cache and the chat's own realtime subscription can both miss).
+  // Tiny query — returns nothing in the normal case — not a history refetch.
+  async function topUpNewerMessages(since: string | null) {
+    if (!since || !chatInfo?.id || !navigator.onLine) return;
+    try {
+      const { data, error } = await supabase
+        .from('messages')
+        .select('*, profiles(display_name, avatar_url, username)')
+        .eq('chat_id', chatInfo.id)
+        .gt('created_at', since)
+        .order('created_at', { ascending: true });
+      if (error || !data || data.length === 0) return;
+
+      const hidden = loadHiddenMessageIds();
+      const fresh = (data as unknown as MessageType[]).filter((m) => !hidden.has(m.id));
+      if (fresh.length === 0) return;
+
+      await localDB.messages.bulkPut(fresh);
+      setMessages((prev) => {
+        const ids = new Set(prev.map((m) => m.id));
+        const toAdd = fresh.filter((m) => !ids.has(m.id));
+        return toAdd.length ? [...prev, ...toAdd] : prev;
+      });
+      loadAllReactions(fresh);
+      markMessagesAsRead();
+    } catch (err) {
+      console.warn('Message top-up failed:', err);
     }
   }
 
@@ -969,10 +1057,30 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
     const typingUnsubscribe = subscribeToTyping();
     const reactionsUnsubscribe = subscribeToReactions();
 
+    // Merge messages the app-wide sync writes to localDB into this open chat —
+    // covers messages that arrived just BEFORE the chat was opened (which the
+    // chat's own realtime subscription can't replay), with no network refetch.
+    const storeUnsubscribe = onMessageStored(chatInfo.id, (msg: any) => {
+      if (loadHiddenMessageIds().has(msg.id)) return;
+      setMessages((prev) => {
+        const idx = prev.findIndex((m) => m.id === msg.id);
+        if (idx !== -1) {
+          // Existing message → merge changed fields (keep the cached profiles
+          // join if the incoming update payload doesn't carry it).
+          const next = [...prev];
+          next[idx] = { ...next[idx], ...msg, profiles: msg.profiles ?? next[idx].profiles };
+          return next;
+        }
+        // New message → append (it's the newest).
+        return [...prev, msg as MessageType];
+      });
+    });
+
     return () => {
       if (messageUnsubscribe) messageUnsubscribe();
       if (typingUnsubscribe) typingUnsubscribe();
       if (reactionsUnsubscribe) reactionsUnsubscribe();
+      storeUnsubscribe();
     };
   }, [chatInfo?.id, chatInfo?.otherUser?.id]);
 
@@ -1225,7 +1333,11 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
   }, [chatInfo?.id, loadAllReactions]);
 
   const handleMessagesScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
+    // Ignore our own programmatic scrolls (pin/center) — only react to the user.
+    if (isAutoScrollingRef.current) return;
     const el = e.currentTarget;
+    // A real user scroll releases the unread anchor (they've taken over).
+    openUnreadAnchorRef.current = null;
     // Track "am I at the bottom?" so late content-growth (image loads) and new
     // messages only auto-scroll when the user actually wants to follow along.
     const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
@@ -1596,7 +1708,13 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
         // Every avatar/image/gif that finishes loading grows the content; while
         // we're meant to be pinned to the bottom, re-pin so that growth doesn't
         // strand the view up top. (load doesn't bubble, so we capture it.)
-        onLoadCapture={() => { if (stickToBottomRef.current && !justPrependedRef.current) pinToBottom(); }}
+        onLoadCapture={() => {
+          if (justPrependedRef.current) return;
+          // While anchoring an unread divider on open, keep it centered as
+          // images load; otherwise keep pinned to the bottom if sticking.
+          if (openUnreadAnchorRef.current) centerOnUnread();
+          else if (stickToBottomRef.current) pinToBottom();
+        }}
         onClick={() => setShowSweetKeyboard(false)}
         className={`relative flex-1 overflow-y-auto p-4 md:p-6 space-y-4 transition-colors duration-300 overscroll-behavior-y-contain ${
           theme === 'dark' ? 'bg-gray-900' : theme === 'sweet' ? 'bg-[#FFE4E1]/30' : 'bg-gray-50'
