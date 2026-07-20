@@ -181,6 +181,23 @@ class OfflineChatDatabase extends Dexie {
       enabled: !!profile.face_lock_enabled,
     };
   }
+
+  // Wipe every locally-cached table. Call this on logout — the cache isn't
+  // scoped per-account (chats/messages/profiles are keyed only by their own
+  // id, not by which user is signed in), so without this, logging into a
+  // DIFFERENT account on the same device would show the previous account's
+  // cached chats and messages, since chat/message loading trusts whatever is
+  // already in localDB. Clearing on sign-out means each account always starts
+  // from a clean local cache and re-populates from scratch (or from a fresh
+  // catch-up sync) on next login.
+  async clearAllLocalData() {
+    await Promise.all([
+      this.chats.clear(),
+      this.messages.clear(),
+      this.profiles.clear(),
+      this.pendingMessages.clear(),
+    ]);
+  }
 }
 
 export const localDB = new OfflineChatDatabase();

@@ -74,7 +74,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
                 ? 'bg-green-50 border-green-200 text-green-700'
                 : t.type === 'error'
                 ? 'bg-red-50 border-red-200 text-red-700'
-                : 'bg-blue-50 border-blue-200 text-blue-700'
+                : 'bg-pink-50 border-pink-200 text-pink-700'
             }`}
           >
             {t.type === 'success' && <CheckCircle2 className="w-5 h-5 shrink-0" />}

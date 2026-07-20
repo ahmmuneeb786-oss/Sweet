@@ -177,18 +177,17 @@ export function ChatMenu({ theme, chatId, onClose, onViewProfile }: ChatMenuProp
           
           {/* Main Menu Container */}
           <div className={`
-            /* Mobile Styles: Slides from bottom */
-            fixed bottom-0 left-0 right-0 w-full rounded-t-3xl z-50 px-2 pb-8 pt-4
-            /* Desktop Styles: Small dropdown */
-            md:absolute md:top-full md:bottom-auto md:left-auto md:right-0 md:w-56 md:rounded-xl md:p-0 md:pb-0 md:pt-0
-            shadow-2xl border transition-all animate-in slide-in-from-bottom md:slide-in-from-top-2 duration-300
-            ${theme === 'sweet' 
-              ? 'bg-[#FFE4E1] border-[#FFB6C1]' 
+            /* Mobile: a compact floating card — rounded on ALL corners, sitting
+               above the bottom edge with side margins (not a full-width sheet),
+               height-capped so it never covers half the screen. */
+            fixed bottom-4 left-3 right-3 z-50 rounded-3xl p-2 max-h-[70vh] overflow-y-auto scrollbar-hide
+            /* Desktop: small dropdown anchored under the trigger. */
+            md:absolute md:top-full md:bottom-auto md:left-auto md:right-0 md:w-56 md:rounded-2xl md:p-1.5 md:max-h-none md:overflow-visible
+            shadow-2xl border transition-all animate-in slide-in-from-bottom-4 md:slide-in-from-top-2 duration-300
+            ${theme === 'sweet'
+              ? 'bg-gradient-to-b from-[#FFF0F5] to-[#FFE4E1] border-[#FFB6C1] shadow-pink-200/60'
               : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700'}
           `}>
-            
-            {/* Mobile Grab Handle (Hidden on Desktop) */}
-            <div className="w-12 h-1.5 bg-gray-300 dark:bg-gray-600 rounded-full mx-auto mb-4 md:hidden" />
 
             {/* Loop through Menu Items */}
             {menuItems.map((item, idx) => {
@@ -201,28 +200,28 @@ export function ChatMenu({ theme, chatId, onClose, onViewProfile }: ChatMenuProp
                     setShowMenu(false);
                     onClose();
                   }}
-                  className={`w-full px-6 md:px-4 py-4 md:py-2 text-left flex items-center gap-4 md:gap-3 transition-colors active:bg-black/5 ${
-                    theme === 'sweet' 
-                      ? 'hover:bg-[#FFC0CB]/30 text-[#4B004B]' 
+                  className={`w-full px-4 py-3 md:py-2 text-left flex items-center gap-3 rounded-2xl md:rounded-lg transition-colors active:scale-[0.98] ${
+                    theme === 'sweet'
+                      ? 'hover:bg-[#FFC0CB]/40 text-[#4B004B]'
                       : 'hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200'
                   } ${item.danger ? '!text-red-600' : ''}`}
                 >
-                  <Icon className="w-5 h-5 md:w-4 md:h-4" />
-                  <span className="text-base md:text-sm font-medium">{item.label}</span>
+                  <Icon className="w-5 h-5 md:w-4 md:h-4 flex-shrink-0" />
+                  <span className="text-[15px] md:text-sm font-medium">{item.label}</span>
                 </button>
               );
             })}
 
             {/* Mute Section */}
-            <div className="border-t border-gray-200 dark:border-gray-700 my-2" />
-            
-            <div className="px-6 md:px-4 py-2">
-              <p className={`text-xs font-bold uppercase tracking-wider mb-3 ${
-                theme === 'sweet' ? 'text-[#8B004B]' : 'text-gray-400'
+            <div className={`border-t my-1.5 mx-2 ${theme === 'sweet' ? 'border-[#FFB6C1]/50' : 'border-gray-200 dark:border-gray-700'}`} />
+
+            <div className="px-4 md:px-2 py-1.5">
+              <p className={`text-[10px] font-bold uppercase tracking-widest mb-2 ${
+                theme === 'sweet' ? 'text-[#FF1493]/70' : 'text-gray-400'
               }`}>
                 Mute Notifications
               </p>
-              
+
               <div className="flex gap-2 md:flex-col">
                 {[
                   { label: '8h', value: '8h' },
@@ -232,9 +231,9 @@ export function ChatMenu({ theme, chatId, onClose, onViewProfile }: ChatMenuProp
                   <button
                     key={option.value}
                     onClick={() => { handleMuteChat(option.value as any); setShowMenu(false); onClose(); }}
-                    className={`flex-1 md:w-full px-3 py-3 md:py-1 text-center md:text-left text-xs font-bold rounded-xl transition-colors ${
-                      theme === 'sweet' 
-                        ? 'bg-white/50 text-[#8B004B] hover:bg-[#FFB6C1]/40' 
+                    className={`flex-1 md:w-full px-3 py-2.5 md:py-1.5 text-center md:text-left text-xs font-bold rounded-xl transition-colors active:scale-95 ${
+                      theme === 'sweet'
+                        ? 'bg-white/60 text-[#8B004B] hover:bg-[#FFB6C1]/50'
                         : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200'
                     }`}
                   >

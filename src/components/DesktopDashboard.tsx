@@ -116,7 +116,7 @@ export function DesktopDashboard({ theme, setTheme, onOpenGifPanel, myGifs, setM
           }`}
         >
           <div className="text-center space-y-4">
-            <div className="w-24 h-24 mx-auto bg-gradient-to-br from-pink-100 to-purple-100 rounded-full flex items-center justify-center">
+            <div className={`w-24 h-24 mx-auto rounded-full flex items-center justify-center bg-gradient-to-br ${theme === 'sweet' ? 'from-[#FFD1DC] to-[#FFB6C1]' : 'from-pink-100 to-purple-100'}`}>
               <span className="text-4xl">💬</span>
             </div>
             <div>

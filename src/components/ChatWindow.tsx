@@ -1417,8 +1417,8 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
     if (!chatInfo) return 'from-[#FF69B4] to-[#FFC0CB]';
     switch (chatInfo.theme) {
       case 'love': return 'from-[#FF69B4] to-[#FFC0CB]';
-      case 'best_friend': return 'from-purple-500 to-pink-500';
-      case 'friend': return 'from-blue-500 to-cyan-500';
+      case 'best_friend': return 'from-[#FF1493] to-[#FF69B4]';
+      case 'friend': return 'from-[#FF8FAB] to-[#FFC0CB]';
       default: return 'from-[#FF69B4] to-[#FFC0CB]';
     }
   }
@@ -1775,14 +1775,14 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
               {isOwn && (
                 <div className="flex flex-col items-end gap-1 mt-1 px-4">
                   {isSending && (
-                    <div className="flex items-center gap-1 text-[10px] text-gray-500">
-                      <div className="w-2.5 h-2.5 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+                    <div className={`flex items-center gap-1 text-[10px] ${theme === 'sweet' ? 'text-[#8B004B]' : 'text-gray-500'}`}>
+                      <div className={`w-2.5 h-2.5 border-2 border-t-transparent rounded-full animate-spin ${theme === 'sweet' ? 'border-[#FF69B4]' : 'border-gray-400'}`} />
                       <span>Sending...</span>
                     </div>
                   )}
                   {isPending && (
-                    <div className="flex items-center gap-1 text-[10px] text-gray-500">
-                      <span className="w-1.5 h-1.5 bg-gray-400 rounded-full" />
+                    <div className={`flex items-center gap-1 text-[10px] ${theme === 'sweet' ? 'text-[#8B004B]' : 'text-gray-500'}`}>
+                      <span className={`w-1.5 h-1.5 rounded-full ${theme === 'sweet' ? 'bg-[#FF69B4]' : 'bg-gray-400'}`} />
                       <span>Waiting to reconnect...</span>
                     </div>
                   )}
@@ -2027,24 +2027,31 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
           </div>
 
           <div className="flex items-center gap-2 mb-0.5">
-            <button
-              type="button"
-              onClick={handleMicClick}
-              className={`p-3 rounded-full transition-all flex-shrink-0 relative ${
-                isRecording
-                  ? 'bg-red-500 text-white scale-110 shadow-[0_0_15px_rgba(239,68,68,0.5)]'
-                  : 'text-gray-400 hover:text-pink-500 bg-gray-100'
-              }`}
-            >
-              {isRecording ? (
-                <div className="w-5 h-5 bg-white rounded-sm animate-pulse" />
-              ) : (
-                <Mic className="w-5 h-5" />
-              )}
-              {isRecording && (
-                <span className="absolute inset-0 rounded-full border-4 border-red-500 animate-ping opacity-25"></span>
-              )}
-            </button>
+            {/* Hide the voice button once the user starts typing — the textarea
+                (flex-1) then expands into the freed space. Kept while recording
+                so it doubles as the stop button. */}
+            {(isRecording || !newMessage.trim()) && (
+              <button
+                type="button"
+                onClick={handleMicClick}
+                className={`p-3 rounded-full transition-all flex-shrink-0 relative ${
+                  isRecording
+                    ? 'bg-red-500 text-white scale-110 shadow-[0_0_15px_rgba(239,68,68,0.5)]'
+                    : theme === 'sweet'
+                      ? 'text-[#FF69B4] hover:text-[#FF1493] bg-[#FFE4E1]'
+                      : 'text-gray-400 hover:text-pink-500 bg-gray-100'
+                }`}
+              >
+                {isRecording ? (
+                  <div className="w-5 h-5 bg-white rounded-sm animate-pulse" />
+                ) : (
+                  <Mic className="w-5 h-5" />
+                )}
+                {isRecording && (
+                  <span className="absolute inset-0 rounded-full border-4 border-red-500 animate-ping opacity-25"></span>
+                )}
+              </button>
+            )}
 
             <button
               type="submit"
@@ -2052,7 +2059,7 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
               className={`p-3 rounded-full transition-all active:scale-95 flex-shrink-0 ${
                 (newMessage.trim() || selectedFile || audioBlob || selectedDoc || selectedVideo || selectedGif)
                   ? `bg-gradient-to-r from-[#FF69B4] to-[#FF1493] text-white shadow-md`
-                  : 'bg-gray-200 text-gray-400'
+                  : theme === 'sweet' ? 'bg-[#FFE4E1] text-[#FF69B4]/60' : 'bg-gray-200 text-gray-400'
               }`}
             >
               <Send className="w-5 h-5" />

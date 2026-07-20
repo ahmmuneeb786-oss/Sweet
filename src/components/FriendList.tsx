@@ -72,7 +72,7 @@ function EmptyState({
       <h3 className={`font-bold text-base ${theme === 'sweet' ? 'text-[#4B004B]' : 'text-gray-800 dark:text-white'}`}>
         {title}
       </h3>
-      <p className="text-sm text-gray-400 mt-1 max-w-[230px] leading-relaxed">
+      <p className={`text-sm mt-1 max-w-[230px] leading-relaxed ${theme === 'sweet' ? 'text-[#8B004B]/70' : 'text-gray-400'}`}>
         {subtitle}
       </p>
     </div>
@@ -393,14 +393,14 @@ export function FriendList({ theme, onClose, onSelectUser, setActiveChatId, init
           ? 'bg-[#FFF0F5] border-l border-[#FFB6C1]'
           : 'bg-white dark:bg-gray-900'
       }`}>
-        <div className="p-6 border-b border-gray-200">
+        <div className={`p-6 border-b ${theme === 'sweet' ? 'border-[#FFB6C1]' : 'border-gray-200'}`}>
           <div className="flex items-center justify-between mb-4">
             <h2 className={`text-xl font-bold ${theme === 'sweet' ? 'text-[#4B004B]' : 'text-gray-900 dark:text-white'}`}>Friends</h2>
             <button
               onClick={onClose}
-              className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+              className={`p-2 rounded-full transition-colors ${theme === 'sweet' ? 'hover:bg-[#FFC0CB]/40' : 'hover:bg-gray-100'}`}
             >
-              <X className="w-5 h-5 text-gray-600" />
+              <X className={`w-5 h-5 ${theme === 'sweet' ? 'text-[#8B004B]' : 'text-gray-600'}`} />
             </button>
           </div>
 
@@ -444,13 +444,15 @@ export function FriendList({ theme, onClose, onSelectUser, setActiveChatId, init
 
           {activeTab === 'search' && (
             <div className="mt-4 relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <Search className={`absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 ${theme === 'sweet' ? 'text-[#8B004B]/50' : 'text-gray-400'}`} />
               <input
                 type="text"
                 placeholder="Search by username..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 bg-white border border-gray-300 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-transparent outline-none transition-all"
+                className={`w-full pl-10 pr-4 py-2 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-transparent outline-none transition-all border ${
+                  theme === 'sweet' ? 'bg-[#FFF0F5] border-[#FFB6C1] text-[#4B004B]' : 'bg-white border-gray-300'
+                }`}
               />
             </div>
           )}
@@ -481,26 +483,26 @@ export function FriendList({ theme, onClose, onSelectUser, setActiveChatId, init
                     {user.user_metadata?.avatar_url ? (
                       <img
                         src={user.user_metadata.avatar_url}
-                        className="w-12 h-12 rounded-full object-cover border-2 border-blue-400"
+                        className={`w-12 h-12 rounded-full object-cover border-2 ${theme === 'sweet' ? 'border-[#FF69B4]' : 'border-blue-400'}`}
                         alt="You"
                       />
                     ) : (
-                      <div className="w-12 h-12 rounded-full bg-blue-500 flex items-center justify-center text-white font-medium">
+                      <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-medium ${theme === 'sweet' ? 'bg-[#FF69B4]' : 'bg-blue-500'}`}>
                         You
                       </div>
                     )}
-                    <div className="absolute bottom-0 right-0 w-3 h-3 bg-blue-500 border-2 border-white dark:border-gray-900 rounded-full" />
+                    <div className={`absolute bottom-0 right-0 w-3 h-3 border-2 border-white dark:border-gray-900 rounded-full ${theme === 'sweet' ? 'bg-[#FF69B4]' : 'bg-blue-500'}`} />
                   </div>
                   <div className="flex-1">
                     <div className="flex justify-between items-center">
                       <h3 className={`font-bold ${theme === 'sweet' ? 'text-[#4B004B]' : 'text-gray-900 dark:text-white'}`}>
                         Saved Messages
                       </h3>
-                      <span className="text-[10px] bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400 px-1.5 py-0.5 rounded uppercase font-bold">
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded uppercase font-bold ${theme === 'sweet' ? 'bg-[#FFD1DC] text-[#8B004B]' : 'bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400'}`}>
                         You
                       </span>
                     </div>
-                    <p className="text-xs text-gray-500">Note to self</p>
+                    <p className={`text-xs ${theme === 'sweet' ? 'text-[#8B004B]/70' : 'text-gray-500'}`}>Note to self</p>
                   </div>
                 </div>
               )}
@@ -529,7 +531,7 @@ export function FriendList({ theme, onClose, onSelectUser, setActiveChatId, init
                           {friend.avatar_url ? (
                             <img src={friend.avatar_url} alt={friend.display_name} className="w-12 h-12 rounded-full object-cover" />
                           ) : (
-                            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-pink-400 to-purple-500 flex items-center justify-center text-white font-medium">
+                            <div className={`w-12 h-12 rounded-full bg-gradient-to-br flex items-center justify-center text-white font-medium ${theme === 'sweet' ? 'from-[#FF69B4] to-[#FF1493]' : 'from-pink-400 to-purple-500'}`}>
                               {friend.display_name[0]}
                             </div>
                           )}
@@ -539,7 +541,7 @@ export function FriendList({ theme, onClose, onSelectUser, setActiveChatId, init
                           <h3 className={`font-semibold truncate ${theme === 'sweet' ? 'text-[#4B004B]' : 'text-gray-900 dark:text-white'}`}>
                             {friend.display_name}
                           </h3>
-                          <p className="text-sm text-gray-500 truncate">@{friend.username}</p>
+                          <p className={`text-sm truncate ${theme === 'sweet' ? 'text-[#8B004B]/70' : 'text-gray-500'}`}>@{friend.username}</p>
                         </div>
 
                         <div className="flex gap-2">
@@ -586,7 +588,7 @@ export function FriendList({ theme, onClose, onSelectUser, setActiveChatId, init
                 friendRequests.map((request) => (
                   <div
                     key={request.id}
-                    className="p-4 border-b border-gray-100"
+                    className={`p-4 border-b ${theme === 'sweet' ? 'border-[#FFB6C1]/20' : 'border-gray-100'}`}
                   >
                     <div className="flex items-center gap-3">
                       <div>
@@ -597,7 +599,7 @@ export function FriendList({ theme, onClose, onSelectUser, setActiveChatId, init
                             className="w-12 h-12 rounded-full object-cover"
                           />
                         ) : (
-                          <div className="w-12 h-12 rounded-full bg-gradient-to-br from-pink-400 to-purple-500 flex items-center justify-center text-white font-medium">
+                          <div className={`w-12 h-12 rounded-full bg-gradient-to-br flex items-center justify-center text-white font-medium ${theme === 'sweet' ? 'from-[#FF69B4] to-[#FF1493]' : 'from-pink-400 to-purple-500'}`}>
                             {request.profiles.display_name[0]}
                           </div>
                         )}
@@ -607,7 +609,7 @@ export function FriendList({ theme, onClose, onSelectUser, setActiveChatId, init
                         <h3 className={`font-semibold truncate ${theme === 'sweet' ? 'text-[#4B004B]' : 'text-gray-900 dark:text-white'}`}>
                           {request.profiles.display_name}
                         </h3>
-                        <p className="text-sm text-gray-500 truncate">
+                        <p className={`text-sm truncate ${theme === 'sweet' ? 'text-[#8B004B]/70' : 'text-gray-500'}`}>
                           @{request.profiles.username}
                         </p>
                       </div>
@@ -660,7 +662,7 @@ export function FriendList({ theme, onClose, onSelectUser, setActiveChatId, init
                   return (
                     <div
                       key={result.id}
-                      className="p-4 border-b border-gray-100"
+                      className={`p-4 border-b ${theme === 'sweet' ? 'border-[#FFB6C1]/20' : 'border-gray-100'}`}
                     >
                       <div className="flex items-center gap-3">
                         <div className="relative">
@@ -671,7 +673,7 @@ export function FriendList({ theme, onClose, onSelectUser, setActiveChatId, init
                               className="w-12 h-12 rounded-full object-cover"
                             />
                           ) : (
-                            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-pink-400 to-purple-500 flex items-center justify-center text-white font-medium">
+                            <div className={`w-12 h-12 rounded-full bg-gradient-to-br flex items-center justify-center text-white font-medium ${theme === 'sweet' ? 'from-[#FF69B4] to-[#FF1493]' : 'from-pink-400 to-purple-500'}`}>
                               {result.display_name[0]}
                             </div>
                           )}
@@ -681,17 +683,17 @@ export function FriendList({ theme, onClose, onSelectUser, setActiveChatId, init
                           <h3 className={`font-semibold truncate ${theme === 'sweet' ? 'text-[#4B004B]' : 'text-gray-900 dark:text-white'}`}>
                             {result.display_name}
                           </h3>
-                          <p className="text-sm text-gray-500 truncate">
+                          <p className={`text-sm truncate ${theme === 'sweet' ? 'text-[#8B004B]/70' : 'text-gray-500'}`}>
                             @{result.username}
                           </p>
                         </div>
 
                         {isFriend(result.id) ? (
-                          <span className="text-sm text-gray-600 px-3 py-1 bg-gray-100 rounded-full">
+                          <span className={`text-sm px-3 py-1 rounded-full ${theme === 'sweet' ? 'bg-[#FFD1DC] text-[#8B004B]' : 'bg-gray-100 text-gray-600'}`}>
                             Friend
                           </span>
                         ) : isRequestSent(result.id) ? (
-                          <span className="text-sm text-gray-600 px-3 py-1 bg-gray-100 rounded-full">
+                          <span className={`text-sm px-3 py-1 rounded-full ${theme === 'sweet' ? 'bg-[#FFD1DC] text-[#8B004B]' : 'bg-gray-100 text-gray-600'}`}>
                             Pending
                           </span>
                         ) : (

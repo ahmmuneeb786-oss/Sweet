@@ -258,13 +258,13 @@ export function LockedChatsPanel({ theme, onClose, onSelectChat }: LockedChatsPa
               <div className="w-6 h-6 border-2 border-pink-500 border-t-transparent rounded-full animate-spin" />
             </div>
           ) : lockedChats.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-center p-6 text-gray-400">
+            <div className={`flex flex-col items-center justify-center h-full text-center p-6 ${theme === 'sweet' ? 'text-[#8B004B]' : 'text-gray-400'}`}>
               <Lock className="w-12 h-12 mb-2 stroke-[1.5]" />
               <p className="font-medium text-sm">Your vault is empty</p>
               <p className="text-xs max-w-[200px] mt-1">Use the chat options menu to add private threads here.</p>
             </div>
           ) : (
-            <div className="divide-y divide-gray-100 dark:divide-gray-800">
+            <div className={`divide-y ${theme === 'sweet' ? 'divide-[#FFD1DC]' : 'divide-gray-100 dark:divide-gray-800'}`}>
               {lockedChats.map((chat) => (
                 <button
                   key={chat.id}
@@ -273,14 +273,14 @@ export function LockedChatsPanel({ theme, onClose, onSelectChat }: LockedChatsPa
                     theme === 'sweet' ? 'hover:bg-[#FFC0CB]/20' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'
                   }`}
                 >
-                  <div className="w-10 h-10 rounded-full bg-pink-100 dark:bg-pink-900/30 flex items-center justify-center text-pink-600 shrink-0">
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${theme === 'sweet' ? 'bg-[#FFD1DC] text-[#FF1493]' : 'bg-pink-100 dark:bg-pink-900/30 text-pink-600'}`}>
                     <MessageSquare className="w-5 h-5" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className={`font-semibold text-sm truncate ${theme === 'sweet' ? 'text-[#4B004B]' : 'text-gray-900 dark:text-white'}`}>
                       {chat.type === 'direct' ? chat.otherUser?.display_name : chat.name}
                     </p>
-                    <p className="text-xs text-gray-400">Protected Conversation</p>
+                    <p className={`text-xs ${theme === 'sweet' ? 'text-[#8B004B]/70' : 'text-gray-400'}`}>Protected Conversation</p>
                   </div>
                 </button>
               ))}
@@ -335,7 +335,7 @@ export function LockedChatsPanel({ theme, onClose, onSelectChat }: LockedChatsPa
             <h3 className={`font-bold ${theme === 'sweet' ? 'text-[#4B004B]' : 'text-gray-900 dark:text-white'}`}>
               Security setup looks incomplete
             </h3>
-            <p className="text-sm text-gray-500">
+            <p className={`text-sm ${theme === 'sweet' ? 'text-[#8B004B]' : 'text-gray-500'}`}>
               This chat is set to require a security method, but the actual PIN/password/face wasn't saved properly. Go to Settings and set it up again.
             </p>
             <button

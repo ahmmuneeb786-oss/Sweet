@@ -372,7 +372,7 @@ export function ProfileSidebar({ onClose, theme, user }: ProfileSidebarProps) {
                 />
               ) : (
                 <div
-                  className="w-32 h-32 rounded-full bg-gradient-to-br from-pink-400 to-purple-500 flex items-center justify-center text-white font-bold text-4xl uppercase shadow-lg"
+                  className={`w-32 h-32 rounded-full bg-gradient-to-br flex items-center justify-center text-white font-bold text-4xl uppercase shadow-lg ${theme === 'sweet' ? 'from-[#FF69B4] to-[#FF1493]' : 'from-pink-400 to-purple-500'}`}
                 >
                   {displayName?.[0] || username?.[0] || 'U'}
                 </div>

@@ -459,8 +459,8 @@ export function ChatList({ selectedChatId, onSelectChat, onShowProfile, onShowFr
   function getThemeColor(theme: string) {
     switch (theme) {
       case 'love': return 'border-l-4 border-pink-500';
-      case 'best_friend': return 'border-l-4 border-purple-500';
-      case 'friend': return 'border-l-4 border-blue-500';
+      case 'best_friend': return 'border-l-4 border-[#FF1493]';
+      case 'friend': return 'border-l-4 border-[#FF8FAB]';
       default: return 'border-l-4 border-transparent';
     }
   }
@@ -485,17 +485,17 @@ export function ChatList({ selectedChatId, onSelectChat, onShowProfile, onShowFr
                   className="w-12 h-12 rounded-full object-cover"
                 />
               ) : (
-                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-pink-400 to-purple-500 flex items-center justify-center text-white font-medium text-lg uppercase">
+                <div className={`w-12 h-12 rounded-full bg-gradient-to-br flex items-center justify-center text-white font-medium text-lg uppercase ${theme === 'sweet' ? 'from-[#FF69B4] to-[#FF1493]' : 'from-pink-400 to-purple-500'}`}>
                   {profile?.display_name?.[0] || myProfile?.display_name?.[0] || profile?.username?.[0] || myProfile?.username?.[0] || 'U'}
                 </div>
               )}
             </div>
             <div className="flex-1">
-              <h1 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2 whitespace-nowrap">
+              <h1 className={`text-xl font-bold flex items-center gap-2 whitespace-nowrap ${theme === 'sweet' ? 'text-[#4B004B]' : 'text-gray-900 dark:text-white'}`}>
                 <Heart className="w-5 h-5 text-pink-500 fill-pink-500 shrink-0" />
                 Sweet
               </h1>
-              <p className="text-xs text-gray-500 dark:text-gray-400">@{profile?.username || myProfile?.username}</p>
+              <p className={`text-xs ${theme === 'sweet' ? 'text-[#8B004B]' : 'text-gray-500 dark:text-gray-400'}`}>@{profile?.username || myProfile?.username}</p>
             </div>
           </div>
 
@@ -630,9 +630,9 @@ export function ChatList({ selectedChatId, onSelectChat, onShowProfile, onShowFr
           </div>
         ) : filteredChats.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-center px-4">
-            <MessageSquarePlus className="w-16 h-16 text-gray-300 mb-3" />
-            <p className="text-gray-500 font-medium">No chats yet</p>
-            <p className="text-gray-400 text-sm mt-1">
+            <MessageSquarePlus className={`w-16 h-16 mb-3 ${theme === 'sweet' ? 'text-[#FFB6C1]' : 'text-gray-300'}`} />
+            <p className={`font-medium ${theme === 'sweet' ? 'text-[#8B004B]' : 'text-gray-500'}`}>No chats yet</p>
+            <p className={`text-sm mt-1 ${theme === 'sweet' ? 'text-[#8B004B]/70' : 'text-gray-400'}`}>
               Start a conversation with your friends
             </p>
           </div>
@@ -664,7 +664,7 @@ export function ChatList({ selectedChatId, onSelectChat, onShowProfile, onShowFr
                             className="w-12 h-12 rounded-full object-cover"
                           />
                         ) : (
-                          <div className="w-12 h-12 rounded-full bg-gradient-to-br from-pink-400 to-purple-500 flex items-center justify-center text-white font-medium">
+                          <div className={`w-12 h-12 rounded-full bg-gradient-to-br flex items-center justify-center text-white font-medium ${theme === 'sweet' ? 'from-[#FF69B4] to-[#FF1493]' : 'from-pink-400 to-purple-500'}`}>
                             {chat.otherUser.display_name[0] || 'U'}
                           </div>
                         )}
@@ -672,12 +672,12 @@ export function ChatList({ selectedChatId, onSelectChat, onShowProfile, onShowFr
                           className={`absolute bottom-0 right-0 block h-3.5 w-3.5 rounded-full border-2 ${
                             theme === 'sweet' ? 'border-[#FFF0F5]' : 'border-white dark:border-gray-900'
                           } ${
-                            isUserOnline(chat.otherUser.id) ? 'bg-green-500' : 'bg-gray-400'
+                            isUserOnline(chat.otherUser.id) ? 'bg-green-500' : theme === 'sweet' ? 'bg-[#FFB6C1]' : 'bg-gray-400'
                           }`}
                         />
                       </>
                     ) : (
-                      <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-white">
+                      <div className={`w-12 h-12 rounded-full bg-gradient-to-br flex items-center justify-center text-white ${theme === 'sweet' ? 'from-[#FF69B4] to-[#FF1493]' : 'from-blue-400 to-purple-500'}`}>
                         <Users className="w-6 h-6" />
                       </div>
                     )}
@@ -685,17 +685,25 @@ export function ChatList({ selectedChatId, onSelectChat, onShowProfile, onShowFr
 
                   <div className="flex-1 min-w-0 text-left">
                     <div className="flex items-center justify-between gap-2 mb-1">
-                      <h3 className={`truncate ${unread > 0 ? 'font-extrabold text-gray-900 dark:text-white' : 'font-semibold text-gray-900 dark:text-gray-100'}`}>
+                      <h3 className={`truncate ${
+                        theme === 'sweet'
+                          ? (unread > 0 ? 'font-extrabold text-[#4B004B]' : 'font-semibold text-[#4B004B]')
+                          : (unread > 0 ? 'font-extrabold text-gray-900 dark:text-white' : 'font-semibold text-gray-900 dark:text-gray-100')
+                      }`}>
                         {chat.type === 'direct' ? chat.otherUser?.display_name : chat.name}
                       </h3>
                       {chat.lastMessage?.created_at && (
-                        <span className={`text-xs shrink-0 ${unread > 0 ? 'text-[#FF1493] font-bold' : 'text-gray-500'}`}>
+                        <span className={`text-xs shrink-0 ${unread > 0 ? 'text-[#FF1493] font-bold' : theme === 'sweet' ? 'text-[#8B004B]' : 'text-gray-500'}`}>
                           {formatTime(chat.lastMessage.created_at)}
                         </span>
                       )}
                     </div>
                     <div className="flex items-center justify-between gap-2">
-                      <p className={`text-sm truncate flex-1 ${unread > 0 ? 'text-gray-800 dark:text-gray-200 font-medium' : 'text-gray-600 dark:text-gray-400'}`}>
+                      <p className={`text-sm truncate flex-1 ${
+                        theme === 'sweet'
+                          ? (unread > 0 ? 'text-[#4B004B] font-medium' : 'text-[#8B004B]')
+                          : (unread > 0 ? 'text-gray-800 dark:text-gray-200 font-medium' : 'text-gray-600 dark:text-gray-400')
+                      }`}>
                         {formatMessagePreview(chat.lastMessage)}
                       </p>
                       {unread > 0 && (

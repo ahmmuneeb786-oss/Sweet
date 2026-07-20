@@ -428,7 +428,7 @@ if (loading || profileSyncLoading) {
     return (
       <div className={theme === 'dark' ? 'dark' : ''}>
         <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
-          <Auth />
+          <Auth theme={theme} />
         </div>
       </div>
     );
@@ -461,7 +461,7 @@ if (loading || profileSyncLoading) {
             </div>
             <div className="mt-8 text-center space-y-2">
               <p className="text-rose-600 font-black tracking-[0.2em] uppercase text-xs">You have got a special message</p>
-              <p className="text-rose-400/60 text-[10px] font-bold uppercase tracking-widest animate-pulse">tap mailbox to see message</p>
+              <p className="text-rose-400/60 text-[10px] font-bold uppercase tracking-widest animate-pulse">Tap mailbox to see message</p>
             </div>
           </div>
         )}
@@ -511,12 +511,13 @@ if (loading || profileSyncLoading) {
               <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar text-center space-y-6">
                 <h2 className="text-pink-600 font-black tracking-tight text-3xl">Welcome My Love</h2>
                 <div className="text-pink-500/80 leading-relaxed font-medium italic text-lg space-y-6">
-                  <p>It has been more than 8 months since we last directly communicated, but not a single day went by where I didn't think of you.</p>
-                  <p>We have suffered a lot but now it's time to heal and rise together.</p>
+                  <p>It has been 11 months and 6 days since we last directly communicated, but not a single day went by where I didn't think of you.</p>
+                  <p>We have suffered a lot but now it's time to heal and rise again, together.</p>
                   <p>I built this app as a sanctuary—a place where the world can't reach us, and where we will share love with each other.</p>
                   <p>Believe it or not, you are the only one I want to spend my each moment with 💕.</p>
-                  <p>To talk with me you have to add me from search section in Friends list, My username is "ahmad" or just login i'll message you myself.</p>
-                  <p className="not-italic font-bold text-pink-600">I've missed you more than words can say.</p>
+                  <p>To talk with me you have to add me from search section in Find Friends, My username is "ahmad" or just login i'll message you myself.</p>
+                  <p>Don't worry in using your own email because my app don't send any code-if there is any problem you fear so just don't worry.</p>
+                  <p className="not-italic font-bold text-pink-600">I've missed you more than I can even explain.</p>
                   <p className="not-italic font-bold text-pink-700">I LOVE YOU SO MUCH!</p>
                 </div>
               </div>

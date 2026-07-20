@@ -186,7 +186,7 @@ export function CreateChat({ theme, onClose, onChatCreated }: CreateChatProps) {
     ? 'bg-[#FFF0F5] border-l border-[#FFB6C1]' 
     : 'bg-white dark:bg-gray-900'
 }`}>
-        <div className="p-6 border-b border-gray-200 flex items-center justify-between">
+        <div className={`p-6 border-b flex items-center justify-between ${theme === 'sweet' ? 'border-[#FFB6C1]' : 'border-gray-200'}`}>
           <h2 className={`text-2xl font-bold ${theme === 'sweet' ? 'text-[#4B004B]' : 'text-gray-900 dark:text-white'}`}>Start Chat</h2>
           <button onClick={onClose} className={`p-2 rounded-full transition-colors ${theme === 'sweet' ? 'hover:bg-[#FFB6C1]/40 text-[#8B004B]' : 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500'}`}>
             <X className="w-5 h-5" />
@@ -195,7 +195,7 @@ export function CreateChat({ theme, onClose, onChatCreated }: CreateChatProps) {
 
         <div className={`p-4 border-b ${theme === 'sweet' ? 'border-[#FFB6C1]/30' : 'border-gray-200 dark:border-gray-800'}`}>
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+            <Search className={`absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 ${theme === 'sweet' ? 'text-[#8B004B]/50' : 'text-gray-400'}`} />
             <input
               type="text"
               placeholder="Search friends..."
@@ -217,8 +217,8 @@ export function CreateChat({ theme, onClose, onChatCreated }: CreateChatProps) {
             </div>
           ) : filteredFriends.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-64 text-center px-4">
-              <MessageCircle className="w-16 h-16 text-gray-300 mb-3" />
-              <p className="text-gray-500 font-medium">
+              <MessageCircle className={`w-16 h-16 mb-3 ${theme === 'sweet' ? 'text-[#FFB6C1]' : 'text-gray-300'}`} />
+              <p className={`font-medium ${theme === 'sweet' ? 'text-[#8B004B]' : 'text-gray-500'}`}>
                 {friends.length === 0 ? 'No friends yet' : 'No matching friends'}
               </p>
             </div>

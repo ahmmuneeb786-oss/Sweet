@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useRef, useState, ReactNode } fro
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { resetChatsReady, markChatsReady } from '../hooks/useChatsReady';
+import { localDB } from '../db';
 
 interface Profile {
   id: string;
@@ -297,6 +298,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     resetChatsReady();
     await supabase.auth.signOut();
+
+    // Wipe the local cache AFTER sign-out succeeds — chats/messages/profiles
+    // in localDB aren't scoped per-account, so leaving them would let the
+    // next account signed in on this device see the previous account's
+    // cached chats and messages. Best-effort: a Dexie failure here shouldn't
+    // block the sign-out itself, which has already completed.
+    try {
+      await localDB.clearAllLocalData();
+    } catch (err) {
+      console.error('Failed to clear local cache on sign out:', err);
+    }
   }
 
   async function updateProfile(updates: Partial<Profile>) {

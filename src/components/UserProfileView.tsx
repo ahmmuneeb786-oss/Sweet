@@ -127,7 +127,7 @@ export function UserProfileView({ userId, theme, onClose }: UserProfileViewProps
               <div className="h-3 w-24 rounded-full bg-pink-100" />
             </div>
           ) : !profile ? (
-            <div className="text-center pt-12 text-gray-400 text-sm">Couldn't load this profile.</div>
+            <div className={`text-center pt-12 text-sm ${theme === 'sweet' ? 'text-[#8B004B]' : 'text-gray-400'}`}>Couldn't load this profile.</div>
           ) : (
             <div className="flex flex-col items-center text-center space-y-4">
               <div className="relative">
@@ -139,7 +139,7 @@ export function UserProfileView({ userId, theme, onClose }: UserProfileViewProps
                     className="w-28 h-28 rounded-full object-cover border-4 border-white shadow-lg cursor-pointer active:scale-95 transition-transform"
                   />
                 ) : (
-                  <div className="w-28 h-28 rounded-full bg-gradient-to-br from-pink-400 to-purple-500 flex items-center justify-center text-white font-bold text-4xl uppercase border-4 border-white shadow-lg">
+                  <div className={`w-28 h-28 rounded-full bg-gradient-to-br flex items-center justify-center text-white font-bold text-4xl uppercase border-4 border-white shadow-lg ${theme === 'sweet' ? 'from-[#FF69B4] to-[#FF1493]' : 'from-pink-400 to-purple-500'}`}>
                     {profile.display_name?.[0] || profile.username?.[0] || '?'}
                   </div>
                 )}
@@ -171,7 +171,7 @@ export function UserProfileView({ userId, theme, onClose }: UserProfileViewProps
                 </InfoCard>
 
                 <InfoCard label="Status" theme={theme}>
-                  <span className={`font-bold uppercase tracking-widest text-xs ${online ? 'text-green-500' : 'text-gray-400'}`}>
+                  <span className={`font-bold uppercase tracking-widest text-xs ${online ? 'text-green-500' : theme === 'sweet' ? 'text-[#8B004B]' : 'text-gray-400'}`}>
                     {online ? 'Online now' : `Last seen ${formatLastSeen(profile.last_seen)}`}
                   </span>
                 </InfoCard>

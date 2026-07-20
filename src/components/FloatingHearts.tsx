@@ -9,11 +9,12 @@ interface HeartProps {
   size: number;
 }
 
-export function FloatingHearts() {
+export function FloatingHearts({ theme }: { theme?: 'light' | 'dark' | 'sweet' }) {
   const [hearts, setHearts] = useState<HeartProps[]>([]);
+  const isSweet = theme === 'sweet';
 
   useEffect(() => {
-    const initialHearts = Array.from({ length: 15 }, (_, i) => ({
+    const initialHearts = Array.from({ length: isSweet ? 22 : 15 }, (_, i) => ({
       id: i,
       left: Math.random() * 100,
       delay: Math.random() * 5,
@@ -21,14 +22,14 @@ export function FloatingHearts() {
       size: 20 + Math.random() * 20
     }));
     setHearts(initialHearts);
-  }, []);
+  }, [isSweet]);
 
   return (
     <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
       {hearts.map((heart) => (
         <div
           key={heart.id}
-          className="absolute animate-float opacity-20"
+          className={`absolute animate-float ${isSweet ? 'opacity-30' : 'opacity-20'}`}
           style={{
             left: `${heart.left}%`,
             animationDelay: `${heart.delay}s`,
@@ -38,7 +39,7 @@ export function FloatingHearts() {
         >
           <Heart
             size={heart.size}
-            className="fill-pink-300 text-pink-300"
+            className={isSweet ? 'fill-[#FF69B4] text-[#FF69B4]' : 'fill-pink-300 text-pink-300'}
           />
         </div>
       ))}

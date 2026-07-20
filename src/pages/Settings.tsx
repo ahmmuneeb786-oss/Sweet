@@ -604,29 +604,29 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
           ? 'bg-[#FFE4E1] text-[#4B004B]' 
           : 'bg-white text-gray-900'
       }`}>
-        <div className="p-6 border-b border-[#FFB6C1] flex items-center justify-between">
-          <h2 className="text-2xl font-bold text-gray-900">Settings</h2>
-          <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full">
+        <div className={`p-6 border-b flex items-center justify-between ${theme === 'sweet' ? 'border-[#FFB6C1]' : 'border-gray-200'}`}>
+          <h2 className={`text-2xl font-bold ${theme === 'sweet' ? 'text-[#4B004B]' : 'text-gray-900'}`}>Settings</h2>
+          <button onClick={onClose} className={`p-2 rounded-full ${theme === 'sweet' ? 'hover:bg-[#FFC0CB]/40' : 'hover:bg-gray-100'}`}>
             <X className="w-5 h-5" />
           </button>
         </div>
 
         <div className="flex-1 overflow-y-auto">
           {activeTab === 'main' && (
-            <div className="divide-y divide-[#FFB6C1]">
+            <div className={`divide-y ${theme === 'sweet' ? 'divide-[#FFB6C1]' : 'divide-gray-100'}`}>
               {settingsSections.map((section) => {
                 const Icon = section.icon;
                 return (
                   <button
                     key={section.id}
                     onClick={() => setActiveTab(section.id as SettingsTab)}
-                    className="w-full p-4 flex items-center justify-between hover:bg-gray-50 transition-colors"
+                    className={`w-full p-4 flex items-center justify-between transition-colors ${theme === 'sweet' ? 'hover:bg-[#FFE4E1]' : 'hover:bg-gray-50'}`}
                   >
                     <div className="flex items-center gap-3">
-                      <Icon className="w-5 h-5 text-gray-600" />
-                      <span className="text-gray-900 font-medium">{section.label}</span>
+                      <Icon className={`w-5 h-5 ${theme === 'sweet' ? 'text-[#8B004B]' : 'text-gray-600'}`} />
+                      <span className={`font-medium ${theme === 'sweet' ? 'text-[#4B004B]' : 'text-gray-900'}`}>{section.label}</span>
                     </div>
-                    <ChevronRight className="w-5 h-5 text-gray-400" />
+                    <ChevronRight className={`w-5 h-5 ${theme === 'sweet' ? 'text-[#FF69B4]' : 'text-gray-400'}`} />
                   </button>
                 );
               })}
@@ -657,7 +657,7 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
               </button>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Display Name</label>
+                <label className={`block text-sm font-medium mb-2 ${theme === 'sweet' ? 'text-[#8B004B]' : 'text-gray-700'}`}>Display Name</label>
                 <input
                   type="text"
                   value={displayName}
@@ -671,20 +671,20 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className={`block text-sm font-medium mb-2 ${theme === 'sweet' ? 'text-[#8B004B]' : 'text-gray-700'}`}>
                   Username
                 </label>
                 <div className="relative">
                   {/* Left Side User Icon */}
-                  <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                  
+                  <User className={`absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 ${theme === 'sweet' ? 'text-[#FF69B4]' : 'text-gray-400'}`} />
+
                   <input
                     type="text"
                     value={newUsername}
                     onChange={(e) => setNewUsername(e.target.value)}
                     placeholder="sweet_alex"
                     className={`w-full pl-10 pr-10 py-3 border rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-transparent outline-none transition-all ${
-                      usernameError ? 'border-red-500' : newUsername && usernameAvailable ? 'border-green-500' : 'border-gray-300'
+                      usernameError ? 'border-red-500' : newUsername && usernameAvailable ? 'border-green-500' : theme === 'sweet' ? 'border-[#FFB6C1]' : 'border-gray-300'
                     }`}
                   />
                   
@@ -727,7 +727,7 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Bio</label>
+                <label className={`block text-sm font-medium mb-2 ${theme === 'sweet' ? 'text-[#8B004B]' : 'text-gray-700'}`}>Bio</label>
                 <textarea
                   value={bio}
                   onChange={(e) => setBio(e.target.value.slice(0, 250))}
@@ -741,7 +741,7 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
                       : 'border-gray-300'
                   }`}
                 />
-                <p className="text-xs text-gray-500 mt-1">{bio.length}/250</p>
+                <p className={`text-xs mt-1 ${theme === 'sweet' ? 'text-[#8B004B]' : 'text-gray-500'}`}>{bio.length}/250</p>
               </div>
 
               <div className="flex gap-2">
@@ -754,7 +754,7 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
                 </button>
                 <button
                   onClick={() => setActiveTab('main')}
-                  className="px-4 py-2 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200"
+                  className={`px-4 py-2 rounded-xl transition-colors ${theme === 'sweet' ? 'bg-[#FFC0CB]/40 text-[#4B004B] hover:bg-[#FFB6C1]' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
                 >
                   Cancel
                 </button>
@@ -768,19 +768,19 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
       onClick={() => setActiveTab('main')}
       className="flex items-center gap-2 text-pink-600 hover:text-pink-700 mb-4"
     >
-      <X className="w-4 h-4" />
+      <ChevronLeft className="w-4 h-4" />
       Back
     </button>
 
-    <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100">
+    <div className={`p-4 rounded-2xl border ${theme === 'sweet' ? 'bg-[#FFE4E1] border-[#FFB6C1]' : 'bg-gray-50 border-gray-100'}`}>
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="p-2 bg-white rounded-lg text-pink-500 shadow-sm">
             <Smile size={20} />
           </div>
           <div>
-            <p className="text-sm font-bold text-gray-800">Face lock</p>
-            <p className="text-[10px] text-gray-500 uppercase tracking-tight">Biometric Security</p>
+            <p className={`text-sm font-bold ${theme === 'sweet' ? 'text-[#4B004B]' : 'text-gray-800'}`}>Face lock</p>
+            <p className={`text-[10px] uppercase tracking-tight ${theme === 'sweet' ? 'text-[#8B004B]' : 'text-gray-500'}`}>Biometric Security</p>
           </div>
         </div>
 
@@ -830,7 +830,7 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
     }
   }}
   className={`w-12 h-6 rounded-full transition-all duration-300 relative p-1 cursor-pointer outline-none ${
-    faceLockEnabled ? 'bg-pink-500 shadow-md shadow-pink-200' : 'bg-gray-300'
+    faceLockEnabled ? 'bg-pink-500 shadow-md shadow-pink-200' : theme === 'sweet' ? 'bg-[#FFC0CB]' : 'bg-gray-300'
   }`}
 >
   {/* The sliding white dot indicator */}
@@ -842,7 +842,7 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
 </button>
       </div>
       
-      <p className="mt-4 text-xs text-gray-500 leading-relaxed italic">
+      <p className={`mt-4 text-xs leading-relaxed italic ${theme === 'sweet' ? 'text-[#8B004B]' : 'text-gray-500'}`}>
         "An inbuilt biometric lock that uses your unique facial features to secure the app. When enabled, you'll need to verify your identity with a quick face scan each time you open the app, ensuring that only you can access your messages and data. It's like having a personal security guard that's always on duty, providing an extra layer of protection for your private conversations."
       </p>
     </div>
@@ -855,16 +855,16 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
                 onClick={() => setActiveTab('main')}
                 className="flex items-center gap-2 text-pink-600 hover:text-pink-700 mb-4"
               >
-                <X className="w-4 h-4" />
+                <ChevronLeft className="w-4 h-4" />
                 Back
               </button>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Last Seen Visibility</label>
+                <label className={`block text-sm font-medium mb-2 ${theme === 'sweet' ? 'text-[#8B004B]' : 'text-gray-700'}`}>Last Seen Visibility</label>
                 <select
                   value={privacySettings.lastSeenVisibility}
                   onChange={(e) => setPrivacySettings({ ...privacySettings, lastSeenVisibility: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-pink-500 outline-none"
+                  className={`w-full px-4 py-2 border rounded-xl focus:ring-2 focus:ring-pink-500 outline-none ${theme === 'sweet' ? 'border-[#FFB6C1] text-[#4B004B] bg-white' : 'border-gray-300'}`}
                 >
                   <option value="everyone">Everyone</option>
                   <option value="friends">Friends Only</option>
@@ -873,11 +873,11 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Profile Photo Visibility</label>
+                <label className={`block text-sm font-medium mb-2 ${theme === 'sweet' ? 'text-[#8B004B]' : 'text-gray-700'}`}>Profile Photo Visibility</label>
                 <select
                   value={privacySettings.profilePhotoVisibility}
                   onChange={(e) => setPrivacySettings({ ...privacySettings, profilePhotoVisibility: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-pink-500 outline-none"
+                  className={`w-full px-4 py-2 border rounded-xl focus:ring-2 focus:ring-pink-500 outline-none ${theme === 'sweet' ? 'border-[#FFB6C1] text-[#4B004B] bg-white' : 'border-gray-300'}`}
                 >
                   <option value="everyone">Everyone</option>
                   <option value="friends">Friends Only</option>
@@ -886,11 +886,11 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Who Can Add You</label>
+                <label className={`block text-sm font-medium mb-2 ${theme === 'sweet' ? 'text-[#8B004B]' : 'text-gray-700'}`}>Who Can Add You</label>
                 <select
                   value={privacySettings.whoCanAdd}
                   onChange={(e) => setPrivacySettings({ ...privacySettings, whoCanAdd: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-pink-500 outline-none"
+                  className={`w-full px-4 py-2 border rounded-xl focus:ring-2 focus:ring-pink-500 outline-none ${theme === 'sweet' ? 'border-[#FFB6C1] text-[#4B004B] bg-white' : 'border-gray-300'}`}
                 >
                   <option value="everyone">Everyone</option>
                   <option value="friends">Friends Only</option>
@@ -914,7 +914,7 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
                 onClick={() => setActiveTab('main')}
                 className="flex items-center gap-2 text-pink-600 hover:text-pink-700 mb-4"
               >
-                <X className="w-4 h-4" />
+                <ChevronLeft className="w-4 h-4" />
                 Back
               </button>
 
@@ -932,7 +932,7 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
               <button
                 onClick={handleNotificationToggle}
                 className={`w-11 h-6 rounded-full transition-colors duration-200 focus:outline-none relative ${
-                  notificationsEnabled ? 'bg-pink-500' : 'bg-gray-200'
+                  notificationsEnabled ? 'bg-pink-500' : theme === 'sweet' ? 'bg-[#FFC0CB]' : 'bg-gray-200'
                 }`}
               >
                 <span
@@ -946,8 +946,8 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
               "Receive a sweet little notification banner whenever someone messages you, even if your browser tab is entirely closed."
         </p>
 
-              <label className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
-                <span className="text-gray-700 font-medium">Message Notifications</span>
+              <label className={`flex items-center justify-between p-3 rounded-xl ${theme === 'sweet' ? 'bg-[#FFE4E1]' : 'bg-gray-50'}`}>
+                <span className={`font-medium ${theme === 'sweet' ? 'text-[#4B004B]' : 'text-gray-700'}`}>Message Notifications</span>
                 <input
                   type="checkbox"
                   checked={notificationSettings.messageNotifications}
@@ -956,8 +956,8 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
                 />
               </label>
 
-              <label className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
-                <span className="text-gray-700 font-medium">Friend Requests</span>
+              <label className={`flex items-center justify-between p-3 rounded-xl ${theme === 'sweet' ? 'bg-[#FFE4E1]' : 'bg-gray-50'}`}>
+                <span className={`font-medium ${theme === 'sweet' ? 'text-[#4B004B]' : 'text-gray-700'}`}>Friend Requests</span>
                 <input
                   type="checkbox"
                   checked={notificationSettings.friendRequests}
@@ -966,8 +966,8 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
                 />
               </label>
 
-              <label className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
-                <span className="text-gray-700 font-medium">Call Notifications</span>
+              <label className={`flex items-center justify-between p-3 rounded-xl ${theme === 'sweet' ? 'bg-[#FFE4E1]' : 'bg-gray-50'}`}>
+                <span className={`font-medium ${theme === 'sweet' ? 'text-[#4B004B]' : 'text-gray-700'}`}>Call Notifications</span>
                 <input
                   type="checkbox"
                   checked={notificationSettings.callNotifications}
@@ -976,8 +976,8 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
                 />
               </label>
 
-              <label className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border-2 border-gray-200">
-                <span className="text-gray-700 font-medium">Mute All</span>
+              <label className={`flex items-center justify-between p-3 rounded-xl border-2 ${theme === 'sweet' ? 'bg-[#FFE4E1] border-[#FFB6C1]' : 'bg-gray-50 border-gray-200'}`}>
+                <span className={`font-medium ${theme === 'sweet' ? 'text-[#4B004B]' : 'text-gray-700'}`}>Mute All</span>
                 <input
                   type="checkbox"
                   checked={notificationSettings.muteAll}
@@ -994,24 +994,24 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
                 onClick={() => setActiveTab('main')}
                 className="flex items-center gap-2 text-pink-600 hover:text-pink-700 mb-4"
               >
-                <X className="w-4 h-4" />
+                <ChevronLeft className="w-4 h-4" />
                 Back
               </button>
 
               <div>
-                <label className="block text-sm font-medium text-gray-900 mb-3 tracking-wide">
+                <label className={`block text-sm font-medium mb-3 tracking-wide ${theme === 'sweet' ? 'text-[#4B004B]' : 'text-gray-900'}`}>
                   App Theme 🎨
                 </label>
                 <div className="grid grid-cols-3 gap-2">
                   {['sweet', 'light', 'dark'].map((t) => {
                     const isSelected = theme === t;
                     return (
-                      <label 
+                      <label
                         key={t}
                         className={`flex flex-col items-center justify-center p-3 rounded-xl border-2 cursor-pointer transition-all duration-200 text-center select-none
-                          ${isSelected 
-                            ? 'border-pink-400 bg-pink-50/80 text-pink-600 shadow-sm scale-[1.02]' 
-                            : 'border-gray-300 bg-gray-50 text-gray-600 hover:bg-gray-200 hover:border-gray-400'
+                          ${isSelected
+                            ? (theme === 'sweet' ? 'border-[#FF1493] bg-white text-[#FF1493] shadow-sm scale-[1.02]' : 'border-pink-400 bg-pink-50/80 text-pink-600 shadow-sm scale-[1.02]')
+                            : (theme === 'sweet' ? 'border-[#FFD1DC] bg-[#FFF0F5] text-[#8B004B] hover:bg-white hover:border-[#FFB6C1]' : 'border-gray-300 bg-gray-50 text-gray-600 hover:bg-gray-200 hover:border-gray-400')
                          }`}
                       >
                        <input
@@ -1035,11 +1035,11 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-3">Chat Themes</label>
+                <label className={`block text-sm font-medium mb-3 ${theme === 'sweet' ? 'text-[#8B004B]' : 'text-gray-700'}`}>Chat Themes</label>
                 <div className="space-y-2">
                   {['love', 'best_friend', 'friend', 'default'].map((t) => (
-                    <div key={t} className="p-3 border border-gray-200 rounded-xl bg-gray-50">
-                      <p className="text-gray-700 font-medium capitalize">{t} Theme</p>
+                    <div key={t} className={`p-3 border rounded-xl ${theme === 'sweet' ? 'border-[#FFB6C1] bg-[#FFF0F5]' : 'border-gray-200 bg-gray-50'}`}>
+                      <p className={`font-medium capitalize ${theme === 'sweet' ? 'text-[#4B004B]' : 'text-gray-700'}`}>{t} Theme</p>
                     </div>
                   ))}
                 </div>
@@ -1048,13 +1048,13 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
           )}
 
 {activeTab === 'storage' && (
-  <div className="p-6 space-y-6 animate-fadeIn text-gray-700">
+  <div className={`p-6 space-y-6 animate-fadeIn ${theme === 'sweet' ? 'text-[#4B004B]' : 'text-gray-700'}`}>
     {/* Soft Back Button */}
     <button
       onClick={() => setActiveTab('main')}
       className="flex items-center gap-2 text-pink-500 hover:text-pink-600 font-medium transition-colors group select-none"
     >
-      <X className="w-4 h-4 transition-transform group-hover:scale-110" />
+      <ChevronLeft className="w-4 h-4 transition-transform group-hover:scale-110" />
       <span className="text-sm">Back</span>
     </button>
 
@@ -1103,6 +1103,15 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
   <div className={`p-6 space-y-6 animate-fadeIn transition-colors ${
     theme === 'sweet' ? 'text-[#4B004B]' : theme === 'dark' ? 'text-gray-200' : 'text-gray-700'
   }`}>
+    {/* Soft Back Button */}
+    <button
+      onClick={() => setActiveTab('main')}
+      className="flex items-center gap-2 text-pink-500 hover:text-pink-600 font-medium transition-colors group select-none"
+    >
+      <ChevronLeft className="w-4 h-4 transition-transform group-hover:scale-110" />
+      <span className="text-sm">Back</span>
+    </button>
+
     <div className="relative overflow-hidden bg-gradient-to-br from-pink-50 via-purple-50 to-pink-100/50 border border-pink-200/60 p-5 rounded-2xl shadow-sm">
       <div className="flex items-center gap-2.5 mb-3">
         <span className="text-base" role="img" aria-label="performance">⚡</span>
@@ -1153,10 +1162,12 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
     </div>
 
     {/* On-screen FPS overlay toggle */}
-    <div className="bg-white/50 dark:bg-gray-800/50 border border-pink-200/60 dark:border-gray-700 rounded-2xl p-4 flex items-center justify-between gap-4">
+    <div className={`border rounded-2xl p-4 flex items-center justify-between gap-4 ${
+      theme === 'sweet' ? 'bg-[#FFF0F5] border-[#FFB6C1]' : theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white/50 border-pink-200/60'
+    }`}>
       <div>
         <p className="text-sm font-bold">Show FPS on screen</p>
-        <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
+        <p className={`text-[11px] mt-0.5 ${theme === 'sweet' ? 'text-[#8B004B]' : theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
           A small live readout stays visible on every screen, positioned out of the way of your chats.
         </p>
       </div>
@@ -1282,7 +1293,7 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
                       </div>
                       <div className="space-y-0.5">
                         <h4 className={`text-sm font-bold ${theme === 'dark' ? 'text-gray-200' : theme === 'sweet' ? 'text-[#4B004B]' : 'text-gray-800'}`}>Unprotected</h4>
-                        <p className={`text-[11px] ${theme === 'dark' ? 'text-gray-500' : 'text-gray-400'}`}>Chats stay visible inside your standard lists.</p>
+                        <p className={`text-[11px] ${theme === 'sweet' ? 'text-[#8B004B]' : theme === 'dark' ? 'text-gray-500' : 'text-gray-400'}`}>Chats stay visible inside your standard lists.</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
@@ -1316,7 +1327,7 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
                       </div>
                       <div className="space-y-0.5">
                         <h4 className={`text-sm font-bold ${theme === 'dark' ? 'text-gray-200' : theme === 'sweet' ? 'text-[#4B004B]' : 'text-gray-800'}`}>4-Digit Security PIN</h4>
-                        <p className={`text-[11px] ${theme === 'dark' ? 'text-gray-500' : 'text-gray-400'}`}>Secure entry using lightweight numbers code sequence.</p>
+                        <p className={`text-[11px] ${theme === 'sweet' ? 'text-[#8B004B]' : theme === 'dark' ? 'text-gray-500' : 'text-gray-400'}`}>Secure entry using lightweight numbers code sequence.</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
@@ -1351,7 +1362,7 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
                       </div>
                       <div className="space-y-0.5">
                         <h4 className={`text-sm font-bold ${theme === 'dark' ? 'text-gray-200' : theme === 'sweet' ? 'text-[#4B004B]' : 'text-gray-800'}`}>Text Alphanumeric Password</h4>
-                        <p className={`text-[11px] ${theme === 'dark' ? 'text-gray-500' : 'text-gray-400'}`}>Deploy custom string codes rules.</p>
+                        <p className={`text-[11px] ${theme === 'sweet' ? 'text-[#8B004B]' : theme === 'dark' ? 'text-gray-500' : 'text-gray-400'}`}>Deploy custom string codes rules.</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
@@ -1386,7 +1397,7 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
                         </div>
                         <div className="space-y-0.5">
                           <h4 className={`text-sm font-bold ${theme === 'dark' ? 'text-gray-200' : theme === 'sweet' ? 'text-[#4B004B]' : 'text-gray-800'}`}>Biometric Verification Array</h4>
-                          <p className={`text-[11px] ${theme === 'dark' ? 'text-gray-500' : 'text-gray-400'}`}>Locks conversational nodes using biometric configurations.</p>
+                          <p className={`text-[11px] ${theme === 'sweet' ? 'text-[#8B004B]' : theme === 'dark' ? 'text-gray-500' : 'text-gray-400'}`}>Locks conversational nodes using biometric configurations.</p>
                         </div>
                       </div>
                       <input 
@@ -1429,10 +1440,10 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
                         }`}
                       >
                         <div className="flex items-center justify-between w-full">
-                          <span className={`text-xs font-bold ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>📸 FaceID Map</span>
+                          <span className={`text-xs font-bold ${theme === 'sweet' ? 'text-[#4B004B]' : theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>📸 FaceID Map</span>
                           <div className={`w-2 h-2 rounded-full ${profile?.face_descriptor ? 'bg-emerald-500' : 'bg-amber-400'}`} />
                         </div>
-                        <span className="text-[10px] text-gray-400">
+                        <span className={`text-[10px] ${theme === 'sweet' ? 'text-[#8B004B]' : 'text-gray-400'}`}>
                           {profile?.face_descriptor ? "Verified & Saved" : "Setup Missing"}
                         </span>
                       </button>
@@ -1470,10 +1481,10 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
                         }`}
                       >
                         <div className="flex items-center justify-between w-full">
-                          <span className={`text-xs font-bold ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>☝️ TouchID Matrix</span>
-                          <div className={`w-2 h-2 rounded-full ${securityType === 'biometric' && profile?.chat_biometric_type === 'fingerprint' ? 'bg-emerald-500' : 'bg-gray-300'}`} />
+                          <span className={`text-xs font-bold ${theme === 'sweet' ? 'text-[#4B004B]' : theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>☝️ TouchID Matrix</span>
+                          <div className={`w-2 h-2 rounded-full ${securityType === 'biometric' && profile?.chat_biometric_type === 'fingerprint' ? 'bg-emerald-500' : theme === 'sweet' ? 'bg-[#FFB6C1]' : 'bg-gray-300'}`} />
                         </div>
-                        <span className="text-[10px] text-gray-400">
+                        <span className={`text-[10px] ${theme === 'sweet' ? 'text-[#8B004B]' : 'text-gray-400'}`}>
                           Hardware Matrix Check
                         </span>
                       </button>
@@ -1498,7 +1509,7 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
                         className={`w-3 h-3 rounded-full border-2 transition-all duration-150 ${
                           tempPin.length > index 
                             ? theme === 'sweet' ? 'bg-[#FF69B4] border-[#FF69B4]' : theme === 'dark' ? 'bg-gray-400 border-gray-400' : 'bg-gray-800 border-gray-800 scale-110 shadow-sm' 
-                            : theme === 'dark' ? 'border-gray-700 bg-gray-800' : 'border-gray-300 bg-gray-50'
+                            : theme === 'sweet' ? 'border-[#FFB6C1] bg-white' : theme === 'dark' ? 'border-gray-700 bg-gray-800' : 'border-gray-300 bg-gray-50'
                         }`}
                       />
                     ))}
@@ -1516,9 +1527,9 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
                         {num}
                       </button>
                     ))}
-                    <button 
+                    <button
                       onClick={() => setTempPin(prev => prev.slice(0, -1))}
-                      className="h-11 w-11 mx-auto flex items-center justify-center text-xs font-semibold text-gray-400 hover:text-red-500 select-none"
+                      className={`h-11 w-11 mx-auto flex items-center justify-center text-xs font-semibold hover:text-red-500 select-none ${theme === 'sweet' ? 'text-[#8B004B]' : 'text-gray-400'}`}
                     >
                       Clear
                     </button>
@@ -1530,13 +1541,13 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
                     >
                       0
                     </button>
-                    <button 
+                    <button
                       onClick={() => {
                         setPinModal(false);
                         setTempPin('');
                         setPinStep('enter');
                       }}
-                      className="h-11 w-11 mx-auto flex items-center justify-center text-xs font-semibold text-gray-400 hover:text-gray-600 select-none"
+                      className={`h-11 w-11 mx-auto flex items-center justify-center text-xs font-semibold select-none ${theme === 'sweet' ? 'text-[#8B004B] hover:text-[#4B004B]' : 'text-gray-400 hover:text-gray-600'}`}
                     >
                       Cancel
                     </button>
@@ -1551,7 +1562,7 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
                 }`}>
                   <div className="space-y-1">
                     <h4 className={`text-sm font-black ${theme === 'sweet' ? 'text-[#FF69B4]' : theme === 'dark' ? 'text-gray-200' : 'text-gray-800'}`}>Establish Alphanumeric Password</h4>
-                    <p className={`text-[11px] ${theme === 'dark' ? 'text-gray-500' : 'text-gray-400'}`}>Type structural sequence keys to hide conversation trees.</p>
+                    <p className={`text-[11px] ${theme === 'sweet' ? 'text-[#8B004B]' : theme === 'dark' ? 'text-gray-500' : 'text-gray-400'}`}>Type structural sequence keys to hide conversation trees.</p>
                   </div>
                   <input 
                     type="password"
@@ -1585,7 +1596,7 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
                       type="button"
                       onClick={() => setShowPasswordModal(false)}
                       className={`px-4 py-2 rounded-xl text-xs font-bold transition-colors ${
-                        theme === 'dark' ? 'bg-gray-800 hover:bg-gray-700 text-gray-300' : 'bg-gray-100 hover:bg-gray-200 text-gray-600'
+                        theme === 'sweet' ? 'bg-[#FFC0CB]/40 hover:bg-[#FFB6C1] text-[#4B004B]' : theme === 'dark' ? 'bg-gray-800 hover:bg-gray-700 text-gray-300' : 'bg-gray-100 hover:bg-gray-200 text-gray-600'
                       }`}
                     >
                       Cancel

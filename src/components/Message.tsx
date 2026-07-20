@@ -92,6 +92,22 @@ function MessageComponent({
   const { isLowPerfMode } = usePerformance();
   const [showMenu, setShowMenu] = useState(false);
   const [menuDirection, setMenuDirection] = useState<'up' | 'down'>('down');
+  // Height cap for the menu so it can never run off the top/bottom edge — set
+  // from the space available in the chosen direction; the menu scrolls if the
+  // items don't all fit.
+  const [menuMaxHeight, setMenuMaxHeight] = useState<number>(320);
+
+  // Open the 3-dot menu in whichever direction has more room, and cap its
+  // height to that room (minus a margin) so its border never touches an edge.
+  const openMenu = (e: React.MouseEvent) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const spaceAbove = rect.top;
+    const down = spaceBelow >= spaceAbove;
+    setMenuDirection(down ? 'down' : 'up');
+    setMenuMaxHeight(Math.max(140, (down ? spaceBelow : spaceAbove) - 16));
+    setShowMenu((s) => !s);
+  };
   const [showReactions, setShowReactions] = useState(false);
   const [dbReactions, setDbReactions] = useState<Reaction[]>(initialDbReactions);
   const [userReactionMap, setUserReactionMap] = useState<Map<string, string>>(
@@ -357,11 +373,11 @@ function MessageComponent({
                   className="w-6 h-6 rounded-full object-cover border border-pink-200"
                 />
               ) : (
-                <div className="w-6 h-6 rounded-full bg-gradient-to-br from-pink-400 to-purple-500 flex items-center justify-center text-white text-[10px] font-bold">
+                <div className={`w-6 h-6 rounded-full bg-gradient-to-br flex items-center justify-center text-white text-[10px] font-bold ${theme === 'sweet' ? 'from-[#FF69B4] to-[#FF1493]' : 'from-pink-400 to-purple-500'}`}>
                   {message.profiles.display_name[0]}
                 </div>
               )}
-              <span className="text-[10px] font-bold text-gray-500 sweet-theme:text-pink-600 uppercase tracking-wider">
+              <span className={`text-[10px] font-bold uppercase tracking-wider ${theme === 'sweet' ? 'text-[#FF1493]' : 'text-gray-500'}`}>
                 {message.profiles.display_name}
               </span>
             </div>
@@ -387,11 +403,7 @@ function MessageComponent({
 
             <div className="relative opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
               <button
-                onClick={(e) => {
-                  const rect = e.currentTarget.getBoundingClientRect();
-                  setMenuDirection(window.innerHeight - rect.bottom < 250 ? 'up' : 'down');
-                  setShowMenu(!showMenu);
-                }}
+                onClick={openMenu}
                 className={`p-1.5 rounded-full border-2 transition-all duration-300 ${
                   theme === 'sweet'
                     ? 'border-[#FFB6C1] text-[#FF69B4] hover:bg-pink-50 hover:scale-110'
@@ -405,7 +417,8 @@ function MessageComponent({
                 <>
                   <div className="fixed inset-0 z-10" onClick={() => setShowMenu(false)} />
                   <div
-                    className={`absolute w-40 max-w-[70vw] rounded-lg shadow-lg border py-1 z-20 ${
+                    style={{ maxHeight: menuMaxHeight }}
+                    className={`absolute w-40 max-w-[70vw] rounded-lg shadow-lg border py-1 z-20 overflow-y-auto ${
                       theme === 'sweet' ? 'bg-[#FFF0F5] border-[#FFB6C1]' : theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
                     } ${isOwn ? 'right-0' : 'left-0'} ${menuDirection === 'up' ? 'bottom-full mb-1 origin-bottom' : 'top-full mt-1 origin-top'}`}
                   >
@@ -454,11 +467,11 @@ function MessageComponent({
                 className="w-6 h-6 rounded-full object-cover border border-pink-200"
               />
             ) : (
-              <div className="w-6 h-6 rounded-full bg-gradient-to-br from-pink-400 to-purple-500 flex items-center justify-center text-white text-[10px] font-bold">
+              <div className={`w-6 h-6 rounded-full bg-gradient-to-br flex items-center justify-center text-white text-[10px] font-bold ${theme === 'sweet' ? 'from-[#FF69B4] to-[#FF1493]' : 'from-pink-400 to-purple-500'}`}>
                 {message.profiles.display_name[0]}
               </div>
             )}
-            <span className="text-[10px] font-bold text-gray-500 sweet-theme:text-pink-600 uppercase tracking-wider">
+            <span className={`text-[10px] font-bold uppercase tracking-wider ${theme === 'sweet' ? 'text-[#FF1493]' : 'text-gray-500'}`}>
               {message.profiles.display_name}
             </span>
           </div>
@@ -471,6 +484,7 @@ function MessageComponent({
                 px-4 py-2.5 shadow-sm transition-all
                 ${getMessageClasses(isOwn)}
                 break-words [word-break:break-word] overflow-hidden
+                min-w-0 max-w-full
               `}
             >
               {/* Quoted preview of the message this one replies to. Tap to
@@ -749,16 +763,7 @@ function MessageComponent({
 
           <div className="relative">
             <button
-              onClick={(e) => {
-                const rect = e.currentTarget.getBoundingClientRect();
-                const windowHeight = window.innerHeight;
-                if (windowHeight - rect.bottom < 250) {
-                  setMenuDirection('up');
-                } else {
-                  setMenuDirection('down');
-                }
-                setShowMenu(!showMenu);
-              }}
+              onClick={openMenu}
               className={`p-1.5 rounded-full border-2 transition-all duration-300 ${
                 theme === 'sweet'
                   ? 'border-[#FFB6C1] text-[#FF69B4] hover:bg-pink-50 hover:scale-110'
@@ -772,7 +777,8 @@ function MessageComponent({
               <>
                 <div className="fixed inset-0 z-10" onClick={() => setShowMenu(false)} />
                 <div
-                  className={`absolute w-48 max-w-[70vw] rounded-lg shadow-lg border py-1 z-20 transition-all duration-300 ${
+                  style={{ maxHeight: menuMaxHeight }}
+                  className={`absolute w-48 max-w-[70vw] rounded-lg shadow-lg border py-1 z-20 overflow-y-auto transition-all duration-300 ${
                     theme === 'sweet' ? 'bg-[#FFF0F5] border-[#FFB6C1]' : theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
                   } ${isOwn ? 'right-0' : 'left-0'} ${
                     menuDirection === 'up' ? 'bottom-full mb-1 origin-bottom' : 'top-full mt-1 origin-top'
@@ -800,7 +806,7 @@ function MessageComponent({
                     </button>
                   ))}
 
-                  <div className="border-t border-gray-200 dark:border-gray-700 my-1" />
+                  <div className={`border-t my-1 ${theme === 'sweet' ? 'border-[#FFB6C1]' : 'border-gray-200 dark:border-gray-700'}`} />
 
                   {/* Edit — only your own plain text messages (not media, and
                       not a location, which is a text row holding a maps URL). */}

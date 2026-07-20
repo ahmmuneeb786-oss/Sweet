@@ -31,7 +31,7 @@ function isValidEmailFormat(emailToCheck: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailToCheck.trim());
 }
 
-export function Auth() {
+export function Auth({ theme = 'light' }: { theme?: 'light' | 'dark' | 'sweet' }) {
   const { signIn, signUp, verifySignupOtp, resendSignupOtp, completeProfileSetup } = useAuth();
   const { showSuccess, showError, showInfo } = useNotify();
   const { isLowPerfMode } = usePerformance();
@@ -334,22 +334,35 @@ useEffect(() => {
     return '';
   };
 
-  return (
-    <div className="min-h-screen flex items-center justify-center relative overflow-hidden bg-gradient-to-br from-pink-50 via-purple-50 to-blue-50">
-      {!isLowPerfMode && <FloatingHearts />}
+  const isSweet = theme === 'sweet';
 
-      <div className="w-full max-w-md mx-4 relative z-10">
-        <div className={`bg-white/90 rounded-3xl shadow-2xl p-8 space-y-6 ${isLowPerfMode ? '' : 'backdrop-blur-sm'}`}>
+  return (
+    <div className={`min-h-screen flex items-center justify-center relative bg-gradient-to-br ${
+      isSweet ? 'from-[#FFF0F5] via-[#FFE4E1] to-[#FFD1DC]' : 'from-pink-50 via-purple-50 to-blue-50'
+    }`}>
+      {/* Fixed to the real device viewport (not the card's scroll height) so
+          hearts stay visible and correctly distributed on short mobile
+          screens even when the signup form is tall enough to scroll. */}
+      <div className="fixed inset-0 z-0 pointer-events-none">
+        <FloatingHearts theme={theme} />
+      </div>
+
+      <div className="w-full max-w-md relative z-10 px-4 py-8 sm:px-6">
+        <div className={`rounded-3xl shadow-2xl p-6 sm:p-8 space-y-6 ${isLowPerfMode ? '' : 'backdrop-blur-sm'} ${
+          isSweet ? 'bg-[#FFF0F5]/90 border border-[#FFB6C1]' : 'bg-white/90'
+        }`}>
 {/* Header Section: Minimalist, Layered Logo */}
           <div className="text-center space-y-3 pb-4">
             <div className="flex justify-center mb-6 relative group">
               {/* Glassmorphic Layered Ring - Creates Depth (Stylish) */}
               {!isLowPerfMode && (
-                <div className="absolute inset-0 bg-pink-100/50 rounded-full blur-xl scale-125 opacity-70 animate-pulse group-hover:opacity-100 transition-opacity"></div>
+                <div className={`absolute inset-0 rounded-full blur-xl scale-125 opacity-70 animate-pulse group-hover:opacity-100 transition-opacity ${isSweet ? 'bg-[#FF69B4]/30' : 'bg-pink-100/50'}`}></div>
               )}
-              
+
               {/* Main Icon Container - Solid & Premium (Professional) */}
-              <div className="relative z-10 bg-white p-5 rounded-[30px] shadow-lg shadow-pink-100/60 border border-pink-50 transition-transform duration-500 group-hover:scale-105 group-hover:-rotate-3">
+              <div className={`relative z-10 p-5 rounded-[30px] shadow-lg transition-transform duration-500 group-hover:scale-105 group-hover:-rotate-3 ${
+                isSweet ? 'bg-white shadow-[#FF69B4]/20 border border-[#FFB6C1]' : 'bg-white shadow-pink-100/60 border border-pink-50'
+              }`}>
                 {/* The "Double Heart" Icon - Playful & Modern (Sweet) */}
                 <div className="relative">
                   {/* Two extra echo hearts were adding continuous stacked
@@ -358,36 +371,38 @@ useEffect(() => {
                   {!isLowPerfMode && (
                     <>
                       <Heart className="w-12 h-12 text-pink-100 fill-pink-50 absolute -top-2 -right-2 opacity-40 animate-[bounce_1.8s_infinite_ease-in-out]" style={{ animationDelay: '0.4s' }} />
-                      <Heart className="w-12 h-12 text-pink-200 fill-pink-200 absolute -top-1 -right-1 opacity-60 animate-[bounce_1.8s_infinite_ease-in-out]" style={{ animationDelay: '0.3s' }} />
+                      <Heart className={`w-12 h-12 absolute -top-1 -right-1 opacity-60 animate-[bounce_1.8s_infinite_ease-in-out] ${isSweet ? 'text-[#FFB6C1] fill-[#FFB6C1]' : 'text-pink-200 fill-pink-200'}`} style={{ animationDelay: '0.3s' }} />
                     </>
                   )}
-                  <Heart className={`relative z-10 w-12 h-12 text-pink-500 fill-pink-500 drop-shadow-[0_4px_6px_rgba(219,39,119,0.3)] ${isLowPerfMode ? '' : 'animate-[bounce_1.8s_infinite_ease-in-out]'}`} />
+                  <Heart className={`relative z-10 w-12 h-12 drop-shadow-[0_4px_6px_rgba(219,39,119,0.3)] ${isSweet ? 'text-[#FF1493] fill-[#FF1493]' : 'text-pink-500 fill-pink-500'} ${isLowPerfMode ? '' : 'animate-[bounce_1.8s_infinite_ease-in-out]'}`} />
                 </div>
               </div>
             </div>
 
             {/* Title: The "Sweet" Text - Clean but bold (Professional) */}
-            <h1 className="text-4xl font-extrabold tracking-tighter bg-gradient-to-br from-pink-500 via-rose-500 to-purple-600 bg-clip-text text-transparent">
+            <h1 className={`text-4xl font-extrabold tracking-tighter bg-gradient-to-br bg-clip-text text-transparent ${
+              isSweet ? 'from-[#FF69B4] via-[#FF1493] to-[#FF69B4]' : 'from-pink-500 via-rose-500 to-purple-600'
+            }`}>
               Sweet
             </h1>
 
             {/* Subtitle: Spread Love - Balanced and clear */}
-            <p className="text-pink-900/60 text-xs font-semibold uppercase tracking-[0.25em] flex items-center justify-center gap-1.5 opacity-70 group-hover:opacity-100 transition-opacity duration-300">
-              <span className="h-0.5 w-6 bg-pink-100"></span>
+            <p className={`text-xs font-semibold uppercase tracking-[0.25em] flex items-center justify-center gap-1.5 opacity-70 group-hover:opacity-100 transition-opacity duration-300 ${isSweet ? 'text-[#8B004B]' : 'text-pink-900/60'}`}>
+              <span className={`h-0.5 w-6 ${isSweet ? 'bg-[#FFB6C1]' : 'bg-pink-100'}`}></span>
               Spread Love By SWEET
-              <span className="h-0.5 w-6 bg-pink-100"></span>
+              <span className={`h-0.5 w-6 ${isSweet ? 'bg-[#FFB6C1]' : 'bg-pink-100'}`}></span>
             </p>
           </div>
 
           {mode !== 'verify-otp' && (
-          <div className="flex gap-2 p-1 bg-gray-100 rounded-full">
+          <div className={`flex gap-2 p-1 rounded-full ${isSweet ? 'bg-[#FFE4E1]' : 'bg-gray-100'}`}>
             <button
               type="button"
               onClick={() => setMode('login')}
               className={`flex-1 py-2 px-4 rounded-full font-medium transition-all ${
                 mode === 'login'
-                  ? 'bg-white text-pink-600 shadow-md'
-                  : 'text-gray-600 hover:text-gray-900'
+                  ? (isSweet ? 'bg-white text-[#FF1493] shadow-md' : 'bg-white text-pink-600 shadow-md')
+                  : (isSweet ? 'text-[#8B004B] hover:text-[#4B004B]' : 'text-gray-600 hover:text-gray-900')
               }`}
             >
               Login
@@ -397,8 +412,8 @@ useEffect(() => {
               onClick={() => setMode('signup')}
               className={`flex-1 py-2 px-4 rounded-full font-medium transition-all ${
                 mode === 'signup'
-                  ? 'bg-white text-pink-600 shadow-md'
-                  : 'text-gray-600 hover:text-gray-900'
+                  ? (isSweet ? 'bg-white text-[#FF1493] shadow-md' : 'bg-white text-pink-600 shadow-md')
+                  : (isSweet ? 'text-[#8B004B] hover:text-[#4B004B]' : 'text-gray-600 hover:text-gray-900')
               }`}
             >
               Sign Up
@@ -410,16 +425,16 @@ useEffect(() => {
             {mode === 'verify-otp' ? (
               <div className="space-y-4">
                 <div className="flex flex-col items-center text-center gap-2 pb-2">
-                  <div className="bg-pink-50 p-3 rounded-full">
-                    <ShieldCheck className="w-6 h-6 text-pink-500" />
+                  <div className={`p-3 rounded-full ${isSweet ? 'bg-[#FFE4E1]' : 'bg-pink-50'}`}>
+                    <ShieldCheck className={`w-6 h-6 ${isSweet ? 'text-[#FF69B4]' : 'text-pink-500'}`} />
                   </div>
-                  <p className="text-sm text-gray-600">
-                    We sent a 6-digit code to <span className="font-semibold text-gray-900">{email}</span>
+                  <p className={`text-sm ${isSweet ? 'text-[#8B004B]' : 'text-gray-600'}`}>
+                    We sent a 6-digit code to <span className={`font-semibold ${isSweet ? 'text-[#4B004B]' : 'text-gray-900'}`}>{email}</span>
                   </p>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className={`block text-sm font-medium mb-2 ${isSweet ? 'text-[#8B004B]' : 'text-gray-700'}`}>
                     Verification Code
                   </label>
                   <input
@@ -430,7 +445,9 @@ useEffect(() => {
                     value={otpCode}
                     onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
                     placeholder="000000"
-                    className="w-full py-3 text-center text-2xl font-bold tracking-[0.5em] border border-gray-300 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-transparent outline-none transition-all"
+                    className={`w-full py-3 text-center text-2xl font-bold tracking-[0.5em] border rounded-xl focus:ring-2 focus:border-transparent outline-none transition-all ${
+                      isSweet ? 'border-[#FFB6C1] text-[#4B004B] focus:ring-[#FF69B4] bg-white' : 'border-gray-300 focus:ring-pink-500'
+                    }`}
                     required
                   />
                 </div>
@@ -439,7 +456,7 @@ useEffect(() => {
                   <button
                     type="button"
                     onClick={() => { setMode('signup'); setOtpCode(''); }}
-                    className="text-gray-500 hover:text-gray-700 font-medium"
+                    className={`font-medium ${isSweet ? 'text-[#8B004B] hover:text-[#4B004B]' : 'text-gray-500 hover:text-gray-700'}`}
                   >
                     ← Back
                   </button>
@@ -447,7 +464,9 @@ useEffect(() => {
                     type="button"
                     onClick={handleResendOtp}
                     disabled={resendCooldown > 0}
-                    className="text-pink-600 hover:text-pink-700 font-medium disabled:text-gray-400 disabled:cursor-not-allowed"
+                    className={`font-medium disabled:cursor-not-allowed ${
+                      isSweet ? 'text-[#FF1493] hover:text-[#FF69B4] disabled:text-[#FFB6C1]' : 'text-pink-600 hover:text-pink-700 disabled:text-gray-400'
+                    }`}
                   >
                     {resendCooldown > 0 ? `Resend code (${resendCooldown}s)` : 'Resend code'}
                   </button>
@@ -458,36 +477,38 @@ useEffect(() => {
             {mode === 'signup' && (
               <>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className={`block text-sm font-medium mb-2 ${isSweet ? 'text-[#8B004B]' : 'text-gray-700'}`}>
                     Display Name
                   </label>
                   <div className="relative">
-                    <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                    <User className={`absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 ${isSweet ? 'text-[#FF69B4]/60' : 'text-gray-400'}`} />
                     <input
                       type="text"
                       value={displayName}
                       onChange={(e) => setDisplayName(e.target.value)}
                       placeholder="Your Name"
-                      className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-transparent outline-none transition-all"
+                      className={`w-full pl-10 pr-4 py-3 border rounded-xl focus:ring-2 focus:border-transparent outline-none transition-all ${
+                        isSweet ? 'border-[#FFB6C1] text-[#4B004B] focus:ring-[#FF69B4] bg-white' : 'border-gray-300 focus:ring-pink-500'
+                      }`}
                       required
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className={`block text-sm font-medium mb-2 ${isSweet ? 'text-[#8B004B]' : 'text-gray-700'}`}>
                     Username
                   </label>
                   <div className="relative">
-                    <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                    <User className={`absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 ${isSweet ? 'text-[#FF69B4]/60' : 'text-gray-400'}`} />
                     <input
                       type="text"
                       value={username}
                       onChange={(e) => setUsername(e.target.value.toLowerCase())}
                       placeholder="sweet_alex"
-                      className={`w-full pl-10 pr-10 py-3 border rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-transparent outline-none transition-all ${
-                        usernameError ? 'border-red-500' : username && usernameAvailable ? 'border-green-500' : 'border-gray-300'
-                      }`}
+                      className={`w-full pl-10 pr-10 py-3 border rounded-xl focus:ring-2 focus:border-transparent outline-none transition-all ${
+                        usernameError ? 'border-red-500' : username && usernameAvailable ? 'border-green-500' : isSweet ? 'border-[#FFB6C1]' : 'border-gray-300'
+                      } ${isSweet ? 'text-[#4B004B] focus:ring-[#FF69B4] bg-white' : 'focus:ring-pink-500'}`}
                       required
                     />
                     {checkingUsername && (
@@ -513,17 +534,19 @@ useEffect(() => {
             )}
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className={`block text-sm font-medium mb-2 ${isSweet ? 'text-[#8B004B]' : 'text-gray-700'}`}>
                 Email
               </label>
               <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <Mail className={`absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 ${isSweet ? 'text-[#FF69B4]/60' : 'text-gray-400'}`} />
                 <input
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="your@email.com"
-                  className="w-full pl-10 pr-10 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-transparent outline-none transition-all"
+                  className={`w-full pl-10 pr-10 py-3 border rounded-xl focus:ring-2 focus:border-transparent outline-none transition-all ${
+                    isSweet ? 'border-[#FFB6C1] text-[#4B004B] focus:ring-[#FF69B4] bg-white' : 'border-gray-300 focus:ring-pink-500'
+                  }`}
                   required
                 />
                 {mode === 'signup' && checkingEmail && (
@@ -552,23 +575,25 @@ useEffect(() => {
             {mode !== 'forgot' && (
               <>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className={`block text-sm font-medium mb-2 ${isSweet ? 'text-[#8B004B]' : 'text-gray-700'}`}>
                     Password
                   </label>
                   <div className="relative">
-                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                    <Lock className={`absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 ${isSweet ? 'text-[#FF69B4]/60' : 'text-gray-400'}`} />
                     <input
                       type={showPassword ? 'text' : 'password'}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       placeholder="••••••••"
-                      className="w-full pl-10 pr-12 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-transparent outline-none transition-all"
+                      className={`w-full pl-10 pr-12 py-3 border rounded-xl focus:ring-2 focus:border-transparent outline-none transition-all ${
+                        isSweet ? 'border-[#FFB6C1] text-[#4B004B] focus:ring-[#FF69B4] bg-white' : 'border-gray-300 focus:ring-pink-500'
+                      }`}
                       required
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                      className={isSweet ? 'absolute right-3 top-1/2 -translate-y-1/2 text-[#FF69B4]/60 hover:text-[#FF1493]' : 'absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600'}
                     >
                       {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                     </button>
@@ -576,7 +601,7 @@ useEffect(() => {
                   {mode === 'signup' && password && (
                     <div className="mt-2 space-y-1">
                       <div className="flex items-center gap-2">
-                        <div className="flex-1 h-1 bg-gray-200 rounded-full overflow-hidden">
+                        <div className={`flex-1 h-1 rounded-full overflow-hidden ${isSweet ? 'bg-[#FFD1DC]' : 'bg-gray-200'}`}>
                           <div
                             className={`h-full transition-all ${getPasswordStrengthColor()}`}
                             style={{
@@ -598,25 +623,25 @@ useEffect(() => {
 
                 {mode === 'signup' && (
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label className={`block text-sm font-medium mb-2 ${isSweet ? 'text-[#8B004B]' : 'text-gray-700'}`}>
                       Confirm Password
                     </label>
                     <div className="relative">
-                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                      <Lock className={`absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 ${isSweet ? 'text-[#FF69B4]/60' : 'text-gray-400'}`} />
                       <input
                         type={showConfirmPassword ? 'text' : 'password'}
                         value={confirmPassword}
                         onChange={(e) => setConfirmPassword(e.target.value)}
                         placeholder="••••••••"
-                        className={`w-full pl-10 pr-12 py-3 border rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-transparent outline-none transition-all ${
-                          confirmPassword && password !== confirmPassword ? 'border-red-500' : 'border-gray-300'
-                        }`}
+                        className={`w-full pl-10 pr-12 py-3 border rounded-xl focus:ring-2 focus:border-transparent outline-none transition-all ${
+                          confirmPassword && password !== confirmPassword ? 'border-red-500' : isSweet ? 'border-[#FFB6C1]' : 'border-gray-300'
+                        } ${isSweet ? 'text-[#4B004B] focus:ring-[#FF69B4] bg-white' : 'focus:ring-pink-500'}`}
                         required
                       />
                       <button
                         type="button"
                         onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                        className={isSweet ? 'absolute right-3 top-1/2 -translate-y-1/2 text-[#FF69B4]/60 hover:text-[#FF1493]' : 'absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600'}
                       >
                         {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                       </button>
@@ -636,7 +661,7 @@ useEffect(() => {
                 <button
                   type="button"
                   onClick={() => setMode('forgot')}
-                  className="text-sm text-pink-600 hover:text-pink-700 font-medium"
+                  className={`text-sm font-medium ${isSweet ? 'text-[#FF1493] hover:text-[#FF69B4]' : 'text-pink-600 hover:text-pink-700'}`}
                 >
                   Forgot password?
                 </button>
@@ -646,7 +671,9 @@ useEffect(() => {
             <button
               type="submit"
               disabled={loading || !isFormValid()}
-              className="w-full py-3 px-4 bg-gradient-to-r from-pink-500 to-rose-500 text-white font-medium rounded-xl hover:from-pink-600 hover:to-rose-600 focus:outline-none focus:ring-2 focus:ring-pink-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all transform hover:scale-[1.02] active:scale-[0.98]"
+              className={`w-full py-3 px-4 text-white font-medium rounded-xl focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all transform hover:scale-[1.02] active:scale-[0.98] bg-gradient-to-r ${
+                isSweet ? 'from-[#FF69B4] to-[#FF1493] hover:from-[#FF1493] hover:to-[#FF69B4] focus:ring-[#FF69B4]' : 'from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 focus:ring-pink-500'
+              }`}
             >
               {loading ? (
                 <div className="flex items-center justify-center gap-2">
@@ -667,7 +694,7 @@ useEffect(() => {
               <button
                 type="button"
                 onClick={() => setMode('login')}
-                className="w-full text-center text-sm text-gray-600 hover:text-gray-900"
+                className={`w-full text-center text-sm ${isSweet ? 'text-[#8B004B] hover:text-[#4B004B]' : 'text-gray-600 hover:text-gray-900'}`}
               >
                 Back to login
               </button>
