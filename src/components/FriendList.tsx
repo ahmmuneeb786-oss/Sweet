@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, Search, UserPlus, Check, X as XIcon, MessageCircle, Inbox, Users, Heart } from 'lucide-react';
+import { X, Search, UserPlus, Check, X as XIcon, MessageCircle, Inbox, Users, Heart, SearchX } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { localDB } from '../db';
@@ -640,13 +640,13 @@ export function FriendList({ theme, onClose, onSelectUser, setActiveChatId, init
                   <div className="w-8 h-8 border-3 border-pink-500 border-t-transparent rounded-full animate-spin" />
                 </div>
               ) : searchResults.length === 0 && searchQuery ? (
-                <div className="flex-1 flex flex-col items-center justify-center min-h-[16rem] text-center px-4">
-                  <Search className="w-16 h-16 text-gray-300 mb-3" />
-                  <p className="text-gray-500 font-medium">No users found</p>
-                  <p className="text-gray-400 text-sm mt-1">
-                    Try searching with a different username
-                  </p>
-                </div>
+                <EmptyState
+                  icon={SearchX}
+                  accent={<span className="text-[13px] leading-none">🥺</span>}
+                  title="No users found"
+                  subtitle="We couldn't find anyone with that username. Try a different one."
+                  theme={theme}
+                />
               ) : searchResults.length === 0 ? (
                 <EmptyState
                   icon={UserPlus}

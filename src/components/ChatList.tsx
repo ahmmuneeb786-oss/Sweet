@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Search, MoreVertical, MessageSquarePlus, Users, User as UserIcon, Settings, Lock, LogOut, Heart } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
@@ -7,6 +7,9 @@ import { usePresence } from '../hooks/usePresence';
 import { markChatsReady } from '../hooks/useChatsReady';
 import { useNotify } from '../contexts/NotificationContext';
 import { usePerformance } from '../contexts/PerformanceContext';
+import { formatMessagePreview } from '../lib/messagePreview';
+import { loadHiddenMessageIds } from '../lib/hiddenMessages';
+import { onChatListRefresh } from '../hooks/chatListRefresh';
 
 interface Chat {
   id: string;
@@ -15,9 +18,13 @@ interface Chat {
   avatar_url: string | null;
   theme: string;
   lastMessage?: {
-    content: string;
+    id?: string;
+    content: string | null;
     created_at: string;
+    type?: string | null;
+    is_deleted?: boolean;
   };
+  unreadCount?: number;
   otherUser?: {
     id: string;
     display_name: string;
@@ -47,6 +54,11 @@ export function ChatList({ selectedChatId, onSelectChat, onShowProfile, onShowFr
   const [showMenu, setShowMenu] = useState(false);
   const [loading, setLoading] = useState(true);
   const [isOnline, setIsOnline] = useState(navigator.onLine); // 🌐 Track network variations
+  // The realtime subscription is created once; this ref lets its INSERT handler
+  // read the CURRENTLY open chat (so a message for the open chat isn't counted
+  // as unread).
+  const selectedChatIdRef = useRef(selectedChatId);
+  selectedChatIdRef.current = selectedChatId;
 
   // Own profile (avatar + username shown top-left) — cached so it doesn't
   // flash blank on reload while AuthContext is still fetching it.
@@ -111,6 +123,14 @@ export function ChatList({ selectedChatId, onSelectChat, onShowProfile, onShowFr
           { event: 'INSERT', schema: 'public', table: 'messages' },
           (payload) => {
             const newMessage = payload.new;
+            // A message the user "deleted for me" shouldn't resurface as the
+            // preview (can happen if it arrives while hidden) — skip it.
+            if (loadHiddenMessageIds().has(newMessage.id)) return;
+
+            // Count it as unread if it's from the other person AND this chat
+            // isn't the one currently open.
+            const countsAsUnread =
+              newMessage.sender_id !== user.id && newMessage.chat_id !== selectedChatIdRef.current;
 
             setChats((currentChats) => {
               const idx = currentChats.findIndex((chat) => chat.id === newMessage.chat_id);
@@ -119,9 +139,13 @@ export function ChatList({ selectedChatId, onSelectChat, onShowProfile, onShowFr
               const updatedChat = {
                 ...currentChats[idx],
                 lastMessage: {
+                  id: newMessage.id,
                   content: newMessage.content,
-                  created_at: newMessage.created_at
-                }
+                  created_at: newMessage.created_at,
+                  type: newMessage.type,
+                  is_deleted: newMessage.is_deleted
+                },
+                unreadCount: (currentChats[idx].unreadCount ?? 0) + (countsAsUnread ? 1 : 0)
               };
 
               // Move the chat with the new message to the top, like a real chat list.
@@ -133,9 +157,54 @@ export function ChatList({ selectedChatId, onSelectChat, onShowProfile, onShowFr
 
             // Persist so the next app open shows this message from cache instantly,
             // instead of only reflecting whatever the last full loadChats() saw.
-            localDB.chats.update(newMessage.chat_id, {
-              last_message_content: newMessage.content,
-              last_message_time: newMessage.created_at
+            localDB.chats.get(newMessage.chat_id).then((c) => {
+              localDB.chats.update(newMessage.chat_id, {
+                last_message_content: newMessage.content,
+                last_message_time: newMessage.created_at,
+                last_message_type: newMessage.type,
+                last_message_is_deleted: newMessage.is_deleted,
+                last_message_id: newMessage.id,
+                unread_count: (c?.unread_count ?? 0) + (countsAsUnread ? 1 : 0)
+              }).catch(() => {});
+            }).catch(() => {});
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: 'UPDATE', schema: 'public', table: 'messages' },
+          (payload) => {
+            const updated = payload.new;
+            // Reflect edits and "delete for everyone" (is_deleted flips) on the
+            // preview live — but only when the changed row IS the chat's current
+            // last message. Bail early (same array reference, no re-render) for
+            // the common case of updates to non-last messages, e.g. the flood
+            // of delivery_status='read' updates.
+            setChats((currentChats) => {
+              if (!currentChats.some((c) => c.lastMessage?.id === updated.id)) return currentChats;
+              return currentChats.map((chat) =>
+                chat.lastMessage?.id === updated.id
+                  ? {
+                      ...chat,
+                      lastMessage: {
+                        ...chat.lastMessage,
+                        content: updated.content,
+                        type: updated.type,
+                        is_deleted: updated.is_deleted
+                      }
+                    }
+                  : chat
+              );
+            });
+            // Cache write keyed by chat_id (the indexed primary key), guarded
+            // so we only touch the row when this really is its last message.
+            localDB.chats.get(updated.chat_id).then((c) => {
+              if (c && c.last_message_id === updated.id) {
+                localDB.chats.update(updated.chat_id, {
+                  last_message_content: updated.content,
+                  last_message_is_deleted: updated.is_deleted,
+                  last_message_type: updated.type
+                }).catch(() => {});
+              }
             }).catch(() => {});
           }
         )
@@ -171,11 +240,29 @@ export function ChatList({ selectedChatId, onSelectChat, onShowProfile, onShowFr
         )
         .subscribe();
 
+      // "Delete for me" in an open chat can't reach us through Supabase (it
+      // never touches the server), so ChatWindow pings this bus to have us
+      // recompute previews — falling back to the previous visible message.
+      const unsubscribeRefresh = onChatListRefresh(() => loadChats());
+
       return () => {
         supabase.removeChannel(channel);
+        unsubscribeRefresh();
       };
     }
   }, [user]);
+
+  // Opening a chat clears its unread badge (the messages get marked read in
+  // ChatWindow). Reflect that in the list + cache immediately.
+  useEffect(() => {
+    if (!selectedChatId) return;
+    setChats((current) =>
+      current.some((c) => c.id === selectedChatId && (c.unreadCount ?? 0) > 0)
+        ? current.map((c) => (c.id === selectedChatId ? { ...c, unreadCount: 0 } : c))
+        : current
+    );
+    localDB.chats.update(selectedChatId, { unread_count: 0 }).catch(() => {});
+  }, [selectedChatId]);
 
   // Shared shape conversion: LocalChat (cache row) -> Chat (what the UI renders)
   function toChat(c: any): Chat {
@@ -185,10 +272,16 @@ export function ChatList({ selectedChatId, onSelectChat, onShowProfile, onShowFr
       name: c.name,
       avatar_url: c.avatar_url,
       theme: c.theme,
-      lastMessage: c.last_message_content ? {
-        content: c.last_message_content,
-        created_at: c.last_message_time || ''
+      // Gate on the timestamp, not the content — a photo/gif/voice message has
+      // no text content but is still a real "last message" worth previewing.
+      lastMessage: c.last_message_time ? {
+        id: c.last_message_id,
+        content: c.last_message_content ?? null,
+        created_at: c.last_message_time,
+        type: c.last_message_type ?? 'text',
+        is_deleted: c.last_message_is_deleted ?? false
       } : undefined,
+      unreadCount: c.unread_count ?? 0,
       otherUser: c.other_user_id ? {
         id: c.other_user_id,
         display_name: c.other_user_name || '',
@@ -259,11 +352,13 @@ export function ChatList({ selectedChatId, onSelectChat, onShowProfile, onShowFr
         })
         .map(p => p.chat_id);
 
+      const hidden = loadHiddenMessageIds();
+
       // Batched instead of one query per chat — this was the N+1 query problem.
       const [{ data: messages }, { data: otherParticipants }] = await Promise.all([
         supabase
           .from('messages')
-          .select('chat_id, content, created_at')
+          .select('id, chat_id, content, created_at, type, is_deleted, sender_id, delivery_status')
           .in('chat_id', chatIds)
           .order('created_at', { ascending: false }),
         directChatIds.length > 0
@@ -286,8 +381,14 @@ export function ChatList({ selectedChatId, onSelectChat, onShowProfile, onShowFr
           const chatData = Array.isArray(p.chats) ? p.chats[0] : p.chats;
           if (!chatData) return null;
 
-          const lastMsg = messages?.find(m => m.chat_id === p.chat_id);
+          // Latest message that ISN'T hidden via "delete for me" — so a
+          // locally-hidden last message falls back to the previous one.
+          const lastMsg = messages?.find(m => m.chat_id === p.chat_id && !hidden.has(m.id));
           const otherUserObj = otherUserByChat.get(p.chat_id);
+          // Unread = received messages in this chat not yet marked read.
+          const unreadCount = messages
+            ? messages.filter(m => m.chat_id === p.chat_id && m.sender_id !== user.id && m.delivery_status !== 'read' && !hidden.has(m.id)).length
+            : 0;
 
           return {
             id: chatData.id,
@@ -297,6 +398,10 @@ export function ChatList({ selectedChatId, onSelectChat, onShowProfile, onShowFr
             theme: chatData.theme,
             last_message_content: lastMsg?.content,
             last_message_time: lastMsg?.created_at,
+            last_message_type: lastMsg?.type,
+            last_message_is_deleted: lastMsg?.is_deleted,
+            last_message_id: lastMsg?.id,
+            unread_count: unreadCount,
             other_user_id: otherUserObj?.id,
             other_user_name: otherUserObj?.display_name,
             other_user_avatar: otherUserObj?.avatar_url,
@@ -532,16 +637,21 @@ export function ChatList({ selectedChatId, onSelectChat, onShowProfile, onShowFr
             </p>
           </div>
         ) : (
-          <div>
+          <div className="p-2 space-y-1.5">
             {filteredChats.map((chat) => {
+              const unread = chat.unreadCount ?? 0;
               return (
                 <button
                   key={chat.id}
                   onClick={() => onSelectChat(chat.id)}
-                  className={`w-full p-4 flex items-start gap-3 transition-all active:scale-[0.98] ${
+                  className={`w-full p-3 rounded-3xl border flex items-start gap-3 transition-all active:scale-[0.98] ${
                     selectedChatId === chat.id
-                      ? theme === 'sweet' ? 'bg-[#FFC0CB]/40' : 'bg-pink-50 dark:bg-pink-900/30'
-                      : theme === 'sweet' ? 'hover:bg-[#FFC0CB]/20' : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                      ? theme === 'sweet'
+                        ? 'bg-[#FFC0CB]/50 border-[#FF69B4] shadow-sm shadow-pink-200/50'
+                        : 'bg-pink-50 dark:bg-pink-900/30 border-pink-300 dark:border-pink-700'
+                      : theme === 'sweet'
+                        ? 'bg-white/60 border-[#FFD1DC] hover:bg-[#FFC0CB]/25 hover:border-[#FFB6C1]'
+                        : 'bg-white dark:bg-gray-800/40 border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50'
                   } ${getThemeColor(chat.theme)}`}
                 >
                   <div className="relative flex-shrink-0">
@@ -574,19 +684,26 @@ export function ChatList({ selectedChatId, onSelectChat, onShowProfile, onShowFr
                   </div>
 
                   <div className="flex-1 min-w-0 text-left">
-                    <div className="flex items-center justify-between mb-1">
-                      <h3 className="font-semibold text-gray-900 dark:text-gray-100 truncate">
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <h3 className={`truncate ${unread > 0 ? 'font-extrabold text-gray-900 dark:text-white' : 'font-semibold text-gray-900 dark:text-gray-100'}`}>
                         {chat.type === 'direct' ? chat.otherUser?.display_name : chat.name}
                       </h3>
                       {chat.lastMessage?.created_at && (
-                        <span className="text-xs text-gray-500 ml-2">
+                        <span className={`text-xs shrink-0 ${unread > 0 ? 'text-[#FF1493] font-bold' : 'text-gray-500'}`}>
                           {formatTime(chat.lastMessage.created_at)}
                         </span>
                       )}
                     </div>
-                    <p className="text-sm text-gray-600 dark:text-gray-400 truncate">
-                      {chat.lastMessage ? chat.lastMessage.content : "No messages yet... 👋"}
-                    </p>
+                    <div className="flex items-center justify-between gap-2">
+                      <p className={`text-sm truncate flex-1 ${unread > 0 ? 'text-gray-800 dark:text-gray-200 font-medium' : 'text-gray-600 dark:text-gray-400'}`}>
+                        {formatMessagePreview(chat.lastMessage)}
+                      </p>
+                      {unread > 0 && (
+                        <span className="shrink-0 min-w-[20px] h-5 px-1.5 rounded-full bg-gradient-to-br from-[#FF69B4] to-[#FF1493] text-white text-[11px] font-black flex items-center justify-center shadow-sm shadow-pink-300/60">
+                          {unread > 99 ? '99+' : unread}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </button>
               );

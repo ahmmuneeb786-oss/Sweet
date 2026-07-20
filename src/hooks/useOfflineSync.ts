@@ -83,14 +83,18 @@ export async function sendPendingMessage(pending: PendingMessage): Promise<SyncR
       content: pending.content,
       type: pending.message_type,
       media_url: mediaUrl,
+      reply_to_id: pending.reply_to_id ?? null,
       delivery_status: 'sent',
     });
     if (error) throw error;
 
     await localDB.messages.update(pending.id, { delivery_status: 'sent', media_url: mediaUrl });
     await localDB.chats.update(pending.chat_id, {
-      last_message_content: pending.content || (pending.media_file_name ? pending.media_file_name : 'Media'),
+      last_message_content: pending.content || pending.media_file_name || null,
       last_message_time: new Date().toISOString(),
+      last_message_type: pending.message_type,
+      last_message_is_deleted: false,
+      last_message_id: pending.id,
     });
     await localDB.pendingMessages.delete(pending.id);
 

@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { Send, Phone, Video, FileText, X, Mic, AlertCircle, Check, ArrowLeft } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback, useLayoutEffect } from 'react';
+import { Send, Phone, Video, FileText, X, Mic, AlertCircle, Check, ArrowLeft, Pencil, Reply } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import LocationPicker from './LocationPicker';
 import { supabase } from '../lib/supabase';
@@ -17,6 +17,9 @@ import { useBackableState } from '../hooks/useBackableState';
 import { queuePendingMessage, retryPendingMessage, subscribeToSyncEvents } from '../hooks/useOfflineSync';
 import { useNotify } from '../contexts/NotificationContext';
 import { useCall } from '../hooks/useCall';
+import { loadHiddenMessageIds, hideMessageLocally } from '../lib/hiddenMessages';
+import { requestChatListRefresh } from '../hooks/chatListRefresh';
+import { formatMessagePreview } from '../lib/messagePreview';
 
 interface ChatWindowProps {
   onOpenGifPanel: () => void;
@@ -90,8 +93,49 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
   const { isOnline: isUserOnline } = usePresence(user?.id);
   const { showError } = useNotify();
   const [messages, setMessages] = useState<MessageType[]>([]);
+  // Mirror of `messages` for async loops (jump-to-message) that can't rely on
+  // the render-time closure's value.
+  const messagesRef = useRef<MessageType[]>([]);
+  messagesRef.current = messages;
   const [chatInfo, setChatInfo] = useState<ChatInfo | null>(null);
+
+  // ── Older-message pagination (scroll up to load the previous page) ──────────
+  const MESSAGE_PAGE_SIZE = 60;
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const hasMoreOlderRef = useRef(true);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const loadingOlderRef = useRef(false);
+  // Set right before a prepend so the scroll effect anchors the viewport
+  // instead of jumping to the bottom.
+  const justPrependedRef = useRef(false);
+  const prevScrollHeightRef = useRef(0);
+
+  // Parent messages referenced by a reply whose parent is OUTSIDE the loaded
+  // window (older than the current page) — fetched on demand so the quote
+  // still renders.
+  const [replyParents, setReplyParents] = useState<Record<string, MessageType>>({});
+  // Briefly highlighted after a jump-to-message so the user sees where they landed.
+  const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
+
+  // The first unread (received, not-yet-read) message when the chat was opened —
+  // an "Unread messages" divider is drawn just above it, and the chat opens
+  // scrolled there. Snapshotted on open so it stays put even after we mark
+  // everything read. null = no unread, open at the bottom.
+  const [unreadDividerId, setUnreadDividerId] = useState<string | null>(null);
+  // Whether we've done the one-time instant positioning for this chat (so the
+  // scroll effect doesn't fight it), and the last message id we've seen at the
+  // bottom (to detect genuinely-new appended messages).
+  const didInitialScrollRef = useRef(false);
+  const prevLastIdRef = useRef<string | null>(null);
+  // Set once the authoritative load has committed, so the initial-position
+  // layout effect doesn't fire off the (possibly-stale) cache render.
+  const initialReadyRef = useRef(false);
   const [newMessage, setNewMessage] = useState('');
+  // When set, the composer is editing an existing message instead of sending
+  // a new one. Holds the message id being edited.
+  const [editingMessage, setEditingMessage] = useState<{ id: string } | null>(null);
+  // When set, the next sent message is a reply to this one (its reply_to_id).
+  const [replyingTo, setReplyingTo] = useState<MessageType | null>(null);
   const [isOtherTyping, setIsOtherTyping] = useState(false);
   const [loading, setLoading] = useState(true);
   const [showProfileView, setShowProfileView] = useState(false);
@@ -134,6 +178,17 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
 
   useEffect(() => {
     if (chatId && user) {
+      // ChatWindow is reused across chats (not remounted), so reset the
+      // pagination + reply-parent state that would otherwise leak from the
+      // previous chat.
+      hasMoreOlderRef.current = true;
+      loadingOlderRef.current = false;
+      didInitialScrollRef.current = false;
+      initialReadyRef.current = false;
+      prevLastIdRef.current = null;
+      setReplyParents({});
+      setHighlightedMessageId(null);
+      setUnreadDividerId(null);
       hydrateThenLoad(chatId);
     }
   }, [chatId, user]);
@@ -184,8 +239,41 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
     return () => clearInterval(tickerInterval);
   }, []);
 
-  useEffect(() => {
-    scrollToBottom();
+  // Scroll management on every messages change:
+  //  - after prepending an older page, keep the viewport anchored,
+  //  - before the one-time initial positioning happens, do nothing (that's
+  //    handled imperatively in loadMessages so opening is instant, not a
+  //    top-to-bottom animation),
+  //  - after that, smooth-scroll to the bottom only for genuinely NEW messages
+  //    appended at the end (not edits, reconciles, or reaction updates).
+  useLayoutEffect(() => {
+    const container = messagesContainerRef.current;
+    if (justPrependedRef.current && container) {
+      container.scrollTop = container.scrollHeight - prevScrollHeightRef.current;
+      justPrependedRef.current = false;
+      return;
+    }
+
+    // One-time instant positioning when a chat opens (after the authoritative
+    // load, signalled by initialReadyRef): jump straight to the bottom (most
+    // recent messages). No animation — this is what removes the top-to-bottom
+    // scroll on open. The "Unread messages" divider still marks where new
+    // messages begin; the user scrolls up to it.
+    if (!didInitialScrollRef.current) {
+      if (!initialReadyRef.current || messages.length === 0 || !container) return;
+      didInitialScrollRef.current = true;
+      container.scrollTop = container.scrollHeight;
+      prevLastIdRef.current = messages[messages.length - 1]?.id ?? null;
+      return;
+    }
+
+    // After the initial open, smooth-scroll to the bottom only for a genuinely
+    // NEW message appended at the end — not edits, reconciles, or reactions.
+    const lastId = messages.length ? messages[messages.length - 1].id : null;
+    if (lastId && lastId !== prevLastIdRef.current) {
+      scrollToBottom();
+    }
+    prevLastIdRef.current = lastId;
   }, [messages]);
 
   useEffect(() => {
@@ -473,8 +561,12 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
     // nodes, with every small state change (new message, reaction, typing
     // indicator) forcing React to re-reconcile the entire history instead of
     // a bounded recent window. Capping to the most recent page fixes both at
-    // once, no virtualization library needed for a window this size.
-    const MESSAGE_PAGE_SIZE = 60;
+    // once; older pages are pulled in on demand by loadOlderMessages().
+    const hidden = loadHiddenMessageIds();
+    // First received message not yet marked read = where the "Unread messages"
+    // divider goes. Computed BEFORE markMessagesAsRead flips them all to read.
+    const firstUnreadId = (list: MessageType[]) =>
+      list.find((m) => m.sender_id !== user?.id && m.delivery_status !== 'read')?.id ?? null;
 
     try {
       const localMessages = await localDB.messages
@@ -482,7 +574,7 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
         .equals(chatInfo.id)
         .sortBy('created_at');
 
-      const recentLocal = localMessages.slice(-MESSAGE_PAGE_SIZE);
+      const recentLocal = localMessages.slice(-MESSAGE_PAGE_SIZE).filter((m) => !hidden.has(m.id));
 
       if (recentLocal.length > 0) {
         setMessages(recentLocal);
@@ -497,10 +589,20 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
         .limit(MESSAGE_PAGE_SIZE);
 
       if (!error && data) {
-        const recent = [...data].reverse(); // back to ascending for display
+        const recent = [...data].reverse().filter((m) => !hidden.has(m.id)); // ascending for display, minus locally-hidden
         setMessages(recent);
         await localDB.messages.bulkPut(recent);
         loadAllReactions(recent);
+        // A full page back means there may be older pages; fewer means we've
+        // reached the very first message.
+        hasMoreOlderRef.current = data.length === MESSAGE_PAGE_SIZE;
+        // Server data is authoritative for read state — position on it.
+        setUnreadDividerId(firstUnreadId(recent));
+        initialReadyRef.current = true;
+      } else if (recentLocal.length > 0) {
+        // Offline / no server data — fall back to the cache for positioning.
+        setUnreadDividerId(firstUnreadId(recentLocal));
+        initialReadyRef.current = true;
       }
     } catch (error) {
       console.error('Error loading messages offline:', error);
@@ -639,6 +741,36 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
     e.preventDefault();
 
     const messageContent = newMessage.trim();
+
+    // Edit branch: the composer is editing an existing text message rather
+    // than sending a new one. Update in place (content + is_edited) instead
+    // of inserting — the other person gets it live via the UPDATE realtime
+    // listener, and the "• Edited" footer lights up from is_edited.
+    if (editingMessage && user && chatInfo) {
+      if (!messageContent) return; // don't allow saving an empty edit
+      const messageId = editingMessage.id;
+      learnFromMessage(messageContent);
+      setMessages((prev) =>
+        prev.map((m) => (m.id === messageId ? { ...m, content: messageContent, is_edited: true } : m))
+      );
+      setNewMessage('');
+      setEditingMessage(null);
+      if (textareaRef.current) textareaRef.current.style.height = 'auto';
+      try {
+        await localDB.messages.update(messageId, { content: messageContent, is_edited: true });
+        const { error } = await supabase
+          .from('messages')
+          .update({ content: messageContent, is_edited: true })
+          .eq('id', messageId)
+          .eq('sender_id', user.id);
+        if (error) throw error;
+      } catch (err) {
+        console.error('Failed to edit message:', err);
+        showError("Couldn't edit the message.");
+      }
+      return;
+    }
+
     if (messageContent) learnFromMessage(messageContent);
     if ((!messageContent && !selectedFile && !audioBlob && !selectedVideo && !selectedDoc && !selectedGif) || !user || !chatInfo) return;
 
@@ -650,6 +782,7 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
     const voicePreview = recordedAudioUrl;
     const docToUpload = doc || selectedDoc;
     const gifToSend = selectedGif;
+    const replyToId = replyingTo?.id ?? null;
 
     const tempMessage: MessageType = {
       id: tempId,
@@ -658,7 +791,7 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
       content: docToUpload ? docToUpload.name : (voiceToUpload ? "Voice Note" : (messageContent || null)),
       type: gifToSend ? "gif" : videoToUpload ? "video" : voiceToUpload ? "voice" : docToUpload ? "file" : (fileToUpload ? "image" : "text"),
       media_url: gifToSend ? gifToSend : videoToUpload ? videoUrlPreview : voiceToUpload ? voicePreview : imagePreview,
-      reply_to_id: null,
+      reply_to_id: replyToId,
       is_edited: false,
       is_deleted: false,
       created_at: new Date().toISOString(),
@@ -679,6 +812,7 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
     setSelectedVideo(null);
     setSelectedDoc(null);
     setSelectedGif(null);
+    setReplyingTo(null);
 
     if (textareaRef.current) textareaRef.current.style.height = 'auto';
 
@@ -705,6 +839,7 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
         media_blob: mediaBlob,
         media_file_name: mediaFileName,
         media_url: gifToSend || undefined,
+        reply_to_id: replyToId,
         created_at: tempMessage.created_at,
         attempts: 0,
         last_error: null,
@@ -757,6 +892,7 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
         content: messageContent || (docToUpload ? docToUpload.name : (voiceToUpload ? "Voice Note" : null)),
         type: messageType,
         media_url: finalMediaUrl,
+        reply_to_id: replyToId,
         delivery_status: 'sent'
       });
 
@@ -767,9 +903,15 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
       // version wrote a nested `otherUser` object here instead, which silently
       // wiped out avatar_url/other_user_* on this chat's cached list entry
       // every time a message was sent.
+      // Store the raw content + type/id; the chat-list preview turns the type
+      // into a label (📷 Photo / GIF / 🎤 Voice message / …) via
+      // formatMessagePreview, so no need to bake a "Media" string here.
       await localDB.chats.update(chatInfo.id, {
-        last_message_content: messageContent || (docToUpload ? docToUpload.name : (voiceToUpload ? "Voice Note" : "Media")),
+        last_message_content: docToUpload ? docToUpload.name : (messageContent || null),
         last_message_time: new Date().toISOString(),
+        last_message_type: messageType,
+        last_message_is_deleted: false,
+        last_message_id: tempId,
       });
 
       setAudioBlob(null);
@@ -781,7 +923,7 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
       // automatically, and the user can also tap it to retry manually.
       await queueForLater(error);
     }
-  }, [newMessage, selectedFile, audioBlob, selectedVideo, selectedDoc, selectedGif, user, chatInfo, videoPreview, recordedAudioUrl, imagePreview]);
+  }, [newMessage, selectedFile, audioBlob, selectedVideo, selectedDoc, selectedGif, user, chatInfo, videoPreview, recordedAudioUrl, imagePreview, editingMessage, replyingTo, showError]);
 
    useEffect(() => {
   // Ensure subscription definitions stay completely unconditional
@@ -838,23 +980,79 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
   }, []);
 
   // Stable delete handler — child passes its own id instead of inline arrow
-  const handleDeleteMessage = useCallback(async (messageId: string) => {
+  // Soft delete: Message.handleDelete already writes is_deleted=true to both
+  // Supabase and the local cache. This handler's only job is to reflect that
+  // in THIS window's in-memory state immediately, so the deleting user sees
+  // the "This message was deleted" tombstone without waiting on the realtime
+  // round trip. The other person gets it via the UPDATE subscription above
+  // (UPDATE events carry the full new row, is_deleted included) — which is
+  // exactly what the old hard DELETE couldn't do, since there's no DELETE
+  // listener and delete events don't propagate here.
+  const handleDeleteMessage = useCallback((messageId: string) => {
+    setMessages((prev) =>
+      prev.map((m) => (m.id === messageId ? { ...m, is_deleted: true } : m))
+    );
+  }, []);
+
+  // "Delete for me" — remove the bubble on this device only. Nothing is
+  // written to Supabase, so the other person keeps seeing the message
+  // untouched. Persisted to the local hidden list so it doesn't come back on
+  // the next load, and dropped from the local cache too.
+  const handleHideMessage = useCallback(async (messageId: string) => {
+    hideMessageLocally(messageId);
+    setMessages((prev) => prev.filter((m) => m.id !== messageId));
     try {
-      const { error } = await supabase
-        .from('messages')
-        .delete()
-        .eq('id', messageId)
-        .eq('sender_id', user?.id);
-
-      if (error) throw error;
-
       await localDB.messages.delete(messageId);
-      setMessages((prev) => prev.filter((m) => m.id !== messageId));
-    } catch (error) {
-      console.error("Error deleting message:", error);
-      showError("Could not delete message.");
+    } catch (err) {
+      console.warn('Failed to drop hidden message from local cache:', err);
     }
-  }, [user?.id]);
+
+    // If the hidden message was this chat's last one, the chat-list preview
+    // would otherwise keep showing it. Recompute the cached preview from the
+    // remaining visible messages (falling back to the previous one) and poke
+    // the list to refresh.
+    if (chatInfo?.id) {
+      try {
+        const hidden = loadHiddenMessageIds();
+        const local = await localDB.messages.where('chat_id').equals(chatInfo.id).sortBy('created_at');
+        const visible = local.filter((m) => !hidden.has(m.id));
+        const newLast = visible[visible.length - 1];
+        await localDB.chats.update(chatInfo.id, {
+          last_message_content: newLast?.content ?? null,
+          last_message_time: newLast?.created_at,
+          last_message_type: newLast?.type ?? null,
+          last_message_is_deleted: newLast?.is_deleted ?? false,
+          last_message_id: newLast?.id,
+        });
+      } catch (err) {
+        console.warn('Failed to recompute chat preview after hide:', err);
+      }
+    }
+    requestChatListRefresh();
+  }, [chatInfo?.id]);
+
+  // Enter edit mode: load the message's text into the composer and open the
+  // keyboard. The actual save happens in handleSendMessage (the edit branch),
+  // so editing reuses the exact same composer + SweetKeyboard as sending.
+  const handleEditMessage = useCallback((messageId: string, content: string) => {
+    setEditingMessage({ id: messageId });
+    setNewMessage(content);
+    setShowSweetKeyboard(true);
+  }, []);
+
+  const cancelEditing = useCallback(() => {
+    setEditingMessage(null);
+    setNewMessage('');
+  }, []);
+
+  // Reply: remember which message we're replying to and open the composer.
+  // Editing and replying are mutually exclusive, so starting a reply cancels
+  // any in-progress edit.
+  const handleReply = useCallback((message: MessageType) => {
+    setEditingMessage(null);
+    setReplyingTo(message);
+    setShowSweetKeyboard(true);
+  }, []);
 
   // Opens the shared gallery viewer scoped to every image/gif in this chat
   // (in message order), starting at whichever one was tapped — same
@@ -882,6 +1080,143 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, []);
+
+  // Fetch the page of 60 messages immediately older than the ones currently
+  // loaded, and prepend them. Local cache first (instant/offline), then the
+  // server fills any gap. Returns whether anything new was added.
+  const loadOlderMessages = useCallback(async (): Promise<boolean> => {
+    if (!chatInfo?.id || loadingOlderRef.current || !hasMoreOlderRef.current) return false;
+    const current = messagesRef.current;
+    const oldest = current[0];
+    if (!oldest) return false;
+
+    loadingOlderRef.current = true;
+    setLoadingOlder(true);
+    const hidden = loadHiddenMessageIds();
+    const existingIds = new Set(current.map((m) => m.id));
+
+    try {
+      // Local cache: the 60 messages just before the current oldest.
+      const local = await localDB.messages.where('chat_id').equals(chatInfo.id).sortBy('created_at');
+      const olderLocal = local.filter((m) => new Date(m.created_at) < new Date(oldest.created_at));
+      let olderPage = olderLocal.slice(-MESSAGE_PAGE_SIZE);
+
+      // Server is authoritative — fetch the same window and prefer it when online.
+      let reachedStart = false;
+      if (navigator.onLine) {
+        const { data, error } = await supabase
+          .from('messages')
+          .select('*, profiles(display_name, avatar_url, username)')
+          .eq('chat_id', chatInfo.id)
+          .lt('created_at', oldest.created_at)
+          .order('created_at', { ascending: false })
+          .limit(MESSAGE_PAGE_SIZE);
+        if (!error && data) {
+          olderPage = [...data].reverse() as unknown as MessageType[];
+          await localDB.messages.bulkPut(olderPage);
+          reachedStart = data.length < MESSAGE_PAGE_SIZE;
+        }
+      } else {
+        reachedStart = olderLocal.length <= MESSAGE_PAGE_SIZE;
+      }
+
+      const fresh = olderPage.filter((m) => !existingIds.has(m.id) && !hidden.has(m.id));
+      if (fresh.length === 0) {
+        hasMoreOlderRef.current = false;
+        return false;
+      }
+
+      // Anchor the viewport so prepending doesn't jump the scroll position.
+      const container = messagesContainerRef.current;
+      prevScrollHeightRef.current = container ? container.scrollHeight : 0;
+      justPrependedRef.current = true;
+
+      setMessages((prev) => [...fresh, ...prev]);
+      loadAllReactions(fresh);
+
+      if (reachedStart) {
+        hasMoreOlderRef.current = false;
+      }
+      return true;
+    } catch (err) {
+      console.error('Failed to load older messages:', err);
+      return false;
+    } finally {
+      loadingOlderRef.current = false;
+      setLoadingOlder(false);
+    }
+  }, [chatInfo?.id, loadAllReactions]);
+
+  const handleMessagesScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
+    if (e.currentTarget.scrollTop < 120 && hasMoreOlderRef.current && !loadingOlderRef.current) {
+      loadOlderMessages();
+    }
+  }, [loadOlderMessages]);
+
+  // Scroll to a specific message, briefly highlighting it. If it isn't loaded
+  // yet (older than the current window), keep pulling older pages until it
+  // shows up, then scroll.
+  const jumpToMessage = useCallback(async (messageId: string) => {
+    const scrollTo = () => {
+      const el = document.getElementById(`msg-${messageId}`);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        setHighlightedMessageId(messageId);
+        setTimeout(() => setHighlightedMessageId((cur) => (cur === messageId ? null : cur)), 2000);
+      }
+    };
+
+    if (messagesRef.current.some((m) => m.id === messageId)) {
+      scrollTo();
+      return;
+    }
+
+    // Not loaded — page backwards until we find it (or run out).
+    let guard = 0;
+    while (guard++ < 30 && hasMoreOlderRef.current && !messagesRef.current.some((m) => m.id === messageId)) {
+      const added = await loadOlderMessages();
+      if (!added) break;
+    }
+    // Let the prepended rows paint before scrolling to one of them.
+    setTimeout(scrollTo, 50);
+  }, [loadOlderMessages]);
+
+  // Resolve the parent of any reply whose parent isn't in the loaded window,
+  // so the quote still renders. Local cache first, then the server.
+  useEffect(() => {
+    const loadedIds = new Set(messages.map((m) => m.id));
+    const missing = Array.from(
+      new Set(
+        messages
+          .map((m) => m.reply_to_id)
+          .filter((rid): rid is string => !!rid && !loadedIds.has(rid) && !replyParents[rid])
+      )
+    );
+    if (missing.length === 0) return;
+
+    let cancelled = false;
+    (async () => {
+      const resolved: Record<string, MessageType> = {};
+
+      const cached = await localDB.messages.bulkGet(missing);
+      cached.forEach((m) => { if (m) resolved[m.id] = m as MessageType; });
+
+      const stillMissing = missing.filter((id) => !resolved[id]);
+      if (stillMissing.length > 0 && navigator.onLine) {
+        const { data } = await supabase
+          .from('messages')
+          .select('*, profiles(display_name, avatar_url, username)')
+          .in('id', stillMissing);
+        (data as unknown as MessageType[] | null)?.forEach((m) => { resolved[m.id] = m; });
+      }
+
+      if (!cancelled && Object.keys(resolved).length > 0) {
+        setReplyParents((prev) => ({ ...prev, ...resolved }));
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [messages, replyParents]);
 
   function getThemeGradient() {
     if (!chatInfo) return 'from-[#FF69B4] to-[#FFC0CB]';
@@ -1173,11 +1508,21 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
       </div>
 
       <div
+        ref={messagesContainerRef}
+        onScroll={handleMessagesScroll}
         onClick={() => setShowSweetKeyboard(false)}
-        className={`flex-1 overflow-y-auto p-4 md:p-6 space-y-4 transition-colors duration-300 scroll-smooth overscroll-behavior-y-contain ${
+        className={`relative flex-1 overflow-y-auto p-4 md:p-6 space-y-4 transition-colors duration-300 overscroll-behavior-y-contain ${
           theme === 'dark' ? 'bg-gray-900' : theme === 'sweet' ? 'bg-[#FFE4E1]/30' : 'bg-gray-50'
         }`}
       >
+        {/* Absolute so it never changes scrollHeight — otherwise showing/hiding
+            it would shift the anchored scroll position when a page loads. */}
+        {loadingOlder && (
+          <div className="absolute top-2 left-1/2 -translate-x-1/2 z-20 bg-white/80 dark:bg-gray-800/80 rounded-full p-1.5 shadow-sm">
+            <div className="w-5 h-5 border-2 border-pink-400 border-t-transparent rounded-full animate-spin" />
+          </div>
+        )}
+
         {messages.map((message, index) => {
           const showAvatar = index === 0 || messages[index - 1].sender_id !== message.sender_id;
           const msgDate = new Date(message.created_at).toDateString();
@@ -1188,9 +1533,20 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
           const isPending = message.delivery_status === 'pending';
           const isFailed = message.delivery_status === 'failed';
           const reactionState = messageReactions[message.id];
+          // The message this one replies to — from the loaded window, or the
+          // on-demand-fetched parents map when it's older than the window.
+          const repliedTo = message.reply_to_id
+            ? (messages.find((m) => m.id === message.reply_to_id) || replyParents[message.reply_to_id])
+            : undefined;
 
           return (
-            <div key={message.id} className="group">
+            <div
+              key={message.id}
+              id={`msg-${message.id}`}
+              className={`group rounded-2xl transition-colors duration-500 ${
+                highlightedMessageId === message.id ? 'bg-pink-300/30' : ''
+              }`}
+            >
               <Message
                 message={message}
                 isOwn={isOwn}
@@ -1199,6 +1555,13 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
                 reactions={REACTIONS_EMOJIS as unknown as string[]}
                 theme={theme}
                 onDelete={handleDeleteMessage}
+                onHide={handleHideMessage}
+                onEdit={handleEditMessage}
+                onReply={(m) => handleReply(m as MessageType)}
+                repliedTo={repliedTo}
+                onJumpToReplied={jumpToMessage}
+                showUnreadDivider={message.id === unreadDividerId}
+                currentUserId={user?.id}
                 onViewMedia={handleViewMedia}
                 initialDbReactions={reactionState?.reactions ?? EMPTY_REACTIONS}
                 initialUserMap={reactionState?.userMap ?? EMPTY_USER_MAP}
@@ -1324,6 +1687,44 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
                 <X className="w-3 h-3" />
               </button>
             </div>
+          </div>
+        )}
+
+        {editingMessage && (
+          <div className="flex items-center gap-2 mb-2 px-3 py-2 rounded-2xl bg-pink-50 border border-pink-200 animate-in fade-in slide-in-from-bottom-2">
+            <Pencil className="w-4 h-4 text-pink-500 flex-shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-[11px] font-black text-pink-600 uppercase tracking-widest">Editing message</p>
+              <p className="text-[11px] text-pink-400 truncate">Make your changes and send</p>
+            </div>
+            <button
+              type="button"
+              onClick={cancelEditing}
+              className="p-1.5 rounded-full text-pink-400 hover:bg-pink-100 hover:text-pink-600 transition-colors flex-shrink-0"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
+        {replyingTo && !editingMessage && (
+          <div className="flex items-center gap-2 mb-2 px-3 py-2 rounded-2xl bg-pink-50 border-l-4 border border-pink-200 border-l-pink-400 animate-in fade-in slide-in-from-bottom-2">
+            <Reply className="w-4 h-4 text-pink-500 flex-shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-[11px] font-black text-pink-600 uppercase tracking-widest truncate">
+                Replying to {replyingTo.sender_id === user?.id ? 'yourself' : (replyingTo.profiles?.display_name || 'them')}
+              </p>
+              <p className="text-[11px] text-pink-400 truncate">
+                {formatMessagePreview({ content: replyingTo.content, type: replyingTo.type, is_deleted: replyingTo.is_deleted })}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setReplyingTo(null)}
+              className="p-1.5 rounded-full text-pink-400 hover:bg-pink-100 hover:text-pink-600 transition-colors flex-shrink-0"
+            >
+              <X className="w-4 h-4" />
+            </button>
           </div>
         )}
 

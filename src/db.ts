@@ -7,8 +7,15 @@ export interface LocalChat {
   name: string | null;      
   avatar_url: string | null;
   theme: string;            
-  last_message_content?: string;
+  last_message_content?: string | null;
   last_message_time?: string;
+  // Carried so the chat-list preview can label by kind (Photo/GIF/Voice/…)
+  // and show "Deleted message" — not just dump the raw content string.
+  last_message_type?: string | null;
+  last_message_is_deleted?: boolean;
+  last_message_id?: string;
+  // Count of unread (received, not-yet-read) messages — the chat-list badge.
+  unread_count?: number;
 
   other_user_id?: string;
   other_user_name?: string;
@@ -67,6 +74,8 @@ export interface PendingMessage {
   // Already-hosted media (e.g. a picked GIF) that needs no upload at all —
   // just re-insert with this URL once we're back online.
   media_url?: string | null;
+  // The message this one replies to, if any — re-inserted once back online.
+  reply_to_id?: string | null;
   created_at: string;
   attempts: number;
   last_error?: string | null;

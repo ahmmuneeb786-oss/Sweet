@@ -1,9 +1,10 @@
 import { useState, useRef, useEffect, memo } from 'react';
-import { MoreVertical, Reply, Forward, Copy, Star, Trash2, CreditCard as Edit3, Heart, Play } from 'lucide-react';
+import { MoreVertical, Reply, Forward, Copy, Star, Trash2, CreditCard as Edit3, Heart, Play, Ban, UserX, Users2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { localDB } from '../db';
 import { usePerformance } from '../contexts/PerformanceContext';
+import { formatMessagePreview } from '../lib/messagePreview';
 
 export interface Reaction {
   reaction: string;
@@ -16,30 +17,47 @@ export interface MessageReactionState {
   userMap: Record<string, string>;
 }
 
-interface MessageProps {
-  message: {
-    id: string;
-    sender_id: string;
-    content: string | null;
-    type: string;
-    media_url: string | null;
-    is_edited: boolean;
-    is_deleted: boolean;
-    created_at: string;
-    profiles: {
-      display_name: string;
-      avatar_url: string | null;
-      username: string;
-    };
+interface MessageData {
+  id: string;
+  sender_id: string;
+  content: string | null;
+  type: string;
+  media_url: string | null;
+  is_edited: boolean;
+  is_deleted: boolean;
+  created_at: string;
+  reply_to_id?: string | null;
+  profiles: {
+    display_name: string;
+    avatar_url: string | null;
+    username: string;
   };
+}
+
+interface MessageProps {
+  message: MessageData;
   isOwn: boolean;
   showAvatar: boolean;
   showDateSeparator: boolean;
   /** Available emoji reaction options (e.g. ['💖','🥰']) */
   reactions: string[];
   theme: 'light' | 'dark' | 'sweet';
-  /** Stable handler — Message calls it with its own id */
+  /** "Delete for everyone" — Message soft-deletes in the DB; this reflects it in the list state */
   onDelete?: (id: string) => void;
+  /** "Delete for me" — hides the bubble on this device only, no DB write */
+  onHide?: (id: string) => void;
+  /** Loads this message's text into the composer for editing */
+  onEdit?: (id: string, content: string) => void;
+  /** Starts a reply to this message */
+  onReply?: (message: MessageData) => void;
+  /** The message this one is replying to (if it's in the loaded window) */
+  repliedTo?: MessageData;
+  /** Tap the reply quote to jump to the original message */
+  onJumpToReplied?: (id: string) => void;
+  /** Draw an "Unread messages" divider just above this message */
+  showUnreadDivider?: boolean;
+  /** Current user id — to label the reply quote as "You" vs the other person */
+  currentUserId?: string;
   /** Opens the shared full-screen gallery viewer, browsable across every image/gif in this chat */
   onViewMedia?: (messageId: string) => void;
   /** Reaction data fed down from ChatWindow's centralized subscription */
@@ -58,6 +76,13 @@ function MessageComponent({
   reactions,
   theme,
   onDelete,
+  onHide,
+  onEdit,
+  onReply,
+  repliedTo,
+  onJumpToReplied,
+  showUnreadDivider,
+  currentUserId,
   onViewMedia,
   showDateSeparator,
   initialDbReactions = EMPTY_REACTIONS,
@@ -212,7 +237,11 @@ function MessageComponent({
     }
   }
 
-  const handleDelete = async () => {
+  // Delete for everyone — soft-delete the row (is_deleted=true) in the cache
+  // and the cloud. The is_deleted flag propagates to the other person via
+  // ChatWindow's UPDATE realtime listener, and both sides render the "message
+  // deleted" tombstone below.
+  const handleDeleteForEveryone = async () => {
     try {
       await localDB.messages.update(message.id, { is_deleted: true });
       if (onDelete) onDelete(message.id);
@@ -228,6 +257,13 @@ function MessageComponent({
     } finally {
       setShowMenu(false);
     }
+  };
+
+  // Delete for me — just hide it on this device; nothing touches the cloud,
+  // so the other person keeps seeing the message.
+  const handleDeleteForMe = () => {
+    onHide?.(message.id);
+    setShowMenu(false);
   };
 
   function formatTime(timestamp: string) {
@@ -250,6 +286,21 @@ function MessageComponent({
       }
     }
   }
+
+  // Only plain text messages are editable — not media, and not a location
+  // (which is stored as a text row whose content is a maps URL).
+  const isEditableText =
+    message.type === 'text' && !!message.content && !message.content.includes('maps');
+
+  const unreadDivider = showUnreadDivider ? (
+    <div className="flex items-center gap-2 my-3 w-full px-2 animate-in fade-in duration-300">
+      <div className="h-[1px] flex-1 bg-gradient-to-r from-transparent to-pink-300/60" />
+      <span className="text-[10px] font-black uppercase tracking-[2px] text-[#FF1493] bg-white/70 px-3 py-1 rounded-full shadow-sm whitespace-nowrap">
+        Unread messages
+      </span>
+      <div className="h-[1px] flex-1 bg-gradient-to-l from-transparent to-pink-300/60" />
+    </div>
+  ) : null;
 
   const formatAudioTime = (seconds: number) => {
     if (isNaN(seconds)) return "0:00";
@@ -279,24 +330,99 @@ function MessageComponent({
 
   if (message.is_deleted) {
     return (
-      <div className={`flex gap-2 ${isOwn ? 'flex-row-reverse' : 'flex-row'}`}>
-        <div className={`flex-shrink-0 ${showAvatar ? 'visible' : 'invisible'}`}>
-          {!isOwn && (
-            message.profiles.avatar_url ? (
-              <img
-                src={message.profiles.avatar_url}
-                alt={message.profiles.display_name}
-                className="w-8 h-8 rounded-full object-cover"
-              />
-            ) : (
-              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-pink-400 to-purple-500 flex items-center justify-center text-white text-sm font-medium">
-                {message.profiles.display_name[0]}
-              </div>
-            )
+      <>
+        {showDateSeparator && (
+          <div className="flex items-center justify-center my-6 w-full">
+            <div className="flex items-center gap-3 w-full max-w-[200px]">
+              <div className="h-[1px] flex-1 bg-gradient-to-r from-transparent via-pink-300/50 to-transparent" />
+              <span className={`text-[10px] font-black uppercase tracking-[2px] whitespace-nowrap
+                ${theme === 'sweet' ? 'text-[#FF1493] bg-white/50 px-3 py-1 rounded-full backdrop-blur-sm shadow-sm' : 'text-gray-400'}
+              `}>
+                {formatStickyDate(message.created_at)}
+              </span>
+              <div className="h-[1px] flex-1 bg-gradient-to-r from-transparent via-pink-300/50 to-transparent" />
+            </div>
+          </div>
+        )}
+
+        {unreadDivider}
+
+        <div className={`flex flex-col group ${isOwn ? 'items-end' : 'items-start'} mb-4 px-0 w-full`}>
+          {!isOwn && showAvatar && (
+            <div className="flex items-center gap-2 mb-1 ml-2">
+              {message.profiles.avatar_url ? (
+                <img
+                  src={message.profiles.avatar_url}
+                  alt={message.profiles.display_name}
+                  className="w-6 h-6 rounded-full object-cover border border-pink-200"
+                />
+              ) : (
+                <div className="w-6 h-6 rounded-full bg-gradient-to-br from-pink-400 to-purple-500 flex items-center justify-center text-white text-[10px] font-bold">
+                  {message.profiles.display_name[0]}
+                </div>
+              )}
+              <span className="text-[10px] font-bold text-gray-500 sweet-theme:text-pink-600 uppercase tracking-wider">
+                {message.profiles.display_name}
+              </span>
+            </div>
           )}
+
+          <div className={`flex items-end ${isOwn ? 'justify-end' : 'justify-start'} w-full px-0`}>
+            <div className={`relative flex flex-col ${isOwn ? 'items-end' : 'items-start'} max-w-[85%] md:max-w-[70%] w-fit`}>
+              {/* Same bubble shell as a real message, just muted + an italic
+                  "deleted" line instead of content. */}
+              <div className={`px-4 py-2.5 shadow-sm ${getMessageClasses(isOwn)} opacity-80`}>
+                <p className={`flex items-center gap-2 text-[14px] italic ${isOwn ? 'text-white/90' : theme === 'sweet' ? 'text-[#8B004B]/70' : 'text-gray-400'}`}>
+                  <Ban className="w-4 h-4 flex-shrink-0 opacity-80" />
+                  This message was deleted
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Footer: timestamp + a 3-dot menu whose only action is "Delete"
+              (delete-for-me — clears the tombstone on this device only). */}
+          <div className={`flex items-center gap-1 mt-1 w-full ${isOwn ? 'ml-auto flex-row-reverse' : 'mr-auto flex-row'} ${theme === 'sweet' ? 'text-[#FF69B4]/80' : 'text-gray-400'}`}>
+            <span className="text-[10px] font-bold">{formatTime(message.created_at)}</span>
+
+            <div className="relative opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+              <button
+                onClick={(e) => {
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  setMenuDirection(window.innerHeight - rect.bottom < 250 ? 'up' : 'down');
+                  setShowMenu(!showMenu);
+                }}
+                className={`p-1.5 rounded-full border-2 transition-all duration-300 ${
+                  theme === 'sweet'
+                    ? 'border-[#FFB6C1] text-[#FF69B4] hover:bg-pink-50 hover:scale-110'
+                    : 'border-gray-200 text-gray-600 dark:border-gray-700 dark:text-gray-400 hover:bg-gray-100'
+                }`}
+              >
+                <MoreVertical className="w-3.5 h-3.5" />
+              </button>
+
+              {showMenu && (
+                <>
+                  <div className="fixed inset-0 z-10" onClick={() => setShowMenu(false)} />
+                  <div
+                    className={`absolute w-40 max-w-[70vw] rounded-lg shadow-lg border py-1 z-20 ${
+                      theme === 'sweet' ? 'bg-[#FFF0F5] border-[#FFB6C1]' : theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+                    } ${isOwn ? 'right-0' : 'left-0'} ${menuDirection === 'up' ? 'bottom-full mb-1 origin-bottom' : 'top-full mt-1 origin-top'}`}
+                  >
+                    <button
+                      onClick={handleDeleteForMe}
+                      className="w-full px-4 py-2 text-left flex items-center gap-2 text-red-600 text-sm border border-transparent hover:border-red-400 transition-all hover:bg-red-50 dark:hover:bg-red-900/20"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      <span>Delete</span>
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
         </div>
-        <div className="text-sm text-gray-400 dark:text-gray-500 italic">This message was deleted</div>
-      </div>
+      </>
     );
   }
 
@@ -315,6 +441,8 @@ function MessageComponent({
           </div>
         </div>
       )}
+
+      {unreadDivider}
 
       <div className={`flex flex-col group ${isOwn ? 'items-end' : 'items-start'} mb-4 px-0 w-full`}>
         {!isOwn && showAvatar && (
@@ -345,6 +473,27 @@ function MessageComponent({
                 break-words [word-break:break-word] overflow-hidden
               `}
             >
+              {/* Quoted preview of the message this one replies to. Tap to
+                  jump to the original (loads older pages first if needed). */}
+              {repliedTo && (
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); onJumpToReplied?.(repliedTo.id); }}
+                  className={`w-full mb-2 rounded-lg border-l-2 pl-2 pr-2 py-1 text-left overflow-hidden transition-opacity hover:opacity-80 active:opacity-70 ${
+                    isOwn
+                      ? 'bg-white/15 border-white/60'
+                      : theme === 'sweet' ? 'bg-[#FF69B4]/10 border-[#FF69B4]' : 'bg-black/5 border-pink-400'
+                  }`}
+                >
+                  <p className={`text-[10px] font-black uppercase tracking-wider truncate ${isOwn ? 'text-white/90' : 'text-[#FF1493]'}`}>
+                    {repliedTo.sender_id === currentUserId ? 'You' : (repliedTo.profiles?.display_name || 'Them')}
+                  </p>
+                  <p className={`text-[11px] truncate ${isOwn ? 'text-white/70' : theme === 'sweet' ? 'text-[#8B004B]/70' : 'text-gray-500'}`}>
+                    {formatMessagePreview({ content: repliedTo.content, type: repliedTo.type, is_deleted: repliedTo.is_deleted })}
+                  </p>
+                </button>
+              )}
+
               {message.type === 'gif' && message.media_url ? (
                 <div
                   className="-mx-5 -my-3 overflow-hidden rounded-[28px] relative cursor-pointer"
@@ -630,7 +779,7 @@ function MessageComponent({
                   }`}
                 >
                   {[
-                    { label: 'Reply', icon: <Reply className="w-4 h-4" />, action: () => {} },
+                    { label: 'Reply', icon: <Reply className="w-4 h-4" />, action: () => onReply?.(message) },
                     { label: 'Forward', icon: <Forward className="w-4 h-4" />, action: () => {} },
                     { label: 'Copy', icon: <Copy className="w-4 h-4" />, action: handleCopy },
                     { label: 'Star', icon: <Star className="w-4 h-4" />, action: () => {} }
@@ -651,30 +800,46 @@ function MessageComponent({
                     </button>
                   ))}
 
+                  <div className="border-t border-gray-200 dark:border-gray-700 my-1" />
+
+                  {/* Edit — only your own plain text messages (not media, and
+                      not a location, which is a text row holding a maps URL). */}
+                  {isOwn && isEditableText && (
+                    <button
+                      onClick={() => { onEdit?.(message.id, message.content || ''); setShowMenu(false); }}
+                      className={`w-full px-4 py-2 text-left flex items-center gap-2 text-sm border border-transparent transition-all ${
+                        theme === 'sweet'
+                          ? 'hover:bg-[#FFC0CB]/30 text-[#4B004B] hover:border-[#FFB6C1]'
+                          : theme === 'dark'
+                          ? 'hover:bg-gray-700 text-white'
+                          : 'hover:bg-gray-50 text-black hover:border-gray-400'
+                      }`}
+                    >
+                      <Edit3 className="w-4 h-4" />
+                      <span>Edit</span>
+                    </button>
+                  )}
+
+                  {/* Delete for me — available on any message, hides it only
+                      on this device. */}
+                  <button
+                    onClick={handleDeleteForMe}
+                    className="w-full px-4 py-2 text-left flex items-center gap-2 text-red-600 text-sm border border-transparent hover:border-red-400 transition-all hover:bg-red-50 dark:hover:bg-red-900/20"
+                  >
+                    <UserX className="w-4 h-4" />
+                    <span>Delete for me</span>
+                  </button>
+
+                  {/* Delete for everyone — only your own messages can be
+                      pulled back for the other person too. */}
                   {isOwn && (
-                    <>
-                      <div className="border-t border-gray-200 dark:border-gray-700 my-1" />
-                      <button
-                        onClick={() => setShowMenu(false)}
-                        className={`w-full px-4 py-2 text-left flex items-center gap-2 text-sm border border-transparent transition-all ${
-                          theme === 'sweet'
-                            ? 'hover:bg-[#FFC0CB]/30 text-[#4B004B] hover:border-[#FFB6C1]'
-                            : theme === 'dark'
-                            ? 'hover:bg-gray-700 text-white'
-                            : 'hover:bg-gray-50 text-black hover:border-gray-400'
-                        }`}
-                      >
-                        <Edit3 className="w-4 h-4" />
-                        <span>Edit</span>
-                      </button>
-                      <button
-                        onClick={handleDelete}
-                        className="w-full px-4 py-2 text-left flex items-center gap-2 text-red-600 text-sm border border-transparent hover:border-red-400 transition-all hover:bg-red-50 dark:hover:bg-red-900/20"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                        <span>Delete</span>
-                      </button>
-                    </>
+                    <button
+                      onClick={handleDeleteForEveryone}
+                      className="w-full px-4 py-2 text-left flex items-center gap-2 text-red-600 text-sm border border-transparent hover:border-red-400 transition-all hover:bg-red-50 dark:hover:bg-red-900/20"
+                    >
+                      <Users2 className="w-4 h-4" />
+                      <span>Delete for everyone</span>
+                    </button>
                   )}
                 </div>
               </>
@@ -696,9 +861,16 @@ function arePropsEqual(prev: MessageProps, next: MessageProps): boolean {
     prev.message.is_deleted === next.message.is_deleted &&
     prev.message.media_url === next.message.media_url &&
     prev.message.created_at === next.message.created_at &&
+    prev.message.reply_to_id === next.message.reply_to_id &&
+    // Re-render the quote if the replied-to message's shown fields change
+    // (e.g. it gets edited or deleted).
+    prev.repliedTo?.id === next.repliedTo?.id &&
+    prev.repliedTo?.content === next.repliedTo?.content &&
+    prev.repliedTo?.is_deleted === next.repliedTo?.is_deleted &&
     prev.isOwn === next.isOwn &&
     prev.showAvatar === next.showAvatar &&
     prev.showDateSeparator === next.showDateSeparator &&
+    prev.showUnreadDivider === next.showUnreadDivider &&
     prev.theme === next.theme &&
     prev.reactions === next.reactions &&
     prev.initialDbReactions === next.initialDbReactions &&
