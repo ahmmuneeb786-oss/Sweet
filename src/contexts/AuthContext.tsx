@@ -1,0 +1,396 @@
+import { createContext, useContext, useEffect, useRef, useState, ReactNode } from 'react';
+import { User, Session } from '@supabase/supabase-js';
+import { supabase } from '../lib/supabase';
+import { resetChatsReady, markChatsReady } from '../hooks/useChatsReady';
+import { localDB } from '../db';
+
+interface Profile {
+  id: string;
+  username: string;
+  display_name: string;
+  bio: string;
+  avatar_url: string | null;
+  last_seen: string;
+  is_online: boolean;
+  created_at: string;
+  chat_biometric_type?: 'fingerprint' | 'face';
+  
+}
+
+interface AuthContextType {
+  user: User | null;
+  profile: Profile | null;
+  session: Session | null;
+  loading: boolean;
+  signUp: (email: string, password: string) => Promise<{
+    data: any;
+    error: Error | null 
+}>;
+  verifySignupOtp: (email: string, token: string) => Promise<{ data: any; error: Error | null }>;
+  resendSignupOtp: (email: string) => Promise<{ error: Error | null }>;
+  completeProfileSetup: (username: string, displayName: string) => Promise<{ error: Error | null }>;
+  signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
+  signOut: () => Promise<void>;
+  updateProfile: (updates: Partial<Profile>) => Promise<{ error: Error | null }>;
+}
+
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const [user, setUser] = useState<User | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
+  const [loading, setLoading] = useState(true);
+  // Guards against a stale profile fetch clobbering a newer one. During
+  // signup two loadProfile() calls race: the SIGNED_IN one (fires before the
+  // profile row exists → returns null) and the one completeProfileSetup runs
+  // after inserting the row (returns real data). Only the latest-issued call
+  // is allowed to write state, so the real profile always wins regardless of
+  // which network response lands last.
+  const profileLoadSeq = useRef(0);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setUser(session?.user ?? null);
+      if (session?.user) {
+        loadProfile(session.user.id);
+      } else {
+        setLoading(false);
+      }
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      setSession(session);
+
+      // TOKEN_REFRESHED fires constantly — notably on every tab refocus,
+      // since Supabase silently re-validates the session then. It hands us
+      // a brand-new `user` object for the SAME account every time. Keeping
+      // the same reference when the id hasn't changed stops that churn
+      // from cascading into every effect elsewhere that depends on `user`
+      // (this is what was re-triggering the loading screen on tab switch).
+      setUser(prevUser => (prevUser?.id === session?.user?.id ? prevUser : session?.user ?? null));
+
+      if (!session?.user) {
+        setProfile(null);
+        setLoading(false);
+        return;
+      }
+
+      // Only these events represent an actual identity/profile change worth
+      // a re-fetch. Re-loading the whole profile on every token refresh was
+      // wasted network calls AND handed out a new `profile` object each
+      // time, which had its own knock-on re-render effects.
+      if (event === 'SIGNED_IN' || event === 'USER_UPDATED' || event === 'INITIAL_SESSION') {
+        loadProfile(session.user.id);
+        updateOnlineStatus(true);
+      } else {
+        // A no-op event (e.g. TOKEN_REFRESHED) for an already-known session —
+        // nothing changed, so make sure we're not left stuck on `loading`.
+        setLoading(false);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  // Re-pull the user's own profile the moment the connection returns —
+  // Supabase auth events don't reliably fire on a plain network reconnect, so
+  // without this a profile edited elsewhere (or a stale local one) wouldn't
+  // refresh until the next sign-in. Pairs with ChatList/ChatWindow's own
+  // reconnect refetches so the whole app catches up on reconnect.
+  useEffect(() => {
+    if (!user?.id) return;
+    const onReconnect = () => {
+      loadProfile(user.id);
+      updateOnlineStatus(true);
+    };
+    window.addEventListener('online', onReconnect);
+    return () => window.removeEventListener('online', onReconnect);
+  }, [user?.id]);
+
+  async function loadProfile(userId: string) {
+    const seq = ++profileLoadSeq.current;
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .maybeSingle();
+
+      if (error) throw error;
+      // Only apply if this is still the most recent load — a slower, older
+      // fetch (e.g. the pre-insert SIGNED_IN one that returns null) must not
+      // overwrite a newer real profile that already landed.
+      if (seq === profileLoadSeq.current) setProfile(data);
+    } catch (error) {
+      console.error('Error loading profile:', error);
+    } finally {
+      if (seq === profileLoadSeq.current) setLoading(false);
+    }
+  }
+
+  async function updateOnlineStatus(isOnline: boolean) {
+    if (!user) return;
+
+    try {
+      // We still update the DB so we know the LAST time they were seen
+      // but we don't rely on this for the "Green Dot" anymore
+      await supabase
+        .from('profiles')
+        .update({
+          is_online: isOnline,
+          last_seen: new Date().toISOString()
+        })
+        .eq('id', user.id);
+    } catch (error) {
+      console.error('Error updating online status:', error);
+    }
+  }
+
+  // Phase 1: create the auth account only. With email confirmation enabled,
+  // this does NOT return a session — no writes to `profiles`/etc. can happen
+  // yet, since there's no authenticated JWT for RLS to check against.
+  async function signUp(email: string, password: string) {
+    try {
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email,
+        password,
+      });
+
+      if (authError) throw authError;
+      if (!authData.user) throw new Error('Failed to create user');
+
+      return { data: authData, error: null };
+    } catch (error) {
+      return { data: null, error: error as Error };
+    }
+  }
+
+  // Phase 2: verify the 6-digit code the user received by email. On
+  // success this establishes a real session — onAuthStateChange picks it
+  // up automatically (fires SIGNED_IN), no manual state wiring needed here.
+  async function verifySignupOtp(email: string, token: string) {
+    try {
+      const { data, error } = await supabase.auth.verifyOtp({ email, token, type: 'signup' });
+      if (error) throw error;
+      return { data, error: null };
+    } catch (error) {
+      return { data: null, error: error as Error };
+    }
+  }
+
+  async function resendSignupOtp(email: string) {
+    try {
+      const { error } = await supabase.auth.resend({ type: 'signup', email });
+      if (error) throw error;
+      return { error: null };
+    } catch (error) {
+      return { error: error as Error };
+    }
+  }
+
+  // Phase 3: only runs once verifySignupOtp succeeded, so a real session
+  // exists and these inserts are properly authenticated for RLS.
+  async function completeProfileSetup(username: string, displayName: string) {
+    try {
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (!authUser) throw new Error('No authenticated session found. Please try signing in.');
+
+      const lowerUsername = username.toLowerCase().trim();
+
+      if (!/^[A-Za-z0-9_-]+$/.test(lowerUsername)) {
+        throw new Error('Username can only contain A-Z, a-z, 0-9, - and _');
+      }
+
+      // Re-check availability here too — the live check in the signup form
+      // only guards against collisions at the moment of typing; this closes
+      // the (rare) gap where someone else grabs the same name in the few
+      // minutes it takes to receive and enter the OTP code.
+      const { data: existingUser } = await supabase
+        .from('profiles')
+        .select('username')
+        .eq('username', lowerUsername)
+        .maybeSingle();
+
+      if (existingUser) {
+        throw new Error('That username was just taken — please choose another and try again.');
+      }
+
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .insert({
+          id: authUser.id,
+          username: lowerUsername,
+          display_name: displayName.trim(),
+          bio: '',
+          is_online: true,
+          face_lock_enabled: false,
+        });
+
+      if (profileError) throw profileError;
+
+      const { error: privacyError } = await supabase
+        .from('privacy_settings')
+        .insert({
+          user_id: authUser.id
+        });
+
+      if (privacyError) throw privacyError;
+
+      const { error: selfChatError } = await supabase
+        .from('chats')
+        .insert({
+          id: `self-${authUser.id}`,
+          type: 'direct',
+          name: 'Saved Messages',
+          created_by: authUser.id
+        });
+
+      if (!selfChatError) {
+        await supabase
+          .from('chat_participants')
+          .insert({
+            chat_id: `self-${authUser.id}`,
+            user_id: authUser.id,
+            role: 'admin'
+          });
+      }
+
+      // A brand-new account has nothing worth waiting on ChatList's network
+      // round trip for — at most the self-chat above, which will simply
+      // appear once it lands. Signal readiness immediately instead of
+      // leaving the user staring at "Loading your chats..." for however long
+      // that fetch takes (or the 8s fallback), waiting on a signal that a
+      // fresh, cache-less account has no fast local path to.
+      markChatsReady();
+
+      // Now that the profile row actually exists, fetch it into state. The
+      // earlier SIGNED_IN load ran before this insert and came back null,
+      // which is the "ghost account" (no name/avatar) a fresh user would
+      // otherwise see until a full reload. Doing it here, still behind the
+      // splash, means the app only reveals once real profile data is loaded.
+      await loadProfile(authUser.id);
+
+      return { error: null };
+    } catch (error) {
+      return { error: error as Error };
+    }
+  }
+
+  async function signIn(email: string, password: string) {
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (error) throw error;
+      return { error: null };
+    } catch (error) {
+      return { error: error as Error };
+    }
+  }
+
+  async function signOut() {
+    if (user) {
+      await updateOnlineStatus(false);
+    }
+    resetChatsReady();
+    await supabase.auth.signOut();
+
+    // Wipe the local cache AFTER sign-out succeeds — chats/messages/profiles
+    // in localDB aren't scoped per-account, so leaving them would let the
+    // next account signed in on this device see the previous account's
+    // cached chats and messages. Best-effort: a Dexie failure here shouldn't
+    // block the sign-out itself, which has already completed.
+    try {
+      await localDB.clearAllLocalData();
+    } catch (err) {
+      console.error('Failed to clear local cache on sign out:', err);
+    }
+  }
+
+  async function updateProfile(updates: Partial<Profile>) {
+    if (!user) return { error: new Error('No user logged in') };
+
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update(updates)
+        .eq('id', user.id);
+
+      if (error) throw error;
+
+      setProfile(prev => prev ? { ...prev, ...updates } : null);
+      return { error: null };
+    } catch (error) {
+      return { error: error as Error };
+    }
+  }
+
+  // 1. GLOBAL PRESENCE TRACKER
+  useEffect(() => {
+    if (!user) return;
+
+    // Connect to a global "heartbeat" channel
+    const channel = supabase.channel('global-presence', {
+      config: { presence: { key: user.id } },
+    });
+
+    channel.subscribe(async (status) => {
+      if (status === 'SUBSCRIBED') {
+        // This is the magic part: it broadcasts your status
+        await channel.track({
+          user_id: user.id,
+          online_at: new Date().toISOString(),
+        });
+        
+        // Update the database once just for the "Last Seen" time
+        updateOnlineStatus(true);
+      }
+    });
+
+    return () => {
+      // When you close the tab, this stops, and you appear offline instantly
+      supabase.removeChannel(channel);
+    };
+  }, [user]);
+
+  useEffect(() => {
+  const handleVisibilityChange = () => {
+    if (document.visibilityState === 'visible') {
+      // When user comes back to the tab, we re-sync presence
+      // This forces the "Last seen" to update immediately
+      supabase.getChannels().forEach(ch => ch.track({ updated_at: Date.now() }));
+    }
+  };
+
+  document.addEventListener('visibilitychange', handleVisibilityChange);
+  return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+}, []);
+
+  const value = {
+    user,
+    profile,
+    session,
+    loading,
+    signUp,
+    verifySignupOtp,
+    resendSignupOtp,
+    completeProfileSetup,
+    signIn,
+    signOut,
+    updateProfile
+  };
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+}
+
+export function useAuth() {
+  const context = useContext(AuthContext);
+  if (context === undefined) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
+}

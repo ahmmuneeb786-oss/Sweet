@@ -1,0 +1,288 @@
+import { useState, useEffect } from 'react';
+import { X, Search, Eye, Lock, Unlock, Trash2, Bell, BellOff, MoreVertical } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
+import { supabase } from '../lib/supabase';
+import { localDB } from '../db';
+import { useNotify } from '../contexts/NotificationContext';
+import { useConfirm } from '../contexts/ConfirmContext';
+import { usePerformance } from '../contexts/PerformanceContext';
+
+interface ChatMenuProps {
+  theme: 'light' | 'dark' | 'sweet'
+  chatId: string;
+  onClose: () => void;
+  onViewProfile?: () => void;
+}
+
+export function ChatMenu({ theme, chatId, onClose, onViewProfile }: ChatMenuProps) {
+  const { user } = useAuth();
+  const { showSuccess, showError } = useNotify();
+  const confirm = useConfirm();
+  const { isLowPerfMode } = usePerformance();
+  const [showMenu, setShowMenu] = useState(false);
+  const [muteStatus, setMuteStatus] = useState<'8h' | '1w' | 'forever' | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showSearch, setShowSearch] = useState(false);
+  const [isLocked, setIsLocked] = useState(false);
+
+  useEffect(() => {
+    if (user && showMenu) {
+      checkLockStatus();
+    }
+  }, [user, showMenu, chatId]);
+
+  async function checkLockStatus() {
+    try {
+      const { data, error } = await supabase
+        .from('chat_participants')
+        .select('is_locked')
+        .eq('chat_id', chatId)
+        .eq('user_id', user?.id)
+        .maybeSingle();
+
+      if (error) throw error;
+      if (data) {
+        setIsLocked(!!data.is_locked);
+      }
+    } catch (error) {
+      console.error('Error checking lock status:', error);
+    }
+  }
+
+  async function handleMuteChat(duration: '8h' | '1w' | 'forever' | null) {
+    if (!user) return;
+
+    try {
+      let muteUntil = null;
+
+      if (duration === '8h') {
+        muteUntil = new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString();
+      } else if (duration === '1w') {
+        muteUntil = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+      }
+
+      await supabase
+        .from('chat_participants')
+        .update({
+          is_muted: duration !== null,
+          muted_until: muteUntil
+        })
+        .eq('chat_id', chatId)
+        .eq('user_id', user.id);
+
+      setMuteStatus(duration);
+    } catch (error) {
+      console.error('Error muting chat:', error);
+    }
+  }
+
+  async function handleLockChat() {
+    if (!user) return;
+
+    const newLockState = !isLocked;
+    
+    try {
+      const { error } = await supabase
+        .from('chat_participants')
+        .update({ is_locked: newLockState })
+        .eq('chat_id', chatId)
+        .eq('user_id', user.id);
+
+      if (error) throw error;
+
+      // 🔴 SYNC SYSTEM: Instantly update internal phone memory files
+      if (newLockState) {
+        // If locked, remove it completely from the local main feed storage cache
+        await localDB.chats.delete(chatId);
+        showSuccess('Conversation moved to your secure Locked Chats vault! 🔒');
+      } else {
+        showSuccess('Conversation restored to your main chat feed! 🔓');
+      }
+      
+      setIsLocked(newLockState);
+      setShowMenu(false);
+      onClose();
+
+      // Force reload layout smoothly to re-trigger localDB.chats.toArray()
+      window.location.reload(); 
+    } catch (error) {
+      console.error('Error locking conversation:', error);
+      showError('Failed to lock conversation.');
+    }
+  }
+
+  async function handleClearChat() {
+    if (!user) return;
+    const confirmed = await confirm({
+      title: 'Clear chat history?',
+      message: 'Clear all messages in this chat? This cannot be undone.',
+      confirmLabel: 'Clear',
+      danger: true,
+    });
+    if (!confirmed) return;
+
+    try {
+      // 1. Tell Supabase server
+      await supabase
+        .from('messages')
+        .update({ is_deleted: true })
+        .eq('chat_id', chatId)
+        .eq('sender_id', user.id);
+
+      // 2. 🔴 SYNC SYSTEM: Instantly wipe preview text out of internal memory cache
+      const cachedRecord = await localDB.chats.get(chatId);
+      if (cachedRecord) {
+        await localDB.chats.update(chatId, {
+          last_message_content: undefined,
+          last_message_time: undefined
+        });
+      }
+
+      showSuccess('Chat history cleared locally! 🧹');
+      window.location.reload();
+    } catch (error) {
+      console.error('Error clearing chat:', error);
+    }
+  }
+
+  const menuItems = [
+    { icon: Search, label: 'Search Messages', action: () => setShowSearch(true) },
+    { icon: Eye, label: 'View Profile', action: () => onViewProfile?.() },
+    { icon: muteStatus ? BellOff : Bell, label: muteStatus ? 'Unmute Chat' : 'Mute Chat', action: () => {} },
+    { icon: isLocked ? Unlock : Lock, 
+      label: isLocked ? 'Unlock Chat' : 'Lock Chat', 
+      action: handleLockChat 
+    },
+    { icon: Trash2, label: 'Clear Chat', action: handleClearChat, danger: true }
+  ];
+
+  return (
+    <div className="relative inline-block">
+      {/* 1. MENU TRIGGER BUTTON */}
+      <button
+        onClick={() => setShowMenu(!showMenu)}
+        className="p-2 hover:bg-white/10 rounded-full transition-colors active:scale-90"
+      >
+        <MoreVertical className={`w-5 h-5 ${theme === 'sweet' ? 'text-[#8B004B]' : 'text-white'}`} />
+      </button>
+
+      {/* 2. MENU DROPDOWN / BOTTOM SHEET */}
+      {showMenu && (
+        <>
+          {/* Background Overlay */}
+          <div
+            className={`fixed inset-0 z-40 bg-black/20 ${isLowPerfMode ? '' : 'backdrop-blur-[1px]'}`}
+            onClick={() => { setShowMenu(false); onClose(); }}
+          />
+          
+          {/* Main Menu Container */}
+          <div className={`
+            /* Mobile: a compact floating card — rounded on ALL corners, sitting
+               above the bottom edge with side margins (not a full-width sheet),
+               height-capped so it never covers half the screen. */
+            fixed bottom-4 left-3 right-3 z-50 rounded-3xl p-2 max-h-[70vh] overflow-y-auto scrollbar-hide
+            /* Desktop: small dropdown anchored under the trigger. */
+            md:absolute md:top-full md:bottom-auto md:left-auto md:right-0 md:w-56 md:rounded-2xl md:p-1.5 md:max-h-none md:overflow-visible
+            shadow-2xl border transition-all animate-in slide-in-from-bottom-4 md:slide-in-from-top-2 duration-300
+            ${theme === 'sweet'
+              ? 'bg-gradient-to-b from-[#FFF0F5] to-[#FFE4E1] border-[#FFB6C1] shadow-pink-200/60'
+              : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700'}
+          `}>
+
+            {/* Loop through Menu Items */}
+            {menuItems.map((item, idx) => {
+              const Icon = item.icon;
+              return (
+                <button
+                  key={idx}
+                  onClick={() => {
+                    item.action();
+                    setShowMenu(false);
+                    onClose();
+                  }}
+                  className={`w-full px-4 py-3 md:py-2 text-left flex items-center gap-3 rounded-2xl md:rounded-lg transition-colors active:scale-[0.98] ${
+                    theme === 'sweet'
+                      ? 'hover:bg-[#FFC0CB]/40 text-[#4B004B]'
+                      : 'hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200'
+                  } ${item.danger ? '!text-red-600' : ''}`}
+                >
+                  <Icon className="w-5 h-5 md:w-4 md:h-4 flex-shrink-0" />
+                  <span className="text-[15px] md:text-sm font-medium">{item.label}</span>
+                </button>
+              );
+            })}
+
+            {/* Mute Section */}
+            <div className={`border-t my-1.5 mx-2 ${theme === 'sweet' ? 'border-[#FFB6C1]/50' : 'border-gray-200 dark:border-gray-700'}`} />
+
+            <div className="px-4 md:px-2 py-1.5">
+              <p className={`text-[10px] font-bold uppercase tracking-widest mb-2 ${
+                theme === 'sweet' ? 'text-[#FF1493]/70' : 'text-gray-400'
+              }`}>
+                Mute Notifications
+              </p>
+
+              <div className="flex gap-2 md:flex-col">
+                {[
+                  { label: '8h', value: '8h' },
+                  { label: '1w', value: '1w' },
+                  { label: 'Always', value: 'forever' }
+                ].map((option) => (
+                  <button
+                    key={option.value}
+                    onClick={() => { handleMuteChat(option.value as any); setShowMenu(false); onClose(); }}
+                    className={`flex-1 md:w-full px-3 py-2.5 md:py-1.5 text-center md:text-left text-xs font-bold rounded-xl transition-colors active:scale-95 ${
+                      theme === 'sweet'
+                        ? 'bg-white/60 text-[#8B004B] hover:bg-[#FFB6C1]/50'
+                        : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200'
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* 3. SEARCH MESSAGES MODAL */}
+      {showSearch && (
+        <div className="fixed inset-0 z-[100] flex items-start justify-center p-4 pt-20">
+          <div 
+            className={`fixed inset-0 bg-black/60 ${isLowPerfMode ? '' : 'backdrop-blur-sm'}`} 
+            onClick={() => { setShowSearch(false); onClose(); }} 
+          />
+          
+          <div className={`relative w-full max-w-lg rounded-2xl shadow-2xl p-4 border animate-in zoom-in-95 duration-200 ${
+            theme === 'sweet' ? 'bg-[#FFF0F5] border-[#FFB6C1]' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700'
+          }`}>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className={`font-semibold ${theme === 'sweet' ? 'text-[#4B004B]' : 'text-gray-900 dark:text-white'}`}>
+                Search Messages
+              </h3>
+              <button
+                onClick={() => { setShowSearch(false); onClose(); }}
+                className="p-1 hover:bg-black/5 rounded"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search in conversation..."
+              autoFocus
+              className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-500 transition-colors ${
+                theme === 'sweet' 
+                  ? 'bg-white border-[#FFB6C1] text-[#4B004B] placeholder:text-[#8B004B]/50' 
+                  : 'bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white'
+              }`}
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

@@ -1,0 +1,724 @@
+import { useState, useEffect, useRef } from 'react';
+import { Search, MoreVertical, MessageSquarePlus, Users, User as UserIcon, Settings, Lock, LogOut, Heart } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
+import { supabase } from '../lib/supabase';
+import { localDB } from '../db';
+import { usePresence } from '../hooks/usePresence';
+import { markChatsReady } from '../hooks/useChatsReady';
+import { useNotify } from '../contexts/NotificationContext';
+import { usePerformance } from '../contexts/PerformanceContext';
+import { formatMessagePreview } from '../lib/messagePreview';
+import { loadHiddenMessageIds } from '../lib/hiddenMessages';
+import { onChatListRefresh } from '../hooks/chatListRefresh';
+
+interface Chat {
+  id: string;
+  type: 'direct' | 'group';
+  name: string | null;
+  avatar_url: string | null;
+  theme: string;
+  lastMessage?: {
+    id?: string;
+    content: string | null;
+    created_at: string;
+    type?: string | null;
+    is_deleted?: boolean;
+  };
+  unreadCount?: number;
+  otherUser?: {
+    id: string;
+    display_name: string;
+    avatar_url: string | null;
+    last_seen: string | null;
+  };
+}
+
+interface ChatListProps {
+  selectedChatId: string | null;
+  onSelectChat: (chatId: string) => void;
+  onShowProfile: () => void;
+  onShowFriends: () => void;
+  onShowSettings: () => void;
+  onShowCreateChat: () => void;
+  theme: 'light' | 'dark' | 'sweet';
+  onShowLockedChats: () => void;
+}
+
+export function ChatList({ selectedChatId, onSelectChat, onShowProfile, onShowFriends, onShowSettings, onShowCreateChat, theme, onShowLockedChats }: ChatListProps) {
+  const { user, profile, signOut } = useAuth();
+  const { isOnline: isUserOnline } = usePresence(user?.id);
+  const { isLowPerfMode } = usePerformance();
+  const { showError } = useNotify();
+  const [chats, setChats] = useState<Chat[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showMenu, setShowMenu] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [isOnline, setIsOnline] = useState(navigator.onLine); // 🌐 Track network variations
+  // The realtime subscription is created once; this ref lets its INSERT handler
+  // read the CURRENTLY open chat (so a message for the open chat isn't counted
+  // as unread).
+  const selectedChatIdRef = useRef(selectedChatId);
+  selectedChatIdRef.current = selectedChatId;
+
+  // Own profile (avatar + username shown top-left) — cached so it doesn't
+  // flash blank on reload while AuthContext is still fetching it.
+  const [myProfile, setMyProfile] = useState<{ display_name: string; username: string; avatar_url: string | null } | null>(null);
+
+  useEffect(() => {
+    async function hydrateMyProfile() {
+      if (!user?.id) return;
+
+      if (navigator.onLine && profile) {
+        const fresh = {
+          display_name: profile.display_name || '',
+          username: profile.username || '',
+          avatar_url: profile.avatar_url || null,
+        };
+        setMyProfile(fresh);
+        await localDB.saveUserProfile(user.id, {
+          ...fresh,
+          bio: profile.bio,
+          created_at: user.created_at,
+        });
+      } else {
+        const cached = await localDB.getUserProfile(user.id);
+        if (cached) {
+          setMyProfile({
+            display_name: cached.display_name,
+            username: cached.username,
+            avatar_url: cached.avatar_url,
+          });
+        }
+      }
+    }
+    hydrateMyProfile();
+  }, [user?.id, profile]);
+
+  // Listen to network status modifications live
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsOnline(true);
+      loadChats(); // 🔄 Quietly refresh and upgrade metadata the second connection returns
+    };
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, [user]);
+
+  useEffect(() => {
+    if (user) {
+      // 1. Initial load from internal cache or active link
+      loadChats();
+
+      // 2. Flicker-free real-time sync channel
+      const channel = supabase
+        .channel('sidebar-live-sync')
+        .on(
+          'postgres_changes',
+          { event: 'INSERT', schema: 'public', table: 'messages' },
+          (payload) => {
+            const newMessage = payload.new;
+            // A message the user "deleted for me" shouldn't resurface as the
+            // preview (can happen if it arrives while hidden) — skip it.
+            if (loadHiddenMessageIds().has(newMessage.id)) return;
+
+            // Count it as unread if it's from the other person AND this chat
+            // isn't the one currently open.
+            const countsAsUnread =
+              newMessage.sender_id !== user.id && newMessage.chat_id !== selectedChatIdRef.current;
+
+            setChats((currentChats) => {
+              const idx = currentChats.findIndex((chat) => chat.id === newMessage.chat_id);
+              if (idx === -1) return currentChats;
+
+              const updatedChat = {
+                ...currentChats[idx],
+                lastMessage: {
+                  id: newMessage.id,
+                  content: newMessage.content,
+                  created_at: newMessage.created_at,
+                  type: newMessage.type,
+                  is_deleted: newMessage.is_deleted
+                },
+                unreadCount: (currentChats[idx].unreadCount ?? 0) + (countsAsUnread ? 1 : 0)
+              };
+
+              // Move the chat with the new message to the top, like a real chat list.
+              const next = [...currentChats];
+              next.splice(idx, 1);
+              next.unshift(updatedChat);
+              return next;
+            });
+
+            // Persist so the next app open shows this message from cache instantly,
+            // instead of only reflecting whatever the last full loadChats() saw.
+            localDB.chats.get(newMessage.chat_id).then((c) => {
+              localDB.chats.update(newMessage.chat_id, {
+                last_message_content: newMessage.content,
+                last_message_time: newMessage.created_at,
+                last_message_type: newMessage.type,
+                last_message_is_deleted: newMessage.is_deleted,
+                last_message_id: newMessage.id,
+                unread_count: (c?.unread_count ?? 0) + (countsAsUnread ? 1 : 0)
+              }).catch(() => {});
+            }).catch(() => {});
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: 'UPDATE', schema: 'public', table: 'messages' },
+          (payload) => {
+            const updated = payload.new;
+            // Reflect edits and "delete for everyone" (is_deleted flips) on the
+            // preview live — but only when the changed row IS the chat's current
+            // last message. Bail early (same array reference, no re-render) for
+            // the common case of updates to non-last messages, e.g. the flood
+            // of delivery_status='read' updates.
+            setChats((currentChats) => {
+              if (!currentChats.some((c) => c.lastMessage?.id === updated.id)) return currentChats;
+              return currentChats.map((chat) =>
+                chat.lastMessage?.id === updated.id
+                  ? {
+                      ...chat,
+                      lastMessage: {
+                        ...chat.lastMessage,
+                        content: updated.content,
+                        type: updated.type,
+                        is_deleted: updated.is_deleted
+                      }
+                    }
+                  : chat
+              );
+            });
+            // Cache write keyed by chat_id (the indexed primary key), guarded
+            // so we only touch the row when this really is its last message.
+            localDB.chats.get(updated.chat_id).then((c) => {
+              if (c && c.last_message_id === updated.id) {
+                localDB.chats.update(updated.chat_id, {
+                  last_message_content: updated.content,
+                  last_message_is_deleted: updated.is_deleted,
+                  last_message_type: updated.type
+                }).catch(() => {});
+              }
+            }).catch(() => {});
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: 'UPDATE', schema: 'public', table: 'profiles' },
+          (payload) => {
+            const updatedProfile = payload.new;
+
+            setChats((currentChats) => {
+              return currentChats.map((chat) => {
+                if (chat.type === 'direct' && chat.otherUser && chat.otherUser.id === updatedProfile.id) {
+                  return {
+                    ...chat,
+                    otherUser: {
+                      ...chat.otherUser,
+                      last_seen: updatedProfile.last_seen
+                    }
+                  };
+                }
+                return chat;
+              });
+            });
+
+            // Online/offline itself now comes from usePresence, not last_seen —
+            // this is just keeping the cached "last seen" value from going stale.
+            localDB.chats
+              .where('other_user_id')
+              .equals(updatedProfile.id)
+              .modify({ other_user_last_seen: updatedProfile.last_seen })
+              .catch(() => {});
+          }
+        )
+        .subscribe();
+
+      // "Delete for me" in an open chat can't reach us through Supabase (it
+      // never touches the server), so ChatWindow pings this bus to have us
+      // recompute previews — falling back to the previous visible message.
+      const unsubscribeRefresh = onChatListRefresh(() => loadChats());
+
+      return () => {
+        supabase.removeChannel(channel);
+        unsubscribeRefresh();
+      };
+    }
+  }, [user]);
+
+  // Opening a chat clears its unread badge (the messages get marked read in
+  // ChatWindow). Reflect that in the list + cache immediately.
+  useEffect(() => {
+    if (!selectedChatId) return;
+    setChats((current) =>
+      current.some((c) => c.id === selectedChatId && (c.unreadCount ?? 0) > 0)
+        ? current.map((c) => (c.id === selectedChatId ? { ...c, unreadCount: 0 } : c))
+        : current
+    );
+    localDB.chats.update(selectedChatId, { unread_count: 0 }).catch(() => {});
+  }, [selectedChatId]);
+
+  // Shared shape conversion: LocalChat (cache row) -> Chat (what the UI renders)
+  function toChat(c: any): Chat {
+    return {
+      id: c.id,
+      type: c.type,
+      name: c.name,
+      avatar_url: c.avatar_url,
+      theme: c.theme,
+      // Gate on the timestamp, not the content — a photo/gif/voice message has
+      // no text content but is still a real "last message" worth previewing.
+      lastMessage: c.last_message_time ? {
+        id: c.last_message_id,
+        content: c.last_message_content ?? null,
+        created_at: c.last_message_time,
+        type: c.last_message_type ?? 'text',
+        is_deleted: c.last_message_is_deleted ?? false
+      } : undefined,
+      unreadCount: c.unread_count ?? 0,
+      otherUser: c.other_user_id ? {
+        id: c.other_user_id,
+        display_name: c.other_user_name || '',
+        avatar_url: c.other_user_avatar || null,
+        last_seen: c.other_user_last_seen || null
+      } : undefined
+    };
+  }
+
+  // Most recently active conversation first — a chat list should always feel
+  // "sorted by what just happened", not by whatever order the DB returned.
+  function byRecency(a: Chat, b: Chat) {
+    const aTime = a.lastMessage?.created_at ? new Date(a.lastMessage.created_at).getTime() : 0;
+    const bTime = b.lastMessage?.created_at ? new Date(b.lastMessage.created_at).getTime() : 0;
+    return bTime - aTime;
+  }
+
+  async function loadChats() {
+    if (!user) return;
+
+    let hadCache = false;
+
+    try {
+      // PHASE 1: Read internal phone storage instantly — this is what makes
+      // the list show up immediately on open instead of a blank/loading screen.
+      const cachedChats = await localDB.chats.toArray();
+      if (cachedChats.length > 0) {
+        hadCache = true;
+        setChats(cachedChats.map(toChat).sort(byRecency));
+        setLoading(false);
+        markChatsReady();
+      } else {
+        setLoading(true);
+      }
+
+      // PHASE 2: Quietly ask Supabase if there are new changes over the network
+      if (!navigator.onLine) return;
+
+      const { data: participants, error: pError } = await supabase
+        .from('chat_participants')
+        .select(`
+          chat_id,
+          chats:chat_id ( id, type, name, avatar_url, theme, created_at )
+        `)
+        .eq('user_id', user.id)
+        .eq('is_locked', false)
+        .is('left_at', null);
+
+      if (pError) {
+        console.error('Supabase Error:', pError.message);
+        if (!hadCache) {
+          showError("Couldn't load your chats. Check your connection.");
+        }
+        return;
+      }
+
+      if (!participants || participants.length === 0) {
+        setChats([]);
+        await localDB.chats.clear();
+        return;
+      }
+
+      const chatIds = participants.map(p => p.chat_id);
+      const directChatIds = participants
+        .filter(p => {
+          const c = Array.isArray(p.chats) ? p.chats[0] : p.chats;
+          return c?.type === 'direct';
+        })
+        .map(p => p.chat_id);
+
+      const hidden = loadHiddenMessageIds();
+
+      // Batched instead of one query per chat — this was the N+1 query problem.
+      const [{ data: messages }, { data: otherParticipants }] = await Promise.all([
+        supabase
+          .from('messages')
+          .select('id, chat_id, content, created_at, type, is_deleted, sender_id, delivery_status')
+          .in('chat_id', chatIds)
+          .order('created_at', { ascending: false }),
+        directChatIds.length > 0
+          ? supabase
+              .from('chat_participants')
+              .select('chat_id, profiles:user_id ( id, display_name, avatar_url, last_seen )')
+              .in('chat_id', directChatIds)
+              .neq('user_id', user.id)
+          : Promise.resolve({ data: [] as any[] })
+      ]);
+
+      const otherUserByChat = new Map<string, any>();
+      otherParticipants?.forEach((row: any) => {
+        const profile = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles;
+        if (profile) otherUserByChat.set(row.chat_id, profile);
+      });
+
+      const freshLocalChats = participants
+        .map(p => {
+          const chatData = Array.isArray(p.chats) ? p.chats[0] : p.chats;
+          if (!chatData) return null;
+
+          // Latest message that ISN'T hidden via "delete for me" — so a
+          // locally-hidden last message falls back to the previous one.
+          const lastMsg = messages?.find(m => m.chat_id === p.chat_id && !hidden.has(m.id));
+          const otherUserObj = otherUserByChat.get(p.chat_id);
+          // Unread = received messages in this chat not yet marked read.
+          const unreadCount = messages
+            ? messages.filter(m => m.chat_id === p.chat_id && m.sender_id !== user.id && m.delivery_status !== 'read' && !hidden.has(m.id)).length
+            : 0;
+
+          return {
+            id: chatData.id,
+            type: chatData.type,
+            name: chatData.name,
+            avatar_url: chatData.avatar_url,
+            theme: chatData.theme,
+            last_message_content: lastMsg?.content,
+            last_message_time: lastMsg?.created_at,
+            last_message_type: lastMsg?.type,
+            last_message_is_deleted: lastMsg?.is_deleted,
+            last_message_id: lastMsg?.id,
+            unread_count: unreadCount,
+            other_user_id: otherUserObj?.id,
+            other_user_name: otherUserObj?.display_name,
+            other_user_avatar: otherUserObj?.avatar_url,
+            other_user_last_seen: otherUserObj?.last_seen
+          };
+        })
+        .filter((c): c is NonNullable<typeof c> => c !== null);
+
+      // PHASE 3: Write fresh data back to local storage, AND prune anything
+      // that's now gone (left/deleted chats) instead of leaving it cached forever.
+      const freshIds = new Set(freshLocalChats.map(c => c.id));
+      const staleIds = cachedChats.map(c => c.id).filter(id => !freshIds.has(id));
+      if (staleIds.length > 0) {
+        await localDB.chats.bulkDelete(staleIds);
+      }
+      await localDB.chats.bulkPut(freshLocalChats);
+
+      setChats(freshLocalChats.map(toChat).sort(byRecency));
+    } catch (error) {
+      console.error('Logic Error loading chats:', error);
+      if (!hadCache) {
+        showError("Couldn't load your chats. Check your connection.");
+      }
+    } finally {
+      setLoading(false);
+      markChatsReady();
+    }
+  }
+
+  const filteredChats = chats.filter(chat => {
+    const chatName = chat.type === 'direct'
+      ? chat.otherUser?.display_name || ''
+      : chat.name || '';
+    return chatName.toLowerCase().includes(searchQuery.toLowerCase());
+  });
+
+  function formatTime(timestamp: string) {
+    if (!timestamp) return '';
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diff = now.getTime() - date.getTime();
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+
+    if (hours < 1) {
+      const minutes = Math.floor(diff / (1000 * 60));
+      return `${minutes}m ago`;
+    } else if (hours < 24) {
+      return `${hours}h ago`;
+    } else {
+      const days = Math.floor(hours / 24);
+      return `${days}d ago`;
+    }
+  }
+
+  function getThemeColor(theme: string) {
+    switch (theme) {
+      case 'love': return 'border-l-4 border-pink-500';
+      case 'best_friend': return 'border-l-4 border-[#FF1493]';
+      case 'friend': return 'border-l-4 border-[#FF8FAB]';
+      default: return 'border-l-4 border-transparent';
+    }
+  }
+
+  return (
+    <div className={`w-full md:w-96 h-full p-4 border-b sticky top-0 z-10 flex flex-col bg-[#FFE4E1]/90 ${isLowPerfMode ? '' : 'backdrop-blur-md'} flex-shrink-0 ${theme === 'sweet' ? 'bg-[#FFF0F5] border-[#FFB6C1]' : 'bg-white dark:bg-gray-900 border-gray-200'}`}>
+      <div className="md:hidden absolute inset-0 overflow-hidden pointer-events-none z-0">
+        {/* FloatingHearts intentionally NOT rendered here — Dashboard (this
+            component's parent, always mounted alongside it) already renders
+            one full-app instance. A second one here used to sit perfectly
+            on top of the first (both effectively full-viewport), silently
+            doubling the animation workload for zero visual difference. */}
+      </div>
+      <div className={`p-4 border-b ${theme === 'sweet' ? 'border-[#FFB6C1]' : 'border-gray-200 dark:border-gray-700'}`}>
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <div className="relative">
+              {(profile?.avatar_url || myProfile?.avatar_url) ? (
+                <img
+                  src={profile?.avatar_url || myProfile?.avatar_url || ''}
+                  alt={profile?.display_name || myProfile?.display_name}
+                  className="w-12 h-12 rounded-full object-cover"
+                />
+              ) : (
+                <div className={`w-12 h-12 rounded-full bg-gradient-to-br flex items-center justify-center text-white font-medium text-lg uppercase ${theme === 'sweet' ? 'from-[#FF69B4] to-[#FF1493]' : 'from-pink-400 to-purple-500'}`}>
+                  {profile?.display_name?.[0] || myProfile?.display_name?.[0] || profile?.username?.[0] || myProfile?.username?.[0] || 'U'}
+                </div>
+              )}
+            </div>
+            <div className="flex-1">
+              <h1 className={`text-xl font-bold flex items-center gap-2 whitespace-nowrap ${theme === 'sweet' ? 'text-[#4B004B]' : 'text-gray-900 dark:text-white'}`}>
+                <Heart className="w-5 h-5 text-pink-500 fill-pink-500 shrink-0" />
+                Sweet
+              </h1>
+              <p className={`text-xs ${theme === 'sweet' ? 'text-[#8B004B]' : 'text-gray-500 dark:text-gray-400'}`}>@{profile?.username || myProfile?.username}</p>
+            </div>
+          </div>
+
+          <div className="relative">
+            <button
+              onClick={() => setShowMenu(!showMenu)}
+              className={`p-2 rounded-full transition-colors outline-none ${
+                theme === 'dark'
+                  ? 'hover:bg-gray-800 text-white'
+                  : theme === 'sweet'
+                    ? 'hover:bg-[#FAD1D1] text-[#4B004B]'
+                    : 'hover:bg-gray-100 text-gray-700'
+              }`}
+            >
+              <MoreVertical className={`w-5 h-5 ${theme === 'dark' ? 'text-gray-200' : theme === 'sweet' ? 'text-[#4B004B]' : 'text-gray-700'}`} />
+            </button>
+
+            {showMenu && (
+              <>
+                <div
+                  className="fixed inset-0 z-10"
+                  onClick={() => setShowMenu(false)}
+                />
+                <div className={`absolute right-0 top-full mt-2 w-64 rounded-xl shadow-lg py-2 z-20 border ${
+                  theme === 'sweet'
+                    ? 'bg-[#FFE4E1] border-[#FFB6C1]'
+                    : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700'
+                }`}>
+                  <button
+                    onClick={() => {
+                      onShowProfile();
+                      setShowMenu(false);
+                    }}
+                    className={`w-full px-4 py-2 text-left flex items-center gap-3 transition-colors ${
+                      theme === 'sweet'
+                        ? 'text-[#8B004B] hover:bg-white'
+                        : 'text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800'
+                    }`}
+                  >
+                    <UserIcon className="w-5 h-5" />
+                    <span>Profile</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      onShowSettings();
+                      setShowMenu(false);
+                    }}
+                    className={`w-full px-4 py-2 text-left flex items-center gap-3 transition-colors ${
+                      theme === 'sweet'
+                        ? 'text-[#8B004B] hover:bg-white'
+                        : 'text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800'
+                    }`}
+                  >
+                    <Settings className="w-5 h-5" />
+                    <span>Settings</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      onShowLockedChats();
+                      setShowMenu(false);
+                    }}
+                    className={`w-full px-4 py-2 text-left flex items-center gap-3 transition-colors ${
+                      theme === 'sweet'
+                        ? 'text-[#8B004B] hover:bg-white'
+                        : 'text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800'
+                    }`}
+                  >
+                    <Lock className="w-5 h-5" />
+                    <span>Locked Chats</span>
+                  </button>
+                  <div className={`border-t my-2 ${theme === 'sweet' ? 'border-[#FFB6C1]' : 'border-gray-200 dark:border-gray-700'}`} />
+                  <button
+                    onClick={() => {
+                      signOut();
+                      setShowMenu(false);
+                    }}
+                    className={`w-full px-4 py-2 text-left flex items-center gap-3 transition-colors ${
+                      theme === 'sweet'
+                        ? 'text-rose-600 hover:bg-white'
+                        : 'text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30'
+                    }`}
+                  >
+                    <LogOut className="w-5 h-5" />
+                    <span>Logout</span>
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+
+        <div className="relative">
+          <Search className={`absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 ${theme === 'sweet' ? 'text-[#8B004B]' : 'text-gray-400'}`} />
+          <input
+            type="text"
+            placeholder="Search chats..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className={`w-full pl-10 pr-4 py-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-pink-500 transition-colors border ${
+              theme === 'sweet'
+                ? 'bg-white border-[#FFB6C1] text-[#8B004B] placeholder:text-[#8B004B]'
+                : 'bg-gray-100 dark:bg-gray-700 border-transparent text-gray-900 dark:text-white dark:placeholder-gray-400'
+            }`}
+          />
+        </div>
+
+        <div className="flex gap-2 mt-3">
+          <button
+            onClick={onShowFriends}
+            className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-gradient-to-r from-pink-500 to-rose-500 text-white rounded-xl hover:from-pink-600 hover:to-rose-600 transition-all"
+          >
+            <Users className="w-4 h-4" />
+            <span className="text-sm font-medium">Find Friends</span>
+          </button>
+          <button
+            onClick={onShowCreateChat}
+            className={`flex items-center justify-center gap-2 px-3 py-2 rounded-xl transition-all border ${
+              theme === 'sweet'
+                ? 'bg-white border-[#FFB6C1] text-[#8B004B] hover:bg-[#FFE4E1]'
+                : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-transparent hover:bg-gray-200'
+            }`}
+          >
+            <MessageSquarePlus className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+
+      <div className="flex-1 min-h-0 overflow-y-auto">
+        {loading ? (
+          <div className="flex items-center justify-center h-32">
+            <div className="w-8 h-8 border-3 border-pink-500 border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : filteredChats.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-full text-center px-4">
+            <MessageSquarePlus className={`w-16 h-16 mb-3 ${theme === 'sweet' ? 'text-[#FFB6C1]' : 'text-gray-300'}`} />
+            <p className={`font-medium ${theme === 'sweet' ? 'text-[#8B004B]' : 'text-gray-500'}`}>No chats yet</p>
+            <p className={`text-sm mt-1 ${theme === 'sweet' ? 'text-[#8B004B]/70' : 'text-gray-400'}`}>
+              Start a conversation with your friends
+            </p>
+          </div>
+        ) : (
+          <div className="p-2 space-y-1.5">
+            {filteredChats.map((chat) => {
+              const unread = chat.unreadCount ?? 0;
+              return (
+                <button
+                  key={chat.id}
+                  onClick={() => onSelectChat(chat.id)}
+                  className={`w-full p-3 rounded-3xl border flex items-start gap-3 transition-all active:scale-[0.98] ${
+                    selectedChatId === chat.id
+                      ? theme === 'sweet'
+                        ? 'bg-[#FFC0CB]/50 border-[#FF69B4] shadow-sm shadow-pink-200/50'
+                        : 'bg-pink-50 dark:bg-pink-900/30 border-pink-300 dark:border-pink-700'
+                      : theme === 'sweet'
+                        ? 'bg-white/60 border-[#FFD1DC] hover:bg-[#FFC0CB]/25 hover:border-[#FFB6C1]'
+                        : 'bg-white dark:bg-gray-800/40 border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                  } ${getThemeColor(chat.theme)}`}
+                >
+                  <div className="relative flex-shrink-0">
+                    {chat.type === 'direct' && chat.otherUser ? (
+                      <>
+                        {chat.otherUser.avatar_url ? (
+                          <img
+                            src={chat.otherUser.avatar_url}
+                            alt={chat.otherUser.display_name}
+                            className="w-12 h-12 rounded-full object-cover"
+                          />
+                        ) : (
+                          <div className={`w-12 h-12 rounded-full bg-gradient-to-br flex items-center justify-center text-white font-medium ${theme === 'sweet' ? 'from-[#FF69B4] to-[#FF1493]' : 'from-pink-400 to-purple-500'}`}>
+                            {chat.otherUser.display_name[0] || 'U'}
+                          </div>
+                        )}
+                        <span
+                          className={`absolute bottom-0 right-0 block h-3.5 w-3.5 rounded-full border-2 ${
+                            theme === 'sweet' ? 'border-[#FFF0F5]' : 'border-white dark:border-gray-900'
+                          } ${
+                            isUserOnline(chat.otherUser.id) ? 'bg-green-500' : theme === 'sweet' ? 'bg-[#FFB6C1]' : 'bg-gray-400'
+                          }`}
+                        />
+                      </>
+                    ) : (
+                      <div className={`w-12 h-12 rounded-full bg-gradient-to-br flex items-center justify-center text-white ${theme === 'sweet' ? 'from-[#FF69B4] to-[#FF1493]' : 'from-blue-400 to-purple-500'}`}>
+                        <Users className="w-6 h-6" />
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex-1 min-w-0 text-left">
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <h3 className={`truncate ${
+                        theme === 'sweet'
+                          ? (unread > 0 ? 'font-extrabold text-[#4B004B]' : 'font-semibold text-[#4B004B]')
+                          : (unread > 0 ? 'font-extrabold text-gray-900 dark:text-white' : 'font-semibold text-gray-900 dark:text-gray-100')
+                      }`}>
+                        {chat.type === 'direct' ? chat.otherUser?.display_name : chat.name}
+                      </h3>
+                      {chat.lastMessage?.created_at && (
+                        <span className={`text-xs shrink-0 ${unread > 0 ? 'text-[#FF1493] font-bold' : theme === 'sweet' ? 'text-[#8B004B]' : 'text-gray-500'}`}>
+                          {formatTime(chat.lastMessage.created_at)}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <p className={`text-sm truncate flex-1 ${
+                        theme === 'sweet'
+                          ? (unread > 0 ? 'text-[#4B004B] font-medium' : 'text-[#8B004B]')
+                          : (unread > 0 ? 'text-gray-800 dark:text-gray-200 font-medium' : 'text-gray-600 dark:text-gray-400')
+                      }`}>
+                        {formatMessagePreview(chat.lastMessage)}
+                      </p>
+                      {unread > 0 && (
+                        <span className="shrink-0 min-w-[20px] h-5 px-1.5 rounded-full bg-gradient-to-br from-[#FF69B4] to-[#FF1493] text-white text-[11px] font-black flex items-center justify-center shadow-sm shadow-pink-300/60">
+                          {unread > 99 ? '99+' : unread}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
