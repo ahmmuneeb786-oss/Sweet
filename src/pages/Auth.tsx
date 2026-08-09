@@ -5,6 +5,7 @@ import { FloatingHearts } from '../components/FloatingHearts';
 import { supabase } from '../lib/supabase';
 import { useNotify } from '../contexts/NotificationContext';
 import { usePerformance } from '../contexts/PerformanceContext';
+import { isTelegramMiniApp } from '../lib/platform';
 
 type AuthMode = 'login' | 'signup' | 'forgot' | 'verify-otp';
 
@@ -191,6 +192,33 @@ useEffect(() => {
       return email;
     }
   };
+
+  async function handleTelegramLogin() {
+    setLoading(true);
+    try {
+      const initData = (window as any).Telegram?.WebApp?.initData;
+      if (!initData) throw new Error('Telegram data unavailable');
+
+      const response = await fetch(
+        'https://ptezdlwwnjrsqomsspgi.supabase.co/functions/v1/telegram-auth',
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ initData }) }
+      );
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Telegram login failed');
+
+      const { error } = await supabase.auth.verifyOtp({
+        email: result.email,
+        token: result.token,
+        type: 'magiclink',
+      });
+      if (error) throw error;
+    // Session now set — AuthContext picks it up automatically, same as any other login.
+    } catch (err) {
+      showError(err instanceof Error ? err.message : 'Could not log in with Telegram');
+    } finally {
+      setLoading(false);
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -393,6 +421,18 @@ useEffect(() => {
               <span className={`h-0.5 w-6 ${isSweet ? 'bg-[#FFB6C1]' : 'bg-pink-100'}`}></span>
             </p>
           </div>
+
+          {isTelegramMiniApp() && (
+            <button
+              type="button"
+              onClick={handleTelegramLogin}
+              className={`w-full py-3 px-4 mb-4 font-medium rounded-xl flex items-center justify-center gap-2 transition-all ${
+                isSweet ? 'bg-[#229ED9] text-white hover:bg-[#1e8bc3]' : 'bg-[#229ED9] text-white hover:bg-[#1e8bc3]'
+              }`}
+            >
+              Continue with Telegram
+            </button>
+          )}
 
           {mode !== 'verify-otp' && (
           <div className={`flex gap-2 p-1 rounded-full ${isSweet ? 'bg-[#FFE4E1]' : 'bg-gray-100'}`}>

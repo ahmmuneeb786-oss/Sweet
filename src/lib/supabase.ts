@@ -34,6 +34,9 @@ export type Database = {
           is_online: boolean;
           created_at: string;
           updated_at: string;
+          telegram_id: number | null;
+          is_telegram_user: boolean;
+          telegram_username: string | null;
         };
         Insert: Omit<Database['public']['Tables']['profiles']['Row'], 'created_at' | 'updated_at'>;
         Update: Partial<Database['public']['Tables']['profiles']['Insert']>;
