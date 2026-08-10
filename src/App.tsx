@@ -5,6 +5,7 @@ import { ConfirmProvider } from './contexts/ConfirmContext';
 import { PerformanceProvider } from './contexts/PerformanceContext';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Auth } from './pages/Auth';
+import { TelegramUsernameSetup } from './pages/TelegramUsernameSetup';
 import { Dashboard } from './pages/Dashboard';
 import { initializeDictionary } from './predictionService';
 import { Heart, Paperclip, X, Search } from 'lucide-react';
@@ -439,6 +440,20 @@ if (loading || profileSyncLoading) {
       <div className={theme === 'dark' ? 'dark' : ''}>
         <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
           <Auth theme={theme} />
+        </div>
+      </div>
+    );
+  }
+
+  // A signed-in Telegram user with no username yet (no Telegram username was
+  // available, or it was already taken by someone else) — block here until
+  // they pick one themselves. Email signups always have a username by the
+  // time a profile row exists, so this only ever fires for that case.
+  if (profile && !profile.username) {
+    return (
+      <div className={theme === 'dark' ? 'dark' : ''}>
+        <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
+          <TelegramUsernameSetup theme={theme} />
         </div>
       </div>
     );

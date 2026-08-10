@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Heart, Mail, Lock, User, Eye, EyeOff, AlertCircle, CheckCircle, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { FloatingHearts } from '../components/FloatingHearts';
-import { supabase } from '../lib/supabase';
+import { supabase, supabaseUrl, supabaseAnonKey } from '../lib/supabase';
 import { useNotify } from '../contexts/NotificationContext';
 import { usePerformance } from '../contexts/PerformanceContext';
 import { isTelegramMiniApp } from '../lib/platform';
@@ -38,6 +38,7 @@ export function Auth({ theme = 'light' }: { theme?: 'light' | 'dark' | 'sweet' }
   const { isLowPerfMode } = usePerformance();
   const [mode, setMode] = useState<AuthMode>('login');
   const [loading, setLoading] = useState(false);
+  const [telegramLoading, setTelegramLoading] = useState(false);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -194,21 +195,28 @@ useEffect(() => {
   };
 
   async function handleTelegramLogin() {
-    setLoading(true);
+    setTelegramLoading(true);
     try {
       const initData = (window as any).Telegram?.WebApp?.initData;
       if (!initData) throw new Error('Telegram data unavailable');
 
       const response = await fetch(
-        'https://ptezdlwwnjrsqomsspgi.supabase.co/functions/v1/telegram-auth',
-        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ initData }) }
+        `${supabaseUrl}/functions/v1/telegram-auth`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${supabaseAnonKey}`,
+            'apikey': supabaseAnonKey,
+          },
+          body: JSON.stringify({ initData }),
+        }
       );
       const result = await response.json();
-      if (!response.ok) throw new Error(result.error || 'Telegram login failed');
+      if (!response.ok) throw new Error(result.error || result.message || 'Telegram login failed');
 
       const { error } = await supabase.auth.verifyOtp({
-        email: result.email,
-        token: result.token,
+        token_hash: result.token_hash,
         type: 'magiclink',
       });
       if (error) throw error;
@@ -216,7 +224,7 @@ useEffect(() => {
     } catch (err) {
       showError(err instanceof Error ? err.message : 'Could not log in with Telegram');
     } finally {
-      setLoading(false);
+      setTelegramLoading(false);
     }
   }
 
@@ -426,11 +434,19 @@ useEffect(() => {
             <button
               type="button"
               onClick={handleTelegramLogin}
-              className={`w-full py-3 px-4 mb-4 font-medium rounded-xl flex items-center justify-center gap-2 transition-all ${
+              disabled={telegramLoading}
+              className={`w-full py-3 px-4 mb-4 font-medium rounded-xl flex items-center justify-center gap-2 transition-all disabled:opacity-60 disabled:cursor-not-allowed ${
                 isSweet ? 'bg-[#229ED9] text-white hover:bg-[#1e8bc3]' : 'bg-[#229ED9] text-white hover:bg-[#1e8bc3]'
               }`}
             >
-              Continue with Telegram
+              {telegramLoading ? (
+                <>
+                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  <span>Connecting...</span>
+                </>
+              ) : (
+                'Continue with Telegram'
+              )}
             </button>
           )}
 

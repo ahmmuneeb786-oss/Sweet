@@ -6,7 +6,7 @@ import { localDB } from '../db';
 
 interface Profile {
   id: string;
-  username: string;
+  username: string | null;
   display_name: string;
   bio: string;
   avatar_url: string | null;
@@ -14,7 +14,7 @@ interface Profile {
   is_online: boolean;
   created_at: string;
   chat_biometric_type?: 'fingerprint' | 'face';
-  
+
 }
 
 interface AuthContextType {

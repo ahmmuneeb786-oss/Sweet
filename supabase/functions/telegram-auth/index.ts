@@ -68,11 +68,12 @@ serve(async (req) => {
     const syntheticEmail = `tg_${telegramId}@telegram.sweetchat.internal`;
 
     // Look up an existing account first
-    const { data: existingProfile } = await supabaseAdmin
+    const { data: existingProfile, error: lookupError } = await supabaseAdmin
       .from('profiles')
       .select('id')
       .eq('telegram_id', telegramId)
       .maybeSingle();
+    if (lookupError) throw lookupError;
 
     let authUserId: string;
 
@@ -80,8 +81,6 @@ serve(async (req) => {
       authUserId = existingProfile.id;
     } else {
       // Brand new Telegram user — create the auth account + profile row.
-      // username is left null on purpose; Auth.tsx routes them to a
-      // username-picker before letting them into the dashboard.
       const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
         email: syntheticEmail,
         email_confirm: true,
@@ -91,9 +90,25 @@ serve(async (req) => {
 
       authUserId = newUser.user.id;
 
-      await supabaseAdmin.from('profiles').insert({
+      // If Telegram has a username for this person, claim it straight away
+      // (lowercased, since our own usernames are case-insensitive) as long as
+      // nobody else in Sweet already has it. Otherwise leave it null — the
+      // client routes anyone with a null username to a mandatory picker
+      // before letting them into the dashboard. Never invent one ourselves.
+      let claimedUsername: string | null = null;
+      const tgUsername = tgUser.username?.toLowerCase();
+      if (tgUsername && /^[a-z0-9_-]+$/.test(tgUsername)) {
+        const { data: usernameTaken } = await supabaseAdmin
+          .from('profiles')
+          .select('id')
+          .eq('username', tgUsername)
+          .maybeSingle();
+        if (!usernameTaken) claimedUsername = tgUsername;
+      }
+
+      const { error: profileError } = await supabaseAdmin.from('profiles').insert({
         id: authUserId,
-        username: null,
+        username: claimedUsername,
         display_name: displayName || 'Sweet User',
         bio: '',
         is_online: true,
@@ -101,8 +116,20 @@ serve(async (req) => {
         is_telegram_user: true,
         telegram_username: tgUser.username || null,
       });
+      if (profileError) {
+        // Roll back the orphaned auth user so a retry doesn't collide with
+        // this synthetic email on the next attempt.
+        await supabaseAdmin.auth.admin.deleteUser(authUserId);
+        throw profileError;
+      }
 
-      await supabaseAdmin.from('privacy_settings').insert({ user_id: authUserId });
+      const { error: privacyError } = await supabaseAdmin
+        .from('privacy_settings')
+        .insert({ user_id: authUserId });
+      if (privacyError) {
+        await supabaseAdmin.auth.admin.deleteUser(authUserId);
+        throw privacyError;
+      }
     }
 
     // Issue a one-time magic-link token — the client exchanges this for a
@@ -116,7 +143,7 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         email: syntheticEmail,
-        token: linkData.properties.hashed_token,
+        token_hash: linkData.properties.hashed_token,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
