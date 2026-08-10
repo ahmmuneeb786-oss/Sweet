@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Heart, Mail, Lock, User, Eye, EyeOff, AlertCircle, CheckCircle, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { FloatingHearts } from '../components/FloatingHearts';
-import { supabase, supabaseUrl, supabaseAnonKey } from '../lib/supabase';
+import { supabase } from '../lib/supabase';
 import { useNotify } from '../contexts/NotificationContext';
 import { usePerformance } from '../contexts/PerformanceContext';
 import { isTelegramMiniApp } from '../lib/platform';
@@ -33,7 +33,7 @@ function isValidEmailFormat(emailToCheck: string) {
 }
 
 export function Auth({ theme = 'light' }: { theme?: 'light' | 'dark' | 'sweet' }) {
-  const { signIn, signUp, verifySignupOtp, resendSignupOtp, completeProfileSetup } = useAuth();
+  const { signIn, signUp, verifySignupOtp, resendSignupOtp, completeProfileSetup, signInWithTelegram } = useAuth();
   const { showSuccess, showError, showInfo } = useNotify();
   const { isLowPerfMode } = usePerformance();
   const [mode, setMode] = useState<AuthMode>('login');
@@ -197,30 +197,8 @@ useEffect(() => {
   async function handleTelegramLogin() {
     setTelegramLoading(true);
     try {
-      const initData = (window as any).Telegram?.WebApp?.initData;
-      if (!initData) throw new Error('Telegram data unavailable');
-
-      const response = await fetch(
-        `${supabaseUrl}/functions/v1/telegram-auth`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${supabaseAnonKey}`,
-            'apikey': supabaseAnonKey,
-          },
-          body: JSON.stringify({ initData }),
-        }
-      );
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error || result.message || 'Telegram login failed');
-
-      const { error } = await supabase.auth.verifyOtp({
-        token_hash: result.token_hash,
-        type: 'magiclink',
-      });
-      if (error) throw error;
-    // Session now set — AuthContext picks it up automatically, same as any other login.
+      await signInWithTelegram();
+      // Session now set — AuthContext picks it up automatically, same as any other login.
     } catch (err) {
       showError(err instanceof Error ? err.message : 'Could not log in with Telegram');
     } finally {

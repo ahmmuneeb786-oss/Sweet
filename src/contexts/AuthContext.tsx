@@ -1,8 +1,9 @@
 import { createContext, useContext, useEffect, useRef, useState, ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
-import { supabase } from '../lib/supabase';
+import { supabase, supabaseUrl, supabaseAnonKey } from '../lib/supabase';
 import { resetChatsReady, markChatsReady } from '../hooks/useChatsReady';
 import { localDB } from '../db';
+import { isTelegramMiniApp } from '../lib/platform';
 
 interface Profile {
   id: string;
@@ -30,6 +31,7 @@ interface AuthContextType {
   resendSignupOtp: (email: string) => Promise<{ error: Error | null }>;
   completeProfileSetup: (username: string, displayName: string) => Promise<{ error: Error | null }>;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
+  signInWithTelegram: () => Promise<void>;
   signOut: () => Promise<void>;
   updateProfile: (updates: Partial<Profile>) => Promise<{ error: Error | null }>;
 }
@@ -48,9 +50,45 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // is allowed to write state, so the real profile always wins regardless of
   // which network response lands last.
   const profileLoadSeq = useRef(0);
+  // Set while we're silently swapping a stale Telegram session for the
+  // account that's actually opening the Mini App right now (see the
+  // mismatch check below). While this is true, the SIGNED_OUT event from
+  // our own mid-switch signOut() must not flip `loading` false — that would
+  // flash the login screen for an instant before the new session lands.
+  const switchingTelegramAccountRef = useRef(false);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (isTelegramMiniApp()) {
+        // Telegram hands the WebView a fresh, current user identity every
+        // time the Mini App opens — but Supabase's persisted session in
+        // local storage could belong to a *different* Telegram account that
+        // last used this same device/browser. Catch that before resuming it.
+        const currentTelegramId = (window as any).Telegram?.WebApp?.initDataUnsafe?.user?.id;
+        const sessionTelegramId = session?.user?.user_metadata?.telegram_id;
+        if (session && currentTelegramId && sessionTelegramId && currentTelegramId !== sessionTelegramId) {
+          switchingTelegramAccountRef.current = true;
+          try {
+            await supabase.auth.signOut();
+            try {
+              await localDB.clearAllLocalData();
+            } catch (err) {
+              console.error('Failed to clear local cache while switching Telegram accounts:', err);
+            }
+            await signInWithTelegram();
+          } catch (err) {
+            console.error('Failed to auto-switch Telegram account:', err);
+            setSession(null);
+            setUser(null);
+            setProfile(null);
+            setLoading(false);
+          } finally {
+            switchingTelegramAccountRef.current = false;
+          }
+          return;
+        }
+      }
+
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
@@ -73,7 +111,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (!session?.user) {
         setProfile(null);
-        setLoading(false);
+        if (!switchingTelegramAccountRef.current) setLoading(false);
         return;
       }
 
@@ -292,6 +330,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  // Exchanges the Mini App's current initData for a Sweet session via the
+  // telegram-auth edge function, then finishes the handoff with verifyOtp.
+  // Shared by the manual "Continue with Telegram" button and the automatic
+  // account-mismatch switch above — both need the exact same exchange.
+  async function signInWithTelegram() {
+    const initData = (window as any).Telegram?.WebApp?.initData;
+    if (!initData) throw new Error('Telegram data unavailable');
+
+    const response = await fetch(`${supabaseUrl}/functions/v1/telegram-auth`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${supabaseAnonKey}`,
+        'apikey': supabaseAnonKey,
+      },
+      body: JSON.stringify({ initData }),
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || result.message || 'Telegram login failed');
+
+    const { error } = await supabase.auth.verifyOtp({
+      token_hash: result.token_hash,
+      type: 'magiclink',
+    });
+    if (error) throw error;
+  }
+
   async function signOut() {
     if (user) {
       await updateOnlineStatus(false);
@@ -380,6 +445,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     resendSignupOtp,
     completeProfileSetup,
     signIn,
+    signInWithTelegram,
     signOut,
     updateProfile
   };
