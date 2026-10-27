@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
-import { X, Camera, Save, CreditCard as Edit3, CloudOff } from 'lucide-react';
+import { X, Camera, Save, CreditCard as Edit3 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { localDB } from '../db'; // 🌸 Integrated our fast offline Dexie store
 import { subscribeToProfileSyncEvents } from '../hooks/useOfflineSync';
 import { useNotify } from '../contexts/NotificationContext';
 import { ImageViewerModal } from './ImageViewerModal';
+import { OfflineBadge } from './OfflineBadge';
 import { useBackableState } from '../hooks/useBackableState';
 
 interface ProfileSidebarProps {
@@ -342,12 +343,7 @@ export function ProfileSidebar({ onClose, theme, user }: ProfileSidebarProps) {
             }`}>
               Profile
             </h2>
-            {!isOnline && (
-              <div className="flex items-center gap-1 bg-pink-100 text-pink-700 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider">
-                <CloudOff className="w-3 h-3" />
-                <span>Offline Mode</span>
-              </div>
-            )}
+            <OfflineBadge theme={theme} mobileOnly surface="dark" />
           </div>
           <button
             onClick={onClose}
@@ -433,7 +429,7 @@ export function ProfileSidebar({ onClose, theme, user }: ProfileSidebarProps) {
                 }`}
               />
               <p className={`mt-1 text-xs ${theme === 'sweet' ? 'text-[#8B004B]/60' : 'text-gray-500'}`}>
-                Head toward settings to change your username.
+                Head toward settings to change your Username.
               </p>
             </div>
 

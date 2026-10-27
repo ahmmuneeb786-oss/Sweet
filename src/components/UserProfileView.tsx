@@ -2,8 +2,10 @@ import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { ArrowLeft, Heart } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { useAuth } from '../contexts/AuthContext';
 import { usePresence } from '../hooks/usePresence';
 import { ImageViewerModal } from './ImageViewerModal';
+import { OfflineBadge } from './OfflineBadge';
 import { usePerformance } from '../contexts/PerformanceContext';
 import { useBackableState } from '../hooks/useBackableState';
 
@@ -61,7 +63,10 @@ export function UserProfileView({ userId, theme, onClose }: UserProfileViewProps
   const [photos, setPhotos] = useState<string[]>([]);
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
   useBackableState(viewerIndex !== null, () => setViewerIndex(null));
-  const { isOnline } = usePresence(userId);
+  const { user } = useAuth();
+  // usePresence takes OUR id (it's the key we announce ourselves under);
+  // the viewed user's id is only what we look up in the shared online set.
+  const { isOnline } = usePresence(user?.id);
   const { isLowPerfMode } = usePerformance();
 
   useEffect(() => {
@@ -90,6 +95,25 @@ export function UserProfileView({ userId, theme, onClose }: UserProfileViewProps
     return () => { cancelled = true; };
   }, [userId]);
 
+  // Keep last_seen live while the profile is open — otherwise someone who
+  // goes offline mid-view shows whatever last_seen was at the moment we opened it.
+  useEffect(() => {
+    const channel = supabase
+      .channel(`profile-view-${userId}`)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'profiles', filter: `id=eq.${userId}` },
+        (payload) => {
+          setProfile((prev) => (prev ? { ...prev, last_seen: payload.new.last_seen } : prev));
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [userId]);
+
   const online = isOnline(userId);
   // Legacy accounts with no profile_photos rows yet still get a 1-photo gallery.
   const galleryPhotos = photos.length > 0 ? photos : (profile?.avatar_url ? [profile.avatar_url] : []);
@@ -107,7 +131,7 @@ export function UserProfileView({ userId, theme, onClose }: UserProfileViewProps
       <div className={`fixed inset-0 z-40 bg-black/20 ${isLowPerfMode ? '' : 'backdrop-blur-[1px]'}`} onClick={onClose} />
 
       <div className={`fixed top-0 right-0 bottom-0 z-50 w-full md:max-w-sm h-full flex flex-col shadow-2xl border-l animate-in slide-in-from-right duration-300 ${
-        theme === 'sweet' ? 'bg-[#FFF0F5] border-[#FFB6C1]' : theme === 'dark' ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-200'
+        theme === 'sweet' ? 'bg-[#FFF0F5] md:bg-[#FFE4E1] border-[#FFB6C1]' : theme === 'dark' ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-200'
       }`}>
         {/* Header */}
         <div className={`p-4 border-b flex items-center gap-3 ${theme === 'sweet' ? 'border-[#FFB6C1]' : theme === 'dark' ? 'border-gray-800' : 'border-gray-200'}`}>
@@ -117,6 +141,7 @@ export function UserProfileView({ userId, theme, onClose }: UserProfileViewProps
           <h2 className={`font-bold text-lg ${theme === 'sweet' ? 'text-[#4B004B]' : theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
             Profile
           </h2>
+          <OfflineBadge theme={theme} mobileOnly />
         </div>
 
         <div className="flex-1 overflow-y-auto p-6">

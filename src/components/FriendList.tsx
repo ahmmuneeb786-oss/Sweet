@@ -6,6 +6,7 @@ import { localDB } from '../db';
 import { useNotify } from '../contexts/NotificationContext';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { usePresence } from '../hooks/usePresence';
+import { OfflineBadge } from './OfflineBadge';
 
 interface FriendListProps {
   theme: 'light' | 'dark' | 'sweet';
@@ -390,12 +391,15 @@ export function FriendList({ theme, onClose, onSelectUser, setActiveChatId, init
       />
       <div className={`fixed right-0 top-0 h-full w-full md:w-96 shadow-2xl z-50 flex flex-col transition-colors duration-300 ${
         theme === 'sweet'
-          ? 'bg-[#FFF0F5] border-l border-[#FFB6C1]'
+          ? 'bg-[#FFF0F5] md:bg-[#FFE4E1] border-l border-[#FFB6C1]'
           : 'bg-white dark:bg-gray-900'
       }`}>
         <div className={`p-6 border-b ${theme === 'sweet' ? 'border-[#FFB6C1]' : 'border-gray-200'}`}>
           <div className="flex items-center justify-between mb-4">
-            <h2 className={`text-xl font-bold ${theme === 'sweet' ? 'text-[#4B004B]' : 'text-gray-900 dark:text-white'}`}>Friends</h2>
+            <div className="flex items-center gap-2">
+              <h2 className={`text-xl font-bold ${theme === 'sweet' ? 'text-[#4B004B]' : 'text-gray-900 dark:text-white'}`}>Friends</h2>
+              <OfflineBadge theme={theme} mobileOnly />
+            </div>
             <button
               onClick={onClose}
               className={`p-2 rounded-full transition-colors ${theme === 'sweet' ? 'hover:bg-[#FFC0CB]/40' : 'hover:bg-gray-100'}`}

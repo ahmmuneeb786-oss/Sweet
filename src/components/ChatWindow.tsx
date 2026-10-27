@@ -12,6 +12,7 @@ import { GifItem } from '../App';
 import { localDB } from '../db';
 import { CallOverlay } from './CallOverlay';
 import { ImageViewerModal } from './ImageViewerModal';
+import { OfflineBadge } from './OfflineBadge';
 import { usePresence } from '../hooks/usePresence';
 import { useBackableState } from '../hooks/useBackableState';
 import { queuePendingMessage, retryPendingMessage, subscribeToSyncEvents } from '../hooks/useOfflineSync';
@@ -85,7 +86,7 @@ function formatLastSeen(lastSeenTimestamp: string | null | undefined): string {
   if (hours < 1) return `last seen ${Math.floor(diff / (1000 * 60))}m ago`;
   if (hours < 24) return `last seen ${hours}h ago`;
   if (days <= 7) return `last seen ${days}d ago`;
-  if (days > 7 && days <= 30) return 'last seen within a week';
+  if (days > 7 && days <= 30) return 'last seen within a month';
   return 'last seen long time ago';
 }
 
@@ -1699,6 +1700,16 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
             </button>
             <ChatMenu chatId={chatInfo.id} onClose={() => { }} theme={theme} onViewProfile={() => setShowProfileView(true)} />
           </div>
+        </div>
+      </div>
+
+      {/* Offline badge floats just under the header (zero-height row, so the
+          message list doesn't shift). The header has no room for it on a
+          phone, and its name/status area is already the profile button.
+          Left-aligned to stay clear of the centered "loading older" spinner. */}
+      <div className="relative h-0 z-20">
+        <div className="absolute top-2 left-4">
+          <OfflineBadge theme={theme} mobileOnly surface="dark" />
         </div>
       </div>
 

@@ -394,46 +394,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  // 1. GLOBAL PRESENCE TRACKER
-  useEffect(() => {
-    if (!user) return;
-
-    // Connect to a global "heartbeat" channel
-    const channel = supabase.channel('global-presence', {
-      config: { presence: { key: user.id } },
-    });
-
-    channel.subscribe(async (status) => {
-      if (status === 'SUBSCRIBED') {
-        // This is the magic part: it broadcasts your status
-        await channel.track({
-          user_id: user.id,
-          online_at: new Date().toISOString(),
-        });
-        
-        // Update the database once just for the "Last Seen" time
-        updateOnlineStatus(true);
-      }
-    });
-
-    return () => {
-      // When you close the tab, this stops, and you appear offline instantly
-      supabase.removeChannel(channel);
-    };
-  }, [user]);
-
-  useEffect(() => {
-  const handleVisibilityChange = () => {
-    if (document.visibilityState === 'visible') {
-      // When user comes back to the tab, we re-sync presence
-      // This forces the "Last seen" to update immediately
-      supabase.getChannels().forEach(ch => ch.track({ updated_at: Date.now() }));
-    }
-  };
-
-  document.addEventListener('visibilitychange', handleVisibilityChange);
-  return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-}, []);
+  // Online presence lives in hooks/usePresence (one shared 'online-users'
+  // channel) and last_seen freshness in hooks/useHeartbeat — both mounted
+  // once in App.tsx. Don't open another presence channel here.
 
   const value = {
     user,

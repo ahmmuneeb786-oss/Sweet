@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { localDB } from '../db';
 import { StrictLock } from './StrictLock';
 import { VaultVerify } from './VaultVerify';
+import { OfflineBadge } from './OfflineBadge';
 import { useNotify } from '../contexts/NotificationContext';
 
 interface LockedChatsPanelProps {
@@ -243,11 +244,15 @@ export function LockedChatsPanel({ theme, onClose, onSelectChat }: LockedChatsPa
           <button onClick={onClose} className="p-1 rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
             <ArrowLeft className={`w-5 h-5 ${theme === 'sweet' ? 'text-[#4B004B]' : 'text-gray-700 dark:text-gray-300'}`} />
           </button>
-          <div className="flex items-center gap-2">
+          {/* flex-wrap: on narrow phones the badge drops below the long title
+              instead of squeezing it. Not mobileOnly: on desktop this panel
+              slides in from the left over ChatList, hiding ChatList's badge. */}
+          <div className="flex items-center gap-x-2 gap-y-1 flex-wrap min-w-0">
             <Lock className="w-4 h-4 text-pink-500" />
             <h2 className={`font-bold text-lg ${theme === 'sweet' ? 'text-[#4B004B]' : 'text-gray-900 dark:text-white'}`}>
               Locked Conversations
             </h2>
+            <OfflineBadge theme={theme} />
           </div>
         </div>
 

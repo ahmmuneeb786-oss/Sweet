@@ -30,6 +30,19 @@ export function useHeartbeat(userId: string | undefined) {
       }
     }, LAST_SEEN_PING_MS);
 
-    return () => clearInterval(intervalId);
+    // Pings are skipped while the tab is hidden, so refresh right away on
+    // return instead of leaving last_seen up to a minute behind. Also ping
+    // on hide: usePresence marks us offline at that same moment, so this
+    // makes "last seen" match when we actually left (best-effort — a tab
+    // closing too fast may not finish the request; the last ping stands).
+    const handleVisibilityChange = () => {
+      pingLastSeen();
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, [userId]);
 }

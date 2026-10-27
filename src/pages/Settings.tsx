@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { PermissionManager } from '../services/PermissionManager';
 import { StrictLock } from '../components/StrictLock';
+import { OfflineBadge } from '../components/OfflineBadge';
 import { localDB } from '../db';
 import { hashSecret } from '../lib/secureHash';
 import { useNotify } from '../contexts/NotificationContext';
@@ -594,6 +595,15 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
     }
   }, [newUsername, profile?.username, profile?.id, isOnline]);
 
+  // Sweet-theme surface levels, modelled on the Theme tab: the panel is dark
+  // pink, each card/option on it is light pink with a soft border, and any
+  // control nested INSIDE a light-pink card flips back to dark pink so it
+  // still stands out. Selected options go white with a hot-pink border.
+  const sweetCard = 'border-2 border-[#FFD1DC] bg-[#FFF0F5]';
+  const sweetCardHover = 'hover:bg-white hover:border-[#FFB6C1]';
+  const sweetCardSelected = 'border-2 border-[#FF1493] bg-white';
+  const sweetInner = 'border border-[#FFB6C1] bg-[#FFE4E1]';
+
   return (
     <>
       <div className="fixed inset-0 bg-black/50 z-40" onClick={onClose} />
@@ -605,7 +615,10 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
           : 'bg-white text-gray-900'
       }`}>
         <div className={`p-6 border-b flex items-center justify-between ${theme === 'sweet' ? 'border-[#FFB6C1]' : 'border-gray-200'}`}>
-          <h2 className={`text-2xl font-bold ${theme === 'sweet' ? 'text-[#4B004B]' : 'text-gray-900'}`}>Settings</h2>
+          <div className="flex items-center gap-2">
+            <h2 className={`text-2xl font-bold ${theme === 'sweet' ? 'text-[#4B004B]' : 'text-gray-900'}`}>Settings</h2>
+            <OfflineBadge theme={theme} mobileOnly surface="dark" />
+          </div>
           <button onClick={onClose} className={`p-2 rounded-full ${theme === 'sweet' ? 'hover:bg-[#FFC0CB]/40' : 'hover:bg-gray-100'}`}>
             <X className="w-5 h-5" />
           </button>
@@ -613,14 +626,14 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
 
         <div className="flex-1 overflow-y-auto">
           {activeTab === 'main' && (
-            <div className={`divide-y ${theme === 'sweet' ? 'divide-[#FFB6C1]' : 'divide-gray-100'}`}>
+            <div className={theme === 'sweet' ? 'p-4 space-y-2' : 'divide-y divide-gray-100'}>
               {settingsSections.map((section) => {
                 const Icon = section.icon;
                 return (
                   <button
                     key={section.id}
                     onClick={() => setActiveTab(section.id as SettingsTab)}
-                    className={`w-full p-4 flex items-center justify-between transition-colors ${theme === 'sweet' ? 'hover:bg-[#FFE4E1]' : 'hover:bg-gray-50'}`}
+                    className={`w-full p-4 flex items-center justify-between transition-colors ${theme === 'sweet' ? `rounded-xl ${sweetCard} ${sweetCardHover}` : 'hover:bg-gray-50'}`}
                   >
                     <div className="flex items-center gap-3">
                       <Icon className={`w-5 h-5 ${theme === 'sweet' ? 'text-[#8B004B]' : 'text-gray-600'}`} />
@@ -635,7 +648,7 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
                   await signOut();
                   onClose();
                 }}
-                className="w-full p-4 flex items-center justify-between hover:bg-red-50 transition-colors text-red-600"
+                className={`w-full p-4 flex items-center justify-between hover:bg-red-50 transition-colors text-red-600 ${theme === 'sweet' ? `rounded-xl ${sweetCard} hover:border-red-200` : ''}`}
               >
                 <div className="flex items-center gap-3">
                   <LogOut className="w-5 h-5" />
@@ -664,7 +677,7 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
                   onChange={(e) => setDisplayName(e.target.value)}
                   className={`w-full px-4 py-2 border rounded-xl focus:ring-2 focus:ring-pink-500 outline-none ${
                     theme === 'sweet'
-                      ? 'border-[#FFB6C1] focus:ring-[#FFB6C1]'
+                      ? 'border-[#FFB6C1] focus:ring-[#FFB6C1] bg-[#FFF0F5]'
                       : ''
                   }`}
                 />
@@ -683,7 +696,7 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
                     value={newUsername}
                     onChange={(e) => setNewUsername(e.target.value)}
                     placeholder="sweet_alex"
-                    className={`w-full pl-10 pr-10 py-3 border rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-transparent outline-none transition-all ${
+                    className={`w-full pl-10 pr-10 py-3 border rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-transparent outline-none transition-all ${theme === 'sweet' ? 'bg-[#FFF0F5]' : ''} ${
                       usernameError ? 'border-red-500' : newUsername && usernameAvailable ? 'border-green-500' : theme === 'sweet' ? 'border-[#FFB6C1]' : 'border-gray-300'
                     }`}
                   />
@@ -735,7 +748,7 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
                   rows={4}
                   className={`w-full px-4 py-2 border rounded-xl focus:ring-2 focus:ring-pink-500 outline-none resize-none ${
                     theme === 'sweet'
-                      ? 'border-[#FFB6C1] focus:ring-[#FFB6C1]'
+                      ? 'border-[#FFB6C1] focus:ring-[#FFB6C1] bg-[#FFF0F5]'
                       : theme === 'dark'
                       ? 'border-gray-700'
                       : 'border-gray-300'
@@ -754,7 +767,7 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
                 </button>
                 <button
                   onClick={() => setActiveTab('main')}
-                  className={`px-4 py-2 rounded-xl transition-colors ${theme === 'sweet' ? 'bg-[#FFC0CB]/40 text-[#4B004B] hover:bg-[#FFB6C1]' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+                  className={`px-4 py-2 rounded-xl transition-colors ${theme === 'sweet' ? `${sweetCard} ${sweetCardHover} text-[#4B004B]` : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
                 >
                   Cancel
                 </button>
@@ -772,10 +785,10 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
       Back
     </button>
 
-    <div className={`p-4 rounded-2xl border ${theme === 'sweet' ? 'bg-[#FFE4E1] border-[#FFB6C1]' : 'bg-gray-50 border-gray-100'}`}>
+    <div className={`p-4 rounded-2xl ${theme === 'sweet' ? sweetCard : 'border bg-gray-50 border-gray-100'}`}>
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-white rounded-lg text-pink-500 shadow-sm">
+          <div className={`p-2 rounded-lg text-pink-500 shadow-sm ${theme === 'sweet' ? sweetInner : 'bg-white'}`}>
             <Smile size={20} />
           </div>
           <div>
@@ -864,7 +877,7 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
                 <select
                   value={privacySettings.lastSeenVisibility}
                   onChange={(e) => setPrivacySettings({ ...privacySettings, lastSeenVisibility: e.target.value })}
-                  className={`w-full px-4 py-2 border rounded-xl focus:ring-2 focus:ring-pink-500 outline-none ${theme === 'sweet' ? 'border-[#FFB6C1] text-[#4B004B] bg-white' : 'border-gray-300'}`}
+                  className={`w-full px-4 py-2 border rounded-xl focus:ring-2 focus:ring-pink-500 outline-none ${theme === 'sweet' ? 'border-[#FFB6C1] text-[#4B004B] bg-[#FFF0F5]' : 'border-gray-300'}`}
                 >
                   <option value="everyone">Everyone</option>
                   <option value="friends">Friends Only</option>
@@ -877,7 +890,7 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
                 <select
                   value={privacySettings.profilePhotoVisibility}
                   onChange={(e) => setPrivacySettings({ ...privacySettings, profilePhotoVisibility: e.target.value })}
-                  className={`w-full px-4 py-2 border rounded-xl focus:ring-2 focus:ring-pink-500 outline-none ${theme === 'sweet' ? 'border-[#FFB6C1] text-[#4B004B] bg-white' : 'border-gray-300'}`}
+                  className={`w-full px-4 py-2 border rounded-xl focus:ring-2 focus:ring-pink-500 outline-none ${theme === 'sweet' ? 'border-[#FFB6C1] text-[#4B004B] bg-[#FFF0F5]' : 'border-gray-300'}`}
                 >
                   <option value="everyone">Everyone</option>
                   <option value="friends">Friends Only</option>
@@ -890,7 +903,7 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
                 <select
                   value={privacySettings.whoCanAdd}
                   onChange={(e) => setPrivacySettings({ ...privacySettings, whoCanAdd: e.target.value })}
-                  className={`w-full px-4 py-2 border rounded-xl focus:ring-2 focus:ring-pink-500 outline-none ${theme === 'sweet' ? 'border-[#FFB6C1] text-[#4B004B] bg-white' : 'border-gray-300'}`}
+                  className={`w-full px-4 py-2 border rounded-xl focus:ring-2 focus:ring-pink-500 outline-none ${theme === 'sweet' ? 'border-[#FFB6C1] text-[#4B004B] bg-[#FFF0F5]' : 'border-gray-300'}`}
                 >
                   <option value="everyone">Everyone</option>
                   <option value="friends">Friends Only</option>
@@ -918,9 +931,9 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
                 Back
               </button>
 
-              <div className="p-4 bg-white rounded-2xl border border-pink-100 flex items-center justify-between shadow-sm mt-4">
+              <div className={`p-4 rounded-2xl flex items-center justify-between shadow-sm mt-4 ${theme === 'sweet' ? sweetCard : 'bg-white border border-pink-100'}`}>
                <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-pink-50 flex items-center justify-center text-pink-500 text-lg">
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-pink-500 text-lg ${theme === 'sweet' ? sweetInner : 'bg-pink-50'}`}>
                   🍬
                 </div>
                 <div className="flex flex-col">
@@ -946,7 +959,7 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
               "Receive a sweet little notification banner whenever someone messages you, even if your browser tab is entirely closed."
         </p>
 
-              <label className={`flex items-center justify-between p-3 rounded-xl ${theme === 'sweet' ? 'bg-[#FFE4E1]' : 'bg-gray-50'}`}>
+              <label className={`flex items-center justify-between p-3 rounded-xl ${theme === 'sweet' ? sweetCard : 'bg-gray-50'}`}>
                 <span className={`font-medium ${theme === 'sweet' ? 'text-[#4B004B]' : 'text-gray-700'}`}>Message Notifications</span>
                 <input
                   type="checkbox"
@@ -956,7 +969,7 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
                 />
               </label>
 
-              <label className={`flex items-center justify-between p-3 rounded-xl ${theme === 'sweet' ? 'bg-[#FFE4E1]' : 'bg-gray-50'}`}>
+              <label className={`flex items-center justify-between p-3 rounded-xl ${theme === 'sweet' ? sweetCard : 'bg-gray-50'}`}>
                 <span className={`font-medium ${theme === 'sweet' ? 'text-[#4B004B]' : 'text-gray-700'}`}>Friend Requests</span>
                 <input
                   type="checkbox"
@@ -966,7 +979,7 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
                 />
               </label>
 
-              <label className={`flex items-center justify-between p-3 rounded-xl ${theme === 'sweet' ? 'bg-[#FFE4E1]' : 'bg-gray-50'}`}>
+              <label className={`flex items-center justify-between p-3 rounded-xl ${theme === 'sweet' ? sweetCard : 'bg-gray-50'}`}>
                 <span className={`font-medium ${theme === 'sweet' ? 'text-[#4B004B]' : 'text-gray-700'}`}>Call Notifications</span>
                 <input
                   type="checkbox"
@@ -976,7 +989,7 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
                 />
               </label>
 
-              <label className={`flex items-center justify-between p-3 rounded-xl border-2 ${theme === 'sweet' ? 'bg-[#FFE4E1] border-[#FFB6C1]' : 'bg-gray-50 border-gray-200'}`}>
+              <label className={`flex items-center justify-between p-3 rounded-xl border-2 ${theme === 'sweet' ? 'bg-[#FFF0F5] border-[#FFB6C1]' : 'bg-gray-50 border-gray-200'}`}>
                 <span className={`font-medium ${theme === 'sweet' ? 'text-[#4B004B]' : 'text-gray-700'}`}>Mute All</span>
                 <input
                   type="checkbox"
@@ -1038,7 +1051,7 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
                 <label className={`block text-sm font-medium mb-3 ${theme === 'sweet' ? 'text-[#8B004B]' : 'text-gray-700'}`}>Chat Themes</label>
                 <div className="space-y-2">
                   {['love', 'best_friend', 'friend', 'default'].map((t) => (
-                    <div key={t} className={`p-3 border rounded-xl ${theme === 'sweet' ? 'border-[#FFB6C1] bg-[#FFF0F5]' : 'border-gray-200 bg-gray-50'}`}>
+                    <div key={t} className={`p-3 rounded-xl ${theme === 'sweet' ? sweetCard : 'border border-gray-200 bg-gray-50'}`}>
                       <p className={`font-medium capitalize ${theme === 'sweet' ? 'text-[#4B004B]' : 'text-gray-700'}`}>{t} Theme</p>
                     </div>
                   ))}
@@ -1059,7 +1072,7 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
     </button>
 
     {/* Sweetened Storage Display Card */}
-    <div className="relative overflow-hidden bg-gradient-to-br from-pink-50 via-purple-50 to-pink-100/50 border border-pink-200/60 p-5 rounded-2xl shadow-sm backdrop-blur-sm">
+    <div className={`relative overflow-hidden p-5 rounded-2xl shadow-sm backdrop-blur-sm ${theme === 'sweet' ? sweetCard : 'bg-gradient-to-br from-pink-50 via-purple-50 to-pink-100/50 border border-pink-200/60'}`}>
       {/* Decorative background candy element */}
       <div className="absolute -right-2 -bottom-2 text-6xl opacity-10 select-none pointer-events-none transform rotate-12">
         🍬
@@ -1091,7 +1104,7 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
     </button>
     
     {/* Cozy Helper Text */}
-    <div className="bg-pink-50/30 border border-dashed border-pink-200/60 rounded-xl p-3">
+    <div className={`border border-dashed rounded-xl p-3 ${theme === 'sweet' ? 'bg-[#FFF0F5] border-[#FFB6C1]' : 'bg-pink-50/30 border-pink-200/60'}`}>
       <p className="text-center text-[11px] text-pink-600/70 leading-relaxed">
         💝 <strong>No worries:</strong> Your chats live safely on our servers forever — clearing local storage just re-downloads them next time you're online. Messages you're still waiting to send are never touched.
       </p>
@@ -1112,7 +1125,7 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
       <span className="text-sm">Back</span>
     </button>
 
-    <div className="relative overflow-hidden bg-gradient-to-br from-pink-50 via-purple-50 to-pink-100/50 border border-pink-200/60 p-5 rounded-2xl shadow-sm">
+    <div className={`relative overflow-hidden p-5 rounded-2xl shadow-sm ${theme === 'sweet' ? sweetCard : 'bg-gradient-to-br from-pink-50 via-purple-50 to-pink-100/50 border border-pink-200/60'}`}>
       <div className="flex items-center gap-2.5 mb-3">
         <span className="text-base" role="img" aria-label="performance">⚡</span>
         <p className="text-xs font-bold uppercase tracking-wider text-pink-600/80">
@@ -1121,13 +1134,13 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
       </div>
 
       <div className="grid grid-cols-2 gap-3 mb-3">
-        <div className="bg-white/50 rounded-xl p-3">
+        <div className={`rounded-xl p-3 ${theme === 'sweet' ? sweetInner : 'bg-white/50'}`}>
           <p className="text-[10px] font-bold uppercase tracking-wider text-pink-600/60 mb-1">Live FPS</p>
           <p className={`text-2xl font-black ${fps < 40 ? 'text-red-500' : fps < 55 ? 'text-amber-500' : 'text-green-600'}`}>
             {fps}
           </p>
         </div>
-        <div className="bg-white/50 rounded-xl p-3">
+        <div className={`rounded-xl p-3 ${theme === 'sweet' ? sweetInner : 'bg-white/50'}`}>
           <p className="text-[10px] font-bold uppercase tracking-wider text-pink-600/60 mb-1">Device Tier</p>
           <p className="text-2xl font-black capitalize text-[#4B004B]">{deviceTier}</p>
         </div>
@@ -1152,6 +1165,8 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
             className={`flex-1 py-2 rounded-xl text-[11px] font-bold transition-colors ${
               override === opt
                 ? 'bg-pink-500 text-white'
+                : theme === 'sweet'
+                ? `${sweetInner} text-pink-600/70 hover:bg-white`
                 : 'bg-white/60 text-pink-600/70 hover:bg-white'
             }`}
           >
@@ -1162,8 +1177,8 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
     </div>
 
     {/* On-screen FPS overlay toggle */}
-    <div className={`border rounded-2xl p-4 flex items-center justify-between gap-4 ${
-      theme === 'sweet' ? 'bg-[#FFF0F5] border-[#FFB6C1]' : theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white/50 border-pink-200/60'
+    <div className={`rounded-2xl p-4 flex items-center justify-between gap-4 ${
+      theme === 'sweet' ? sweetCard : theme === 'dark' ? 'border bg-gray-800/50 border-gray-700' : 'border bg-white/50 border-pink-200/60'
     }`}>
       <div>
         <p className="text-sm font-bold">Show FPS on screen</p>
@@ -1269,8 +1284,8 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
               {/* Primary Controls Interface */}
               {!showPinModal && !showPasswordModal && (
                 <div className="space-y-3">
-                  <div className={`p-4 rounded-2xl border transition-colors ${
-                    theme === 'sweet' ? 'bg-[#FFC0CB]/20 border-[#FFB6C1]' : theme === 'dark' ? 'bg-gray-800/30 border-gray-800' : 'bg-gray-50 border-gray-200'
+                  <div className={`p-4 rounded-2xl transition-colors ${
+                    theme === 'sweet' ? sweetCard : theme === 'dark' ? 'border bg-gray-800/30 border-gray-800' : 'border bg-gray-50 border-gray-200'
                   }`}>
                     <p className={`text-xs font-medium leading-relaxed ${
                       theme === 'sweet' ? 'text-[#8B004B]' : theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
@@ -1280,15 +1295,15 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
                   </div>
 
                   {/* OPTION 1: REMOVE LOCK PROTECTION */}
-                  <label className={`flex items-center justify-between p-3.5 border rounded-2xl cursor-pointer transition-all ${
+                  <label className={`flex items-center justify-between p-3.5 rounded-2xl cursor-pointer transition-all ${
                     theme === 'sweet'
-                      ? securityType === 'none' ? 'border-[#FF69B4] bg-[#FFC0CB]/10' : 'border-[#FFB6C1] bg-[#FFE4E1]'
+                      ? securityType === 'none' ? sweetCardSelected : `${sweetCard} ${sweetCardHover}`
                       : theme === 'dark'
-                        ? securityType === 'none' ? 'border-gray-600 bg-gray-800' : 'border-gray-800 bg-gray-900/50 hover:border-gray-700'
-                        : securityType === 'none' ? 'border-gray-400 bg-gray-50' : 'border-gray-200 bg-white hover:border-gray-300'
+                        ? securityType === 'none' ? 'border border-gray-600 bg-gray-800' : 'border border-gray-800 bg-gray-900/50 hover:border-gray-700'
+                        : securityType === 'none' ? 'border border-gray-400 bg-gray-50' : 'border border-gray-200 bg-white hover:border-gray-300'
                   }`}>
                     <div className="flex items-center gap-3">
-                      <div className={`text-lg p-2 rounded-xl ${theme === 'dark' ? 'bg-gray-800' : theme === 'sweet' ? 'bg-[#FFC0CB]/40' : 'bg-gray-100'}`}>
+                      <div className={`text-lg p-2 rounded-xl ${theme === 'dark' ? 'bg-gray-800' : theme === 'sweet' ? sweetInner : 'bg-gray-100'}`}>
                         🔓
                       </div>
                       <div className="space-y-0.5">
@@ -1314,15 +1329,15 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
                   </label>
 
                   {/* OPTION 2: THE 4-DIGIT PIN */}
-                  <label className={`flex items-center justify-between p-3.5 border rounded-2xl cursor-pointer transition-all ${
+                  <label className={`flex items-center justify-between p-3.5 rounded-2xl cursor-pointer transition-all ${
                     theme === 'sweet'
-                      ? securityType === 'pin' ? 'border-[#FF69B4] bg-[#FFC0CB]/10' : 'border-[#FFB6C1] bg-[#FFE4E1]'
+                      ? securityType === 'pin' ? sweetCardSelected : `${sweetCard} ${sweetCardHover}`
                       : theme === 'dark'
-                        ? securityType === 'pin' ? 'border-gray-600 bg-gray-800' : 'border-gray-800 bg-gray-900/50 hover:border-gray-700'
-                        : securityType === 'pin' ? 'border-gray-400 bg-gray-50' : 'border-gray-200 bg-white hover:border-gray-300'
+                        ? securityType === 'pin' ? 'border border-gray-600 bg-gray-800' : 'border border-gray-800 bg-gray-900/50 hover:border-gray-700'
+                        : securityType === 'pin' ? 'border border-gray-400 bg-gray-50' : 'border border-gray-200 bg-white hover:border-gray-300'
                   }`}>
                     <div className="flex items-center gap-3">
-                      <div className={`text-lg p-2 rounded-xl ${theme === 'dark' ? 'bg-gray-800' : theme === 'sweet' ? 'bg-[#FFC0CB]/40' : 'bg-gray-100'}`}>
+                      <div className={`text-lg p-2 rounded-xl ${theme === 'dark' ? 'bg-gray-800' : theme === 'sweet' ? sweetInner : 'bg-gray-100'}`}>
                         🔢
                       </div>
                       <div className="space-y-0.5">
@@ -1349,15 +1364,15 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
                   </label>
 
                   {/* OPTION 3: THE COMPACT TEXT PASSWORD PROTECTOR */}
-                  <label className={`flex items-center justify-between p-3.5 border rounded-2xl cursor-pointer transition-all ${
+                  <label className={`flex items-center justify-between p-3.5 rounded-2xl cursor-pointer transition-all ${
                     theme === 'sweet'
-                      ? securityType === 'password' ? 'border-[#FF69B4] bg-[#FFC0CB]/10' : 'border-[#FFB6C1] bg-[#FFE4E1]'
+                      ? securityType === 'password' ? sweetCardSelected : `${sweetCard} ${sweetCardHover}`
                       : theme === 'dark'
-                        ? securityType === 'password' ? 'border-gray-600 bg-gray-800' : 'border-gray-800 bg-gray-900/50 hover:border-gray-700'
-                        : securityType === 'password' ? 'border-gray-400 bg-gray-50' : 'border-gray-200 bg-white hover:border-gray-300'
+                        ? securityType === 'password' ? 'border border-gray-600 bg-gray-800' : 'border border-gray-800 bg-gray-900/50 hover:border-gray-700'
+                        : securityType === 'password' ? 'border border-gray-400 bg-gray-50' : 'border border-gray-200 bg-white hover:border-gray-300'
                   }`}>
                     <div className="flex items-center gap-3">
-                      <div className={`text-lg p-2 rounded-xl ${theme === 'dark' ? 'bg-gray-800' : theme === 'sweet' ? 'bg-[#FFC0CB]/40' : 'bg-gray-100'}`}>
+                      <div className={`text-lg p-2 rounded-xl ${theme === 'dark' ? 'bg-gray-800' : theme === 'sweet' ? sweetInner : 'bg-gray-100'}`}>
                         🔏
                       </div>
                       <div className="space-y-0.5">
@@ -1383,16 +1398,16 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
                   </label>
 
                   {/* OPTION 4: BIOMETRIC RECOGNITION PANEL */}
-                  <div className={`p-3.5 border rounded-2xl transition-all space-y-3 ${
+                  <div className={`p-3.5 rounded-2xl transition-all space-y-3 ${
                     theme === 'sweet'
-                      ? securityType === 'biometric' ? 'border-[#FF69B4] bg-[#FFC0CB]/10' : 'border-[#FFB6C1] bg-[#FFE4E1]'
+                      ? securityType === 'biometric' ? sweetCardSelected : sweetCard
                       : theme === 'dark'
-                        ? securityType === 'biometric' ? 'border-gray-600 bg-gray-800/40' : 'border-gray-800 bg-gray-900/50'
-                        : securityType === 'biometric' ? 'border-gray-400 bg-gray-50' : 'border-gray-200 bg-white'
+                        ? securityType === 'biometric' ? 'border border-gray-600 bg-gray-800/40' : 'border border-gray-800 bg-gray-900/50'
+                        : securityType === 'biometric' ? 'border border-gray-400 bg-gray-50' : 'border border-gray-200 bg-white'
                   }`}>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
-                        <div className={`text-lg p-2 rounded-xl ${theme === 'dark' ? 'bg-gray-800' : theme === 'sweet' ? 'bg-[#FFC0CB]/40' : 'bg-gray-100'}`}>
+                        <div className={`text-lg p-2 rounded-xl ${theme === 'dark' ? 'bg-gray-800' : theme === 'sweet' ? sweetInner : 'bg-gray-100'}`}>
                           🧬
                         </div>
                         <div className="space-y-0.5">
@@ -1433,7 +1448,7 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
                         }}
                         className={`p-3 text-left rounded-xl border flex flex-col gap-1 transition-all ${
                           theme === 'sweet'
-                            ? securityType === 'biometric' && profile?.chat_biometric_type === 'face' ? 'border-[#FF69B4] bg-[#FFE4E1]' : 'border-[#FFB6C1] bg-white/40'
+                            ? securityType === 'biometric' && profile?.chat_biometric_type === 'face' ? 'border-[#FF1493] bg-white' : 'border-[#FFB6C1] bg-[#FFE4E1] hover:bg-white'
                             : theme === 'dark'
                               ? securityType === 'biometric' && profile?.chat_biometric_type === 'face' ? 'border-gray-500 bg-gray-900' : 'border-gray-700 bg-gray-800/30'
                               : securityType === 'biometric' && profile?.chat_biometric_type === 'face' ? 'border-gray-400 bg-gray-100' : 'border-gray-200 bg-white'
@@ -1474,7 +1489,7 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
                         }}
                         className={`p-3 text-left rounded-xl border flex flex-col gap-1 transition-all ${
                           theme === 'sweet'
-                            ? securityType === 'biometric' && profile?.chat_biometric_type === 'fingerprint' ? 'border-[#FF69B4] bg-[#FFE4E1]' : 'border-[#FFB6C1] bg-white/40'
+                            ? securityType === 'biometric' && profile?.chat_biometric_type === 'fingerprint' ? 'border-[#FF1493] bg-white' : 'border-[#FFB6C1] bg-[#FFE4E1] hover:bg-white'
                             : theme === 'dark'
                               ? securityType === 'biometric' && profile?.chat_biometric_type === 'fingerprint' ? 'border-gray-500 bg-gray-900' : 'border-gray-700 bg-gray-800/30'
                               : securityType === 'biometric' && profile?.chat_biometric_type === 'fingerprint' ? 'border-gray-400 bg-gray-100' : 'border-gray-200 bg-white'
@@ -1495,8 +1510,8 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
 
               {/* INLINE PIN NUMPAD DESIGN VIEW */}
               {showPinModal && (
-                <div className={`text-center space-y-4 py-4 rounded-2xl border p-4 shadow-sm animate-scaleIn transition-colors ${
-                  theme === 'sweet' ? 'bg-[#FFE4E1] border-[#FFB6C1]' : theme === 'dark' ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-200'
+                <div className={`text-center space-y-4 py-4 rounded-2xl p-4 shadow-sm animate-scaleIn transition-colors ${
+                  theme === 'sweet' ? sweetCard : theme === 'dark' ? 'border bg-gray-900 border-gray-800' : 'border bg-white border-gray-200'
                 }`}>
                   <p className={`text-sm font-black ${theme === 'sweet' ? 'text-[#FF69B4]' : theme === 'dark' ? 'text-gray-200' : 'text-gray-800'}`}>
                     {pinStep === 'enter' ? 'Create Secure Vault PIN 🔑' : 'Confirm Your Secure Vault PIN 🌸'}
@@ -1521,7 +1536,7 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
                         key={num}
                         onClick={() => handlePinKeyPress(num.toString())}
                         className={`h-11 w-11 mx-auto flex items-center justify-center rounded-full font-bold transition-all text-sm active:scale-90 border ${
-                          theme === 'sweet' ? 'bg-[#FFC0CB]/40 border-[#FFB6C1] text-[#4B004B] hover:border-[#FF69B4]' : theme === 'dark' ? 'bg-gray-800 border-gray-700 text-gray-200 hover:border-gray-500' : 'bg-gray-50 border border-gray-200 text-gray-700 hover:border-gray-400'
+                          theme === 'sweet' ? 'bg-[#FFE4E1] border-[#FFB6C1] text-[#4B004B] hover:border-[#FF69B4] hover:bg-white' : theme === 'dark' ? 'bg-gray-800 border-gray-700 text-gray-200 hover:border-gray-500' : 'bg-gray-50 border border-gray-200 text-gray-700 hover:border-gray-400'
                         }`}
                       >
                         {num}
@@ -1536,7 +1551,7 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
                     <button
                       onClick={() => handlePinKeyPress("0")}
                       className={`h-11 w-11 mx-auto flex items-center justify-center rounded-full font-bold text-sm active:scale-90 border ${
-                        theme === 'sweet' ? 'bg-[#FFC0CB]/40 border-[#FFB6C1] text-[#4B004B]' : theme === 'dark' ? 'bg-gray-800 border-gray-700 text-gray-200' : 'bg-gray-50 border border-gray-200 text-gray-700'
+                        theme === 'sweet' ? 'bg-[#FFE4E1] border-[#FFB6C1] text-[#4B004B] hover:border-[#FF69B4] hover:bg-white' : theme === 'dark' ? 'bg-gray-800 border-gray-700 text-gray-200' : 'bg-gray-50 border border-gray-200 text-gray-700'
                       }`}
                     >
                       0
@@ -1557,8 +1572,8 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
 
               {/* ALPHANUMERIC PASSWORD VIEW MODAL */}
               {showPasswordModal && (
-                <div className={`rounded-2xl border p-5 shadow-sm space-y-4 animate-scaleIn transition-colors ${
-                  theme === 'sweet' ? 'bg-[#FFE4E1] border-[#FFB6C1]' : theme === 'dark' ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-200'
+                <div className={`rounded-2xl p-5 shadow-sm space-y-4 animate-scaleIn transition-colors ${
+                  theme === 'sweet' ? sweetCard : theme === 'dark' ? 'border bg-gray-900 border-gray-800' : 'border bg-white border-gray-200'
                 }`}>
                   <div className="space-y-1">
                     <h4 className={`text-sm font-black ${theme === 'sweet' ? 'text-[#FF69B4]' : theme === 'dark' ? 'text-gray-200' : 'text-gray-800'}`}>Establish Alphanumeric Password</h4>
@@ -1570,7 +1585,7 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
                     value={tempPassword}
                     onChange={(e) => setTempPassword(e.target.value)}
                     className={`w-full px-4 py-2.5 rounded-xl text-sm outline-none transition-all border ${
-                      theme === 'sweet' ? 'bg-[#FFC0CB]/20 border-[#FFB6C1] focus:ring-2 focus:ring-[#FF69B4] text-[#4B004B]' : theme === 'dark' ? 'bg-gray-800 border-gray-700 focus:ring-2 focus:ring-gray-600 text-gray-100' : 'bg-gray-50 border border-gray-200 focus:ring-2 focus:ring-gray-400 focus:bg-white text-gray-800'
+                      theme === 'sweet' ? 'bg-[#FFE4E1] border-[#FFB6C1] focus:ring-2 focus:ring-[#FF69B4] text-[#4B004B]' : theme === 'dark' ? 'bg-gray-800 border-gray-700 focus:ring-2 focus:ring-gray-600 text-gray-100' : 'bg-gray-50 border border-gray-200 focus:ring-2 focus:ring-gray-400 focus:bg-white text-gray-800'
                     }`}
                   />
                   <div className="flex gap-2 pt-1">
@@ -1596,7 +1611,7 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
                       type="button"
                       onClick={() => setShowPasswordModal(false)}
                       className={`px-4 py-2 rounded-xl text-xs font-bold transition-colors ${
-                        theme === 'sweet' ? 'bg-[#FFC0CB]/40 hover:bg-[#FFB6C1] text-[#4B004B]' : theme === 'dark' ? 'bg-gray-800 hover:bg-gray-700 text-gray-300' : 'bg-gray-100 hover:bg-gray-200 text-gray-600'
+                        theme === 'sweet' ? `${sweetInner} hover:bg-white text-[#4B004B]` : theme === 'dark' ? 'bg-gray-800 hover:bg-gray-700 text-gray-300' : 'bg-gray-100 hover:bg-gray-200 text-gray-600'
                       }`}
                     >
                       Cancel

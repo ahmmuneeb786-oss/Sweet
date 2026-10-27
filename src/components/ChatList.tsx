@@ -10,6 +10,7 @@ import { usePerformance } from '../contexts/PerformanceContext';
 import { formatMessagePreview } from '../lib/messagePreview';
 import { loadHiddenMessageIds } from '../lib/hiddenMessages';
 import { onChatListRefresh } from '../hooks/chatListRefresh';
+import { OfflineBadge } from './OfflineBadge';
 
 interface Chat {
   id: string;
@@ -53,7 +54,6 @@ export function ChatList({ selectedChatId, onSelectChat, onShowProfile, onShowFr
   const [searchQuery, setSearchQuery] = useState('');
   const [showMenu, setShowMenu] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [isOnline, setIsOnline] = useState(navigator.onLine); // 🌐 Track network variations
   // The realtime subscription is created once; this ref lets its INSERT handler
   // read the CURRENTLY open chat (so a message for the open chat isn't counted
   // as unread).
@@ -94,19 +94,16 @@ export function ChatList({ selectedChatId, onSelectChat, onShowProfile, onShowFr
     hydrateMyProfile();
   }, [user?.id, profile]);
 
-  // Listen to network status modifications live
+  // Refresh the list the moment the connection returns. (The "Offline Mode"
+  // badge tracks the network state itself — see OfflineBadge.)
   useEffect(() => {
     const handleOnline = () => {
-      setIsOnline(true);
       loadChats(); // 🔄 Quietly refresh and upgrade metadata the second connection returns
     };
-    const handleOffline = () => setIsOnline(false);
 
     window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
     return () => {
       window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
     };
   }, [user]);
 
@@ -181,19 +178,19 @@ export function ChatList({ selectedChatId, onSelectChat, onShowProfile, onShowFr
             // of delivery_status='read' updates.
             setChats((currentChats) => {
               if (!currentChats.some((c) => c.lastMessage?.id === updated.id)) return currentChats;
-              return currentChats.map((chat) =>
-                chat.lastMessage?.id === updated.id
-                  ? {
-                      ...chat,
-                      lastMessage: {
-                        ...chat.lastMessage,
-                        content: updated.content,
-                        type: updated.type,
-                        is_deleted: updated.is_deleted
-                      }
-                    }
-                  : chat
-              );
+              return currentChats.map((chat) => {
+                const last = chat.lastMessage;
+                if (!last || last.id !== updated.id) return chat;
+                return {
+                  ...chat,
+                  lastMessage: {
+                    ...last,
+                    content: updated.content,
+                    type: updated.type,
+                    is_deleted: updated.is_deleted
+                  }
+                };
+              });
             });
             // Cache write keyed by chat_id (the indexed primary key), guarded
             // so we only touch the row when this really is its last message.
@@ -206,36 +203,6 @@ export function ChatList({ selectedChatId, onSelectChat, onShowProfile, onShowFr
                 }).catch(() => {});
               }
             }).catch(() => {});
-          }
-        )
-        .on(
-          'postgres_changes',
-          { event: 'UPDATE', schema: 'public', table: 'profiles' },
-          (payload) => {
-            const updatedProfile = payload.new;
-
-            setChats((currentChats) => {
-              return currentChats.map((chat) => {
-                if (chat.type === 'direct' && chat.otherUser && chat.otherUser.id === updatedProfile.id) {
-                  return {
-                    ...chat,
-                    otherUser: {
-                      ...chat.otherUser,
-                      last_seen: updatedProfile.last_seen
-                    }
-                  };
-                }
-                return chat;
-              });
-            });
-
-            // Online/offline itself now comes from usePresence, not last_seen —
-            // this is just keeping the cached "last seen" value from going stale.
-            localDB.chats
-              .where('other_user_id')
-              .equals(updatedProfile.id)
-              .modify({ other_user_last_seen: updatedProfile.last_seen })
-              .catch(() => {});
           }
         )
         .subscribe();
@@ -251,6 +218,55 @@ export function ChatList({ selectedChatId, onSelectChat, onShowProfile, onShowFr
       };
     }
   }, [user]);
+
+  // Keep chat partners' cached last_seen fresh. Online/offline itself comes
+  // from usePresence — this only stops the "last seen" value going stale.
+  // Subscribed to OUR partners only: an unfiltered profiles subscription
+  // delivered every visible user's 60s heartbeat to every client.
+  // Sorted + joined so re-sorting the list on a new message doesn't resubscribe.
+  const partnerIdsKey = Array.from(
+    new Set(chats.filter((c) => c.type === 'direct' && c.otherUser).map((c) => c.otherUser!.id))
+  ).sort().join(',');
+
+  useEffect(() => {
+    if (!user || !partnerIdsKey) return;
+    const partnerIds = partnerIdsKey.split(',');
+
+    // Realtime's `in` filter accepts at most 100 values; past that, fall back
+    // to the unfiltered stream and ignore non-partners in the handler.
+    const filter = partnerIds.length <= 100 ? `id=in.(${partnerIdsKey})` : undefined;
+    const partnerSet = new Set(partnerIds);
+
+    const channel = supabase
+      .channel('chat-list-partner-profiles')
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'profiles', ...(filter ? { filter } : {}) },
+        (payload) => {
+          const updatedProfile = payload.new;
+          if (!partnerSet.has(updatedProfile.id)) return;
+
+          setChats((currentChats) =>
+            currentChats.map((chat) =>
+              chat.type === 'direct' && chat.otherUser && chat.otherUser.id === updatedProfile.id
+                ? { ...chat, otherUser: { ...chat.otherUser, last_seen: updatedProfile.last_seen } }
+                : chat
+            )
+          );
+
+          localDB.chats
+            .where('other_user_id')
+            .equals(updatedProfile.id)
+            .modify({ other_user_last_seen: updatedProfile.last_seen })
+            .catch(() => {});
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user, partnerIdsKey]);
 
   // Opening a chat clears its unread badge (the messages get marked read in
   // ChatWindow). Reflect that in the list + cache immediately.
@@ -466,7 +482,7 @@ export function ChatList({ selectedChatId, onSelectChat, onShowProfile, onShowFr
   }
 
   return (
-    <div className={`w-full md:w-96 h-full p-4 border-b sticky top-0 z-10 flex flex-col bg-[#FFE4E1]/90 ${isLowPerfMode ? '' : 'backdrop-blur-md'} flex-shrink-0 ${theme === 'sweet' ? 'bg-[#FFF0F5] border-[#FFB6C1]' : 'bg-white dark:bg-gray-900 border-gray-200'}`}>
+    <div className={`w-full md:w-96 h-full p-4 border-b sticky top-0 z-10 flex flex-col ${isLowPerfMode ? '' : 'backdrop-blur-md'} flex-shrink-0 ${theme === 'sweet' ? 'bg-[#FFF0F5] border-[#FFB6C1]' : 'bg-white dark:bg-gray-900 border-gray-200'}`}>
       <div className="md:hidden absolute inset-0 overflow-hidden pointer-events-none z-0">
         {/* FloatingHearts intentionally NOT rendered here — Dashboard (this
             component's parent, always mounted alongside it) already renders
@@ -491,10 +507,13 @@ export function ChatList({ selectedChatId, onSelectChat, onShowProfile, onShowFr
               )}
             </div>
             <div className="flex-1">
-              <h1 className={`text-xl font-bold flex items-center gap-2 whitespace-nowrap ${theme === 'sweet' ? 'text-[#4B004B]' : 'text-gray-900 dark:text-white'}`}>
-                <Heart className="w-5 h-5 text-pink-500 fill-pink-500 shrink-0" />
-                Sweet
-              </h1>
+              <div className="flex items-center gap-2">
+                <h1 className={`text-xl font-bold flex items-center gap-2 whitespace-nowrap ${theme === 'sweet' ? 'text-[#4B004B]' : 'text-gray-900 dark:text-white'}`}>
+                  <Heart className="w-5 h-5 text-pink-500 fill-pink-500 shrink-0" />
+                  Sweet
+                </h1>
+                <OfflineBadge theme={theme} />
+              </div>
               <p className={`text-xs ${theme === 'sweet' ? 'text-[#8B004B]' : 'text-gray-500 dark:text-gray-400'}`}>@{profile?.username || myProfile?.username}</p>
             </div>
           </div>
