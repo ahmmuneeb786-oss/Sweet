@@ -21,6 +21,11 @@ export interface LocalChat {
   other_user_name?: string;
   other_user_avatar?: string | null;
   other_user_last_seen?: string | null;
+
+  // true = lives in the Locked Chats vault, never in the main list. Every
+  // write must carry it over (use localDB.upsertChat) or a locked chat
+  // leaks back onto the main feed.
+  is_locked?: boolean;
 }
 
 // Structure for caching user profiles locally
@@ -81,11 +86,38 @@ export interface PendingMessage {
   last_error?: string | null;
 }
 
+// The signed-in user's own vault_settings row, cached so locked chats can
+// still be unlocked offline. Only ever this device's own user.
+export interface LocalVault {
+  user_id: string;
+  // The MAIN lock — asked for first. 'none' = locked chats open with a tap.
+  chat_security_type: 'none' | 'pin' | 'password' | 'face' | 'fingerprint';
+  // Also accept any other saved lock (see getSavedMethods in lib/vault).
+  allow_other_methods: boolean;
+  pin_hash: string | null;
+  pin_salt: string | null;
+  password_hash: string | null;
+  password_salt: string | null;
+  face_descriptor: number[] | null;
+  // App Lock (asked when the app opens). face_lock_enabled is the master
+  // on/off — named from when the face was its only method. The backup
+  // password is required to turn it on, so it can never trap the user.
+  face_lock_enabled: boolean;
+  app_lock_face: boolean;
+  app_lock_fingerprint: boolean;
+  app_password_hash: string | null;
+  app_password_salt: string | null;
+  // WebAuthn credential ids, one per device that registered a fingerprint.
+  fingerprint_credential_ids: string[];
+  cached_at: string;
+}
+
 class OfflineChatDatabase extends Dexie {
   chats!: Table<LocalChat>;
   messages!: Table<LocalMessage, string>;
   profiles!: Table<LocalProfile, string>;
   pendingMessages!: Table<PendingMessage, string>;
+  vault!: Table<LocalVault, string>;
 
   constructor() {
     super('WhatsAppOfflineDB');
@@ -112,6 +144,25 @@ class OfflineChatDatabase extends Dexie {
       profiles: 'id, username',
       pendingMessages: 'id, chat_id, created_at'
     });
+
+    // v5: vault security settings moved out of the publicly readable
+    // profiles table into vault_settings — cached here for offline unlock.
+    this.version(5).stores({
+      chats: 'id, type, other_user_id',
+      messages: 'id, chat_id, created_at',
+      profiles: 'id, username',
+      pendingMessages: 'id, chat_id, created_at',
+      vault: 'user_id'
+    });
+  }
+
+  // put() replaces the whole row — so a plain put() from a screen that
+  // doesn't know about the vault (opening a chat, starting one from a
+  // friend) would drop is_locked and put a locked chat back in the main
+  // list. This keeps the existing flag unless the caller sets it explicitly.
+  async upsertChat(chat: LocalChat) {
+    const existing = await this.chats.get(chat.id);
+    return await this.chats.put({ ...chat, is_locked: chat.is_locked ?? existing?.is_locked ?? false });
   }
 
   // Pass { pendingSync: true } when saving an edit made offline (or one that
@@ -196,6 +247,7 @@ class OfflineChatDatabase extends Dexie {
       this.messages.clear(),
       this.profiles.clear(),
       this.pendingMessages.clear(),
+      this.vault.clear(),
     ]);
   }
 }

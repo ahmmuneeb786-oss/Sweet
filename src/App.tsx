@@ -11,6 +11,7 @@ import { initializeDictionary } from './predictionService';
 import { Heart, Paperclip, X, Search } from 'lucide-react';
 import { FloatingHearts } from './components/FloatingHearts';
 import { StrictLock } from './components/StrictLock';
+import { AppLockGate } from './components/AppLockGate';
 import { supabase } from './lib/supabase';
 import { useHeartbeat } from './hooks/useHeartbeat';
 import { usePresence } from './hooks/usePresence';
@@ -19,6 +20,21 @@ import { useMessageSync, catchUpMessages, waitAtMost } from './hooks/useMessageS
 import { useChatsReady } from './hooks/useChatsReady';
 import { localDB } from './db';
 import { preloadFaceModels } from './lib/faceModels';
+import { DEFAULT_VAULT, getCachedVault, onVaultChange, saveVault, type VaultSettings } from './lib/vault';
+import { getAppLockMethods } from './lib/appLock';
+import { getDeviceFingerprintId } from './lib/fingerprint';
+import { hasCamera } from './lib/camera';
+
+// Face models are a large download. Only fetch them when the App Lock will
+// actually use the face on this device — and only hold the splash for them
+// when the face scan is the first thing shown (not just a backup behind
+// fingerprint or password, where they load quietly in the background).
+async function preloadFaceModelsIfUsed(uid: string, vault: VaultSettings | null) {
+  if (!vault) return;
+  const methods = getAppLockMethods(vault, vault.face_descriptor, getDeviceFingerprintId(uid), await hasCamera());
+  if (methods[0] === 'face') await preloadFaceModels();
+  else if (methods.includes('face')) preloadFaceModels().catch(() => {});
+}
 import { VisitTrackingProvider, useVisitTracking } from './contexts/VisitTrackingContext';
 
 // Define the interface for our GIF objects
@@ -235,8 +251,8 @@ function AppContent() {
       }
       setFaceLockEnabled(true);
       setIsAppLocked(true);
-      // Still need models ready before it's safe to show the scanner.
-      await preloadFaceModels();
+      // Models ready before the scanner shows — but only if it will.
+      await preloadFaceModelsIfUsed(uid, await getCachedVault(uid));
       setProfileSyncedFor(uid);
     }
 
@@ -252,11 +268,12 @@ function AppContent() {
       // which is exactly what was locking brand-new accounts — with no face
       // ever registered — into an unpassable scanner. maybeSingle() just
       // returns null in that case instead, which we treat as "not locked"
-      // below, since a user with no profile yet can't have this enabled.
+      // below. Same for a user who never touched lock settings at all: they
+      // simply have no vault_settings row (owner-only table — see lib/vault).
       const { data, error } = await supabase
-        .from('profiles')
-        .select('face_descriptor, face_lock_enabled')
-        .eq('id', uid)
+        .from('vault_settings')
+        .select('face_descriptor, face_lock_enabled, app_lock_face, app_lock_fingerprint, fingerprint_credential_ids')
+        .eq('user_id', uid)
         .maybeSingle();
 
       if (error) throw error;
@@ -292,7 +309,7 @@ function AppContent() {
         // without awaiting it, so the splash still closed early for anyone
         // whose local cache came back empty (new device, cleared storage,
         // or a write that hadn't landed yet).
-        await preloadFaceModels();
+        await preloadFaceModelsIfUsed(uid, { ...DEFAULT_VAULT, ...data } as VaultSettings);
       }
 
       // Don't reveal the app until the launch catch-up has landed, so the
@@ -332,6 +349,21 @@ function AppContent() {
   // therefore re-flash profileSyncLoading) on every tab refocus.
 }, [user?.id, loading]);
 
+  // Keep the in-memory face-lock state current when it changes mid-session
+  // (e.g. a face registered from Locked Chats settings) — otherwise the
+  // app-lock toggle keeps the old face until a reload. Deliberately never
+  // touches isAppLocked: a setting change shouldn't lock/unlock the app.
+  useEffect(() => {
+    if (!user?.id) return;
+    const uid = user.id;
+    return onVaultChange((changedUid, vault) => {
+      if (changedUid !== uid) return;
+      setSavedDescriptor(vault.face_descriptor);
+      setIsFaceRegistered(!!vault.face_descriptor);
+      setFaceLockEnabled(vault.face_lock_enabled);
+    });
+  }, [user?.id]);
+
   const handleCloseWelcome = () => {
   setShowLetter(false);
   // Save to browser memory permanently
@@ -360,17 +392,10 @@ useEffect(() => {
   }, [theme]);
 
   const updateFaceDescriptor = async (userId: string, descriptor: number[]) => {
-  const { error } = await supabase
-    .from('profiles')
-    .update({ face_descriptor: descriptor, face_lock_enabled: true })
-    .eq('id', userId);
-
-  if (error) throw error;
-
-  // Written to local storage immediately too — not just the database —
-  // so the very next scan (and every one after, including offline) reads
-  // from the device instantly instead of waiting on a network round trip.
-  await localDB.saveFaceLockDataLocally(userId, descriptor, true);
+  // saveVault also writes the device copy immediately — not just the
+  // database — so the very next scan (and every one after, including
+  // offline) reads from the device instantly instead of a network round trip.
+  await saveVault(userId, { face_descriptor: descriptor, face_lock_enabled: true });
 
   // Without this, savedDescriptor stayed null in memory until the next
   // full reload — meaning toggling face-lock off then on again in the
@@ -600,12 +625,12 @@ if (loading || profileSyncLoading) {
           otherwise markChatsReady() would never fire and every load would
           sit through the full readyTimedOut window, every single time. */}
       {isAppLocked ? (
-        <StrictLock
-          onUnlock={() => setIsAppLocked(false)}
-          mode="verify"
+        // Fingerprint / face / app password — the password works on every
+        // device, so a PC without a camera can't trap anyone any more.
+        <AppLockGate
           userId={user.id}
-          onSaveDescriptor={updateFaceDescriptor}
-          savedDescriptor={savedDescriptor}
+          purpose="launch"
+          onUnlock={() => setIsAppLocked(false)}
           onSignOut={signOut}
         />
       ) : (

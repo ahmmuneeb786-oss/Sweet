@@ -19,7 +19,15 @@ interface StrictLockProps {
   // A lighter, non-destructive escape — e.g. LockedChatsPanel uses this to
   // just back out to the chat list, rather than signing out of the app.
   onCancel?: () => void;
+  // Verify mode: called once per sustained wrong-face streak, so the vault
+  // can count it against its failed-attempt limit (see lib/vaultAttempts).
+  onMismatch?: () => void;
 }
+
+// Frames are checked every 700ms; this many non-matching frames in a row
+// (~3.5s of a wrong face) count as one failed attempt — a single bad frame
+// (blink, turned head) doesn't.
+const MISMATCH_FRAMES_PER_ATTEMPT = 5;
 
 export const StrictLock = ({ 
   onUnlock, 
@@ -29,9 +37,15 @@ export const StrictLock = ({
   userId,
   onSaveDescriptor,
   onSignOut,
-  onCancel
+  onCancel,
+  onMismatch
 }: StrictLockProps) => {
   const { showError } = useNotify();
+  // The detection loop is a setInterval created once, so it would see a
+  // stale onMismatch — read the latest through a ref instead.
+  const onMismatchRef = useRef(onMismatch);
+  onMismatchRef.current = onMismatch;
+  const mismatchStreakRef = useRef(0);
   const videoRef = useRef<HTMLVideoElement>(null);
   const detectionIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [isModelLoaded, setIsModelLoaded] = useState(false);
@@ -198,6 +212,7 @@ const handleDetection = async () => {
       const distance = faceapi.euclideanDistance(currentDescriptor, targetDescriptor);
 
       if (distance < 0.5) {
+        mismatchStreakRef.current = 0;
         setErrorState(false);
         if (smileValue > 0.85) {
           setFeedback('Identity Verified! Opening...');
@@ -215,6 +230,12 @@ const handleDetection = async () => {
         setFeedback('Identity not recognized 🔒');
         setErrorState(true);
         setIsPulsing(false);
+
+        mismatchStreakRef.current += 1;
+        if (mismatchStreakRef.current >= MISMATCH_FRAMES_PER_ATTEMPT) {
+          mismatchStreakRef.current = 0;
+          onMismatchRef.current?.();
+        }
       }
     } 
   }, 700);
@@ -277,12 +298,15 @@ const stopCamera = () => {
           </p>
         </div>
         
-        {/* Cancel Button (register mode) so the user isn't trapped in settings */}
+        {/* Cancel Button (register mode) so the user isn't trapped in settings.
+            Prefers onCancel: onUnlock means "verified", and callers that act
+            on it (e.g. switching the vault to biometric) must not fire on a
+            cancel. Falls back for callers that only pass onUnlock. */}
         {mode === 'register' && (
-          <button 
+          <button
             onClick={() => {
               stopCamera();
-              onUnlock();
+              (onCancel ?? onUnlock)();
             }}
             className="mt-6 text-pink-400 text-sm font-medium hover:text-pink-600 transition-colors"
           >

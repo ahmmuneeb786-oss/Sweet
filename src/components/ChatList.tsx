@@ -324,9 +324,13 @@ export function ChatList({ selectedChatId, onSelectChat, onShowProfile, onShowFr
       // PHASE 1: Read internal phone storage instantly — this is what makes
       // the list show up immediately on open instead of a blank/loading screen.
       const cachedChats = await localDB.chats.toArray();
+      // Locked chats share this cache with the vault — never show them here.
+      const visibleCachedChats = cachedChats.filter(c => !c.is_locked);
+      // Keyed on the whole cache, not just the visible part: if everything
+      // cached is locked, the list must still update (to empty) offline.
       if (cachedChats.length > 0) {
         hadCache = true;
-        setChats(cachedChats.map(toChat).sort(byRecency));
+        setChats(visibleCachedChats.map(toChat).sort(byRecency));
         setLoading(false);
         markChatsReady();
       } else {
@@ -356,7 +360,9 @@ export function ChatList({ selectedChatId, onSelectChat, onShowProfile, onShowFr
 
       if (!participants || participants.length === 0) {
         setChats([]);
-        await localDB.chats.clear();
+        // Not clear(): locked rows belong to the vault and must survive for
+        // offline use — this query never returns them.
+        await localDB.chats.filter(c => !c.is_locked).delete();
         return;
       }
 
@@ -421,7 +427,10 @@ export function ChatList({ selectedChatId, onSelectChat, onShowProfile, onShowFr
             other_user_id: otherUserObj?.id,
             other_user_name: otherUserObj?.display_name,
             other_user_avatar: otherUserObj?.avatar_url,
-            other_user_last_seen: otherUserObj?.last_seen
+            other_user_last_seen: otherUserObj?.last_seen,
+            // Fetched with is_locked = false, so this also clears a stale
+            // locked flag on a chat that was unlocked from another device.
+            is_locked: false
           };
         })
         .filter((c): c is NonNullable<typeof c> => c !== null);
@@ -429,7 +438,11 @@ export function ChatList({ selectedChatId, onSelectChat, onShowProfile, onShowFr
       // PHASE 3: Write fresh data back to local storage, AND prune anything
       // that's now gone (left/deleted chats) instead of leaving it cached forever.
       const freshIds = new Set(freshLocalChats.map(c => c.id));
-      const staleIds = cachedChats.map(c => c.id).filter(id => !freshIds.has(id));
+      // Locked rows are skipped: this query excludes them on purpose, so
+      // "missing" here doesn't mean gone — the vault prunes its own rows.
+      const staleIds = cachedChats
+        .filter(c => !c.is_locked && !freshIds.has(c.id))
+        .map(c => c.id);
       if (staleIds.length > 0) {
         await localDB.chats.bulkDelete(staleIds);
       }

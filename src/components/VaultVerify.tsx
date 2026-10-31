@@ -1,31 +1,59 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Lock, AlertCircle } from 'lucide-react';
-import { hashSecret } from '../lib/secureHash';
+import { verifyVaultSecret, type SecretKind, type VaultSettings } from '../lib/vault';
+import { attemptsLeftText } from '../lib/vaultAttempts';
 
 interface VaultVerifyProps {
-  mode: 'pin' | 'password';
-  expectedHash: string;
+  // 'app-password' = the App Lock's own backup password.
+  mode: SecretKind;
+  vault: VaultSettings;
   userId: string;
   onUnlock: () => void;
-  onCancel: () => void;
+  // Records the failure against the shared limit; returns tries left
+  // before a lockout (VaultGate swaps in the lockout screen at 0).
+  onFailedAttempt: () => number;
+  // Omitted at app start, where there's nothing to cancel back to.
+  onCancel?: () => void;
 }
 
-export function VaultVerify({ mode, expectedHash, userId, onUnlock, onCancel }: VaultVerifyProps) {
+export function VaultVerify({ mode, vault, userId, onUnlock, onFailedAttempt, onCancel }: VaultVerifyProps) {
   const [value, setValue] = useState('');
   const [error, setError] = useState('');
   const [checking, setChecking] = useState(false);
+  // Ref, not just state: two taps in the same tick both still see the old
+  // `checking` value before React re-renders.
+  const checkingRef = useRef(false);
 
   async function verify(candidate: string) {
+    // One check at a time — the hash takes up to a second, and a second
+    // submit (Enter + click) would otherwise count as two attempts.
+    if (checkingRef.current) return;
+    checkingRef.current = true;
     setChecking(true);
     setError('');
-    const hash = await hashSecret(candidate, userId);
-    if (hash === expectedHash) {
-      onUnlock();
-    } else {
-      setError(mode === 'pin' ? 'Incorrect PIN' : 'Incorrect password');
+    let ok = false;
+    try {
+      ok = await verifyVaultSecret(userId, mode, candidate, vault);
+    } catch (err) {
+      // Without this, a throw left `checking` stuck true and the keypad
+      // permanently disabled.
+      console.error('Vault verification failed:', err);
+      setError('Something went wrong. Please try again.');
       setValue('');
+      checkingRef.current = false;
       setChecking(false);
+      return;
     }
+
+    if (ok) {
+      onUnlock();
+      return;
+    }
+    const attemptsLeft = onFailedAttempt();
+    setError(`${mode === 'pin' ? 'Incorrect PIN' : 'Incorrect password'}. ${attemptsLeftText(attemptsLeft)}`);
+    setValue('');
+    checkingRef.current = false;
+    setChecking(false);
   }
 
   function handleKeyPress(digit: string) {
@@ -40,7 +68,7 @@ export function VaultVerify({ mode, expectedHash, userId, onUnlock, onCancel }: 
       <div className="absolute top-10 flex items-center gap-2 bg-white/50 px-4 py-2 rounded-full backdrop-blur-md border border-white">
         <Lock className="w-4 h-4 text-pink-500" />
         <span className="text-pink-600 text-xs font-bold uppercase tracking-widest">
-          {mode === 'pin' ? 'Enter Vault PIN' : 'Enter Vault Password'}
+          {mode === 'pin' ? 'Enter Vault PIN' : mode === 'password' ? 'Enter Vault Password' : 'Enter App Password'}
         </span>
       </div>
 
@@ -75,8 +103,9 @@ export function VaultVerify({ mode, expectedHash, userId, onUnlock, onCancel }: 
                 </button>
               ))}
               <button
+                disabled={checking}
                 onClick={() => setValue((v) => v.slice(0, -1))}
-                className="h-11 w-11 mx-auto flex items-center justify-center text-xs font-semibold text-gray-400 hover:text-red-500"
+                className="h-11 w-11 mx-auto flex items-center justify-center text-xs font-semibold text-gray-400 hover:text-red-500 disabled:opacity-50"
               >
                 Clear
               </button>
@@ -87,12 +116,16 @@ export function VaultVerify({ mode, expectedHash, userId, onUnlock, onCancel }: 
               >
                 0
               </button>
-              <button
-                onClick={onCancel}
-                className="h-11 w-11 mx-auto flex items-center justify-center text-xs font-semibold text-gray-400 hover:text-gray-600"
-              >
-                Cancel
-              </button>
+              {onCancel ? (
+                <button
+                  onClick={onCancel}
+                  className="h-11 w-11 mx-auto flex items-center justify-center text-xs font-semibold text-gray-400 hover:text-gray-600"
+                >
+                  Cancel
+                </button>
+              ) : (
+                <span /> // keeps the keypad grid aligned
+              )}
             </div>
           </>
         ) : (
@@ -104,7 +137,7 @@ export function VaultVerify({ mode, expectedHash, userId, onUnlock, onCancel }: 
               disabled={checking}
               onChange={(e) => setValue(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === 'Enter' && value) verify(value);
+                if (e.key === 'Enter' && value && !checking) verify(value);
               }}
               placeholder="Enter password..."
               className="w-full px-4 py-2.5 rounded-xl text-sm outline-none border border-[#FFB6C1] bg-[#FFC0CB]/20 text-[#4B004B] mb-3"
@@ -117,12 +150,14 @@ export function VaultVerify({ mode, expectedHash, userId, onUnlock, onCancel }: 
               >
                 {checking ? 'Checking...' : 'Unlock'}
               </button>
-              <button
-                onClick={onCancel}
-                className="px-4 py-2 rounded-xl text-xs font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 transition-colors"
-              >
-                Cancel
-              </button>
+              {onCancel && (
+                <button
+                  onClick={onCancel}
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 transition-colors"
+                >
+                  Cancel
+                </button>
+              )}
             </div>
           </>
         )}

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useLayoutEffect } from 'react';
-import { Send, Phone, Video, FileText, X, Mic, AlertCircle, Check, ArrowLeft, Pencil, Reply } from 'lucide-react';
+import { Send, Phone, Video, FileText, X, Mic, AlertCircle, Check, ArrowLeft, Pencil, Reply, Lock } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import LocationPicker from './LocationPicker';
 import { supabase } from '../lib/supabase';
@@ -22,6 +22,8 @@ import { loadHiddenMessageIds, hideMessageLocally } from '../lib/hiddenMessages'
 import { requestChatListRefresh } from '../hooks/chatListRefresh';
 import { onMessageStored } from '../hooks/messageBus';
 import { formatMessagePreview } from '../lib/messagePreview';
+import { consumeChatAccess, getCachedVault, peekVault } from '../lib/vault';
+import { VaultGate } from './VaultGate';
 
 interface ChatWindowProps {
   onOpenGifPanel: () => void;
@@ -213,6 +215,73 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
     }
   }, [chatId, user]);
 
+  // ─── Locked-chat gate ───────────────────────────────────────────────────────
+  // Every locked chat is verified HERE, however it was opened (vault panel,
+  // friends list, new-chat screen, a profile). Checking only in the vault
+  // panel let every other path open a locked chat with no PIN at all.
+  // Keyed on the resolved chat id (chatInfo.id), since `chatId` can be a
+  // friend's user id that only resolves to the room id while loading.
+  // locked: null = still checking.
+  const [vaultLock, setVaultLock] = useState<{ chatId: string; locked: boolean | null; unlocked: boolean } | null>(null);
+  const [showVaultGate, setShowVaultGate] = useState(true);
+  const resolvedChatId = chatInfo?.id;
+  useEffect(() => {
+    if (!resolvedChatId || !user?.id) return;
+    const id = resolvedChatId;
+    const uid = user.id;
+    let cancelled = false;
+    // Already verified by the vault panel a moment ago → don't ask twice.
+    let unlocked = consumeChatAccess(id);
+    setShowVaultGate(true);
+
+    (async () => {
+      // Vault set to "Unprotected" → nothing to verify. Decided here, before
+      // anything renders, so the locked placeholder doesn't blink up first.
+      if (!unlocked) {
+        const vault = peekVault(uid) ?? await getCachedVault(uid);
+        if (vault?.chat_security_type === 'none') unlocked = true;
+      }
+
+      // Cache first so a known-locked chat is covered instantly (and offline).
+      const cached = await localDB.chats.get(id);
+      if (cancelled) return;
+      setVaultLock({ chatId: id, locked: cached ? !!cached.is_locked : null, unlocked });
+
+      const { data, error } = await supabase
+        .from('chat_participants')
+        .select('is_locked')
+        .eq('chat_id', id)
+        .eq('user_id', uid)
+        .maybeSingle();
+      if (cancelled) return;
+      setVaultLock((prev) => {
+        if (!prev || prev.chatId !== id) return prev;
+        // Offline with nothing cached: no way to know, and nothing cached
+        // to protect either — don't leave the user stuck on a spinner.
+        if (error) return prev.locked === null ? { ...prev, locked: false } : prev;
+        return { ...prev, locked: !!data?.is_locked };
+      });
+    })();
+
+    return () => { cancelled = true; };
+  }, [resolvedChatId, user?.id]);
+
+  const vaultLockCurrent = vaultLock && chatInfo && vaultLock.chatId === chatInfo.id ? vaultLock : null;
+  const vaultChecking = !!chatInfo && (!vaultLockCurrent || vaultLockCurrent.locked === null);
+  const vaultLocked = !!vaultLockCurrent?.locked && !vaultLockCurrent.unlocked;
+  const chatHidden = vaultChecking || vaultLocked;
+  // Read through a ref by markMessagesAsRead: it's also called from realtime
+  // handlers set up earlier, which would otherwise see a stale value.
+  const chatHiddenRef = useRef(chatHidden);
+  chatHiddenRef.current = chatHidden;
+
+  // Messages only count as read once they can actually be seen — not while
+  // a locked chat sits behind its PIN screen. This catches up the moment
+  // it's unlocked (or the lock check clears for a normal chat).
+  useEffect(() => {
+    if (!chatHidden && chatInfo?.id) markMessagesAsRead();
+  }, [chatHidden, chatInfo?.id]);
+
   async function hydrateThenLoad(requestedChatId: string) {
     // Cache-first: if we've opened this chat before (including "switching
     // back" to one already visited this session), paint the header instantly
@@ -345,7 +414,9 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
       scrollToBottom();
     }
     prevLastIdRef.current = lastId;
-  }, [messages, unreadDividerId, pinToBottom, centerOnUnread]);
+    // chatHidden: the message list isn't mounted behind the vault gate, so
+    // the initial scroll has to run again once it's unlocked.
+  }, [messages, unreadDividerId, pinToBottom, centerOnUnread, chatHidden]);
 
   useEffect(() => {
     if (!chatInfo?.otherUser?.id) return;
@@ -515,7 +586,7 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
       // not just chats ChatList happened to fetch first. Flattened shape to
       // match LocalChat (see the earlier bug where a nested `otherUser`
       // object silently corrupted this same cache).
-      await localDB.chats.put({
+      await localDB.upsertChat({
         id: chatData.id,
         type: chatData.type,
         name: chatData.name,
@@ -734,6 +805,9 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
 
   async function markMessagesAsRead() {
     if (!chatInfo?.id || !user) return;
+    // Behind the vault gate (or still checking): the other person must not
+    // see "read" for messages nobody has unlocked.
+    if (chatHiddenRef.current) return;
     const { error } = await supabase
       .from('messages')
       .update({ delivery_status: 'read' })
@@ -1555,10 +1629,43 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
     setIsTextareaOverflowing(fullHeight > TEXTAREA_MAX_HEIGHT);
   }, [newMessage]);
 
-  if (loading || !chatInfo) {
+  if (loading || !chatInfo || vaultChecking) {
     return (
       <div className="flex-1 flex items-center justify-center">
         <div className="w-8 h-8 border-3 border-pink-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (vaultLocked && user) {
+    return (
+      <div className={`flex-1 flex flex-col items-center justify-center gap-3 p-6 text-center ${
+        theme === 'sweet' ? 'text-[#8B004B]' : theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
+      }`}>
+        <Lock className="w-12 h-12 text-pink-500 stroke-[1.5]" />
+        <p className="font-medium text-sm">This chat is locked</p>
+        <button
+          onClick={() => setShowVaultGate(true)}
+          className="px-5 py-2 rounded-xl bg-pink-500 text-white text-sm font-bold hover:bg-pink-600 transition-colors"
+        >
+          Unlock
+        </button>
+        {onBack && (
+          <button onClick={onBack} className="text-xs font-medium hover:underline">
+            Go back
+          </button>
+        )}
+        {showVaultGate && (
+          <VaultGate
+            theme={theme}
+            userId={user.id}
+            onUnlock={() => setVaultLock((prev) => (prev ? { ...prev, unlocked: true } : prev))}
+            onCancel={() => {
+              setShowVaultGate(false);
+              onBack?.();
+            }}
+          />
+        )}
       </div>
     );
   }

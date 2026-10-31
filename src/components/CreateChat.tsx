@@ -151,14 +151,19 @@ export function CreateChat({ theme, onClose, onChatCreated }: CreateChatProps) {
       // Flattened to match LocalChat — a nested `otherUser` object here
       // silently corrupts this exact cache, same bug pattern found and
       // fixed in ChatWindow/ChatList/LockedChatsPanel earlier.
-      await localDB.chats.put({
+      // Carry over an existing chat's real last message, type and unread
+      // count — the placeholder preview is only for a brand-new chat.
+      const existingRow = await localDB.chats.get(consistentRoomId);
+      await localDB.upsertChat({
+        ...existingRow,
         id: consistentRoomId,
         type: 'direct',
         name: existingChat.name || (targetedFriend ? targetedFriend.display_name : 'Chat'),
         avatar_url: existingChat.avatar_url || targetedFriend?.avatar_url || null,
         theme: existingChat.theme || 'light',
-        last_message_content: "No messages yet... 👋",
-        last_message_time: new Date().toISOString(),
+        ...(existingRow?.last_message_time
+          ? {}
+          : { last_message_content: "No messages yet... 👋", last_message_time: new Date().toISOString() }),
         other_user_id: targetedFriend?.id,
         other_user_name: targetedFriend?.display_name,
         other_user_avatar: targetedFriend?.avatar_url,

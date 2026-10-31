@@ -335,14 +335,19 @@ export function FriendList({ theme, onClose, onSelectUser, setActiveChatId, init
       const targetFriend = friends.find(f => f.id === friendId);
 
       // OFFLINE FIRST LAYER
-      await localDB.chats.put({
+      // Carry over an existing chat's real last message, type and unread
+      // count — the placeholder preview is only for a brand-new chat.
+      const existingRow = await localDB.chats.get(consistentRoomId);
+      await localDB.upsertChat({
+        ...existingRow,
         id: consistentRoomId,
         type: 'direct',
         name: targetFriend?.display_name || 'Direct Chat',
         avatar_url: targetFriend?.avatar_url || null,
-        theme: 'sweet',
-        last_message_content: "No messages yet... 👋",
-        last_message_time: new Date().toISOString(),
+        theme: existingRow?.theme ?? 'sweet',
+        ...(existingRow?.last_message_time
+          ? {}
+          : { last_message_content: "No messages yet... 👋", last_message_time: new Date().toISOString() }),
         other_user_id: targetFriend?.id,
         other_user_name: targetFriend?.display_name,
         other_user_avatar: targetFriend?.avatar_url,

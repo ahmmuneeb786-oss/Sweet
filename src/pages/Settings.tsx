@@ -1,17 +1,30 @@
 import React, { useState, useEffect } from 'react';
-import { ChevronRight, X, Bell, Lock, Palette, HardDrive, LogOut, User, Shield, ShieldCheck, Smile, CheckCircle, AlertCircle, ChevronLeft, Zap } from 'lucide-react';
+import { ChevronRight, X, Bell, Lock, Palette, HardDrive, LogOut, User, Shield, ShieldCheck, CheckCircle, AlertCircle, ChevronLeft, Zap } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { PermissionManager } from '../services/PermissionManager';
-import { StrictLock } from '../components/StrictLock';
+import { VaultGate } from '../components/VaultGate';
+import { LockedChatsSettings } from '../components/LockedChatsSettings';
+import { AppLockGate } from '../components/AppLockGate';
+import { AppLockSettings } from '../components/AppLockSettings';
 import { OfflineBadge } from '../components/OfflineBadge';
 import { localDB } from '../db';
-import { hashSecret } from '../lib/secureHash';
 import { useNotify } from '../contexts/NotificationContext';
-import { usePerformance } from '../contexts/PerformanceContext';
+import { usePerformance, useFps } from '../contexts/PerformanceContext';
+
+// Kept as its own component so only this number re-renders every second,
+// not the whole Settings page.
+function LiveFpsValue() {
+  const fps = useFps();
+  return (
+    <p className={`text-2xl font-black ${fps < 40 ? 'text-red-500' : fps < 55 ? 'text-amber-500' : 'text-green-600'}`}>
+      {fps}
+    </p>
+  );
+}
 
 
-type SettingsTab = 'main' | 'account' | 'privacy' | 'notifications' | 'theme' | 'storage' | 'locked' | 'lock' | 'performance';
+type SettingsTab ='main' | 'account' | 'privacy' | 'notifications' | 'theme' | 'storage' | 'locked' | 'lock' | 'performance';
 
 interface SettingsProps {
   onClose: () => void;
@@ -35,19 +48,16 @@ interface SecureProfile {
   display_name?: string;
   bio?: string;
   avatar_url?: string | null;
-  face_lock_enabled?: boolean;
-  face_descriptor?: number[] | null;
-  chat_security_type?: 'none' | 'pin' | 'password' | 'biometric';
-  chat_biometric_type?: 'face' | 'fingerprint' | null;
-  chat_pin?: string | null;
-  chat_password?: string | null;
 }
 
-export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLockEnabled, onRegisterFace, user, savedDescriptor, onCloseLockedPanel }: SettingsProps) {
+// faceLockEnabled / setFaceLockEnabled / onRegisterFace / savedDescriptor
+// are still passed by the dashboards but no longer used: App Lock settings
+// now live in AppLockSettings, which reads and saves vault_settings itself.
+export function Settings({ onClose, theme, setTheme, user, onCloseLockedPanel }: SettingsProps) {
   // 3. Destructure and apply the typecast ('as SecureProfile')
   const { profile: rawProfile, updateProfile, signOut } = useAuth();
-  const { showSuccess, showError, showInfo } = useNotify();
-  const { fps, deviceTier, isLowPerfMode, override, setOverride, showOverlay, setShowOverlay } = usePerformance();
+  const { showSuccess, showInfo } = useNotify();
+  const { deviceTier, isLowPerfMode, override, setOverride, showOverlay, setShowOverlay } = usePerformance();
   const profile = rawProfile as SecureProfile; // ✨ This instantly cleans up all profile red marks!
 
   const [activeTab, setActiveTab] = useState<SettingsTab>('main');
@@ -63,19 +73,8 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [storageUsed, setStorageUsed] = React.useState<string>('Calculating...');
   const [isClearing, setIsClearing] = React.useState<boolean>(false);
-  const [showFaceScanner, setShowFaceScanner] = useState(false);
-  const [faceScannerMode, setFaceScannerMode] = useState<'verify' | 'register'>('verify');
-  const [showPinModal, setPinModal] = useState(false);
-  const [pinStep, setPinStep] = useState<'enter' | 'confirm'>('enter');
-  const [tempPin, setTempPin] = useState('');
-  const [showPasswordModal, setShowPasswordModal] = useState(false);
-  const [tempPassword, setTempPassword] = useState('');
-  const [savedPin, setSavedPin] = useState('');
   const [loading, setLoading] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
-  const [securityType, setSecurityType] = useState<'none' | 'pin' | 'password' | 'biometric'>(
-    profile?.chat_security_type || 'none'
-  );
 
   React.useEffect(() => {
     if (activeTab === 'storage') {
@@ -425,57 +424,22 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
     { id: 'locked', label: 'Locked Chats Settings', icon: Lock }
   ];
 
-  // Handles PIN code entry flow sequence logic
-  const handlePinKeyPress = async (digit: string) => {
-    if (tempPin.length >= 4) return;
-    const nextPin = tempPin + digit;
-    setTempPin(nextPin);
+  // Locked Chats settings need the vault check every time the tab is
+  // entered — leaving it (or Settings) locks it again.
+  const [lockedTabUnlocked, setLockedTabUnlocked] = useState(false);
+  const [appLockTabUnlocked, setAppLockTabUnlocked] = useState(false);
+  useEffect(() => {
+    if (activeTab !== 'locked') setLockedTabUnlocked(false);
+    if (activeTab !== 'lock') setAppLockTabUnlocked(false);
+  }, [activeTab]);
 
-    // If it reaches exactly 4 numbers, process validation step
-    if (nextPin.length === 4) {
-      if (pinStep === 'enter') {
-        // First entry step complete. Save it temporarily and switch to confirm view step
-        setSavedPin(nextPin);
-        setTimeout(() => {
-          setTempPin('');
-          setPinStep('confirm');
-        }, 300);
-      } else if (pinStep === 'confirm') {
-        // Check if secondary confirmation pattern matches first try perfectly
-        if (nextPin === savedPin) {
-          try {
-            setSecurityType('pin');
-            const hashedPin = await hashSecret(nextPin, user?.id || '');
-            await supabase
-              .from('profiles')
-              .update({ 
-                chat_pin: hashedPin,
-                chat_security_type: 'pin' 
-              })
-              .eq('id', user?.id);
-            
-            showSuccess("Security PIN successfully set up!");
-            setPinModal(false);
-            setTempPin('');
-            setPinStep('enter');
-          } catch (err) {
-            console.error(err);
-            showError("Could not update secure PIN configuration framework layers.");
-          }
-        } else {
-          showError("PIN codes did not match up! Let's try again.");
-          setTempPin('');
-          setPinStep('enter');
-        }
-      }
+  const leaveLockedTab = () => {
+    if (typeof onCloseLockedPanel === 'function') {
+      onCloseLockedPanel(); // Closes standalone overlay if opened directly
+    } else {
+      setActiveTab('main'); // Falls back to standard settings navigation
     }
   };
-  
-  useEffect(() => {
-    if (profile?.chat_security_type) {
-      setSecurityType(profile.chat_security_type);
-    }
-  }, [profile?.chat_security_type]);
 
   useEffect(() => {
     const goOnline = () => setIsOnline(true);
@@ -601,7 +565,6 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
   // still stands out. Selected options go white with a hot-pink border.
   const sweetCard = 'border-2 border-[#FFD1DC] bg-[#FFF0F5]';
   const sweetCardHover = 'hover:bg-white hover:border-[#FFB6C1]';
-  const sweetCardSelected = 'border-2 border-[#FF1493] bg-white';
   const sweetInner = 'border border-[#FFB6C1] bg-[#FFE4E1]';
 
   return (
@@ -775,92 +738,27 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
             </div>
           )}
 
-          {activeTab === 'lock' && (
-  <div className="p-6 space-y-6">
-    <button
-      onClick={() => setActiveTab('main')}
-      className="flex items-center gap-2 text-pink-600 hover:text-pink-700 mb-4"
-    >
-      <ChevronLeft className="w-4 h-4" />
-      Back
-    </button>
+          {/* Same reasoning as the Locked Chats tab: without this, anyone
+              holding the unlocked phone could switch the app lock off. */}
+          {/* Same reasoning as the Locked Chats tab: without this, anyone
+              holding the unlocked phone could switch the App Lock off. */}
+          {activeTab === 'lock' && !appLockTabUnlocked && user?.id && (
+            <AppLockGate
+              userId={user.id}
+              purpose="settings"
+              onUnlock={() => setAppLockTabUnlocked(true)}
+              onCancel={() => setActiveTab('main')}
+            />
+          )}
 
-    <div className={`p-4 rounded-2xl ${theme === 'sweet' ? sweetCard : 'border bg-gray-50 border-gray-100'}`}>
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className={`p-2 rounded-lg text-pink-500 shadow-sm ${theme === 'sweet' ? sweetInner : 'bg-white'}`}>
-            <Smile size={20} />
-          </div>
-          <div>
-            <p className={`text-sm font-bold ${theme === 'sweet' ? 'text-[#4B004B]' : 'text-gray-800'}`}>Face lock</p>
-            <p className={`text-[10px] uppercase tracking-tight ${theme === 'sweet' ? 'text-[#8B004B]' : 'text-gray-500'}`}>Biometric Security</p>
-          </div>
-        </div>
-
-        {/* The Toggle Button */}
-<button
-  type="button"
-  onClick={async () => {
-    if (!user?.id) return;
-
-    const nextState = !faceLockEnabled;
-
-    // 1. IF THE USER IS TURNING IT ON: Check if they actually have a face registered
-    if (nextState) {
-      const hasFaceData = Array.isArray(savedDescriptor) && savedDescriptor.length > 0;
-      
-      if (!hasFaceData) {
-        // Stop here! Open the face scanner overlay, but DO NOT flip the main toggle yet.
-        onRegisterFace();
-        return; 
-      }
-    }
-
-    // 2. IF THEY HAVE DATA (or are turning it OFF): Safely run the state change
-    try {
-      // Snappy local update
-      setFaceLockEnabled(nextState);
-
-      // Persist to database
-      const { error } = await supabase
-        .from('profiles')
-        .update({ face_lock_enabled: nextState })
-        .eq('id', user.id);
-
-      if (error) {
-        setFaceLockEnabled(faceLockEnabled); // Rollback on failure
-        throw error;
-      }
-
-      // Keep the local cache in sync too — without this, disabling face
-      // lock here wouldn't be reflected on the next OFFLINE app open,
-      // which would still read the old "enabled" value from local storage
-      // and lock someone who'd already turned it off.
-      await localDB.saveFaceLockDataLocally(user.id, savedDescriptor ?? null, nextState);
-    } catch (err) {
-      console.error("Failed to save toggle state to cloud:", err);
-      showError("Could not update settings. Check network connection.");
-    }
-  }}
-  className={`w-12 h-6 rounded-full transition-all duration-300 relative p-1 cursor-pointer outline-none ${
-    faceLockEnabled ? 'bg-pink-500 shadow-md shadow-pink-200' : theme === 'sweet' ? 'bg-[#FFC0CB]' : 'bg-gray-300'
-  }`}
->
-  {/* The sliding white dot indicator */}
-  <div 
-    className={`w-4 h-4 bg-white rounded-full shadow-md transition-transform duration-300 ease-out ${
-      faceLockEnabled ? 'translate-x-6' : 'translate-x-0'
-    }`}
-  />
-</button>
-      </div>
-      
-      <p className={`mt-4 text-xs leading-relaxed italic ${theme === 'sweet' ? 'text-[#8B004B]' : 'text-gray-500'}`}>
-        "An inbuilt biometric lock that uses your unique facial features to secure the app. When enabled, you'll need to verify your identity with a quick face scan each time you open the app, ensuring that only you can access your messages and data. It's like having a personal security guard that's always on duty, providing an extra layer of protection for your private conversations."
-      </p>
-    </div>
-  </div>
-)}
+          {activeTab === 'lock' && appLockTabUnlocked && user?.id && (
+            <AppLockSettings
+              theme={theme}
+              userId={user.id}
+              displayName={profile?.display_name || ''}
+              onBack={() => setActiveTab('main')}
+            />
+          )}
 
           {activeTab === 'privacy' && (
             <div className="p-6 space-y-6">
@@ -1136,9 +1034,7 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
       <div className="grid grid-cols-2 gap-3 mb-3">
         <div className={`rounded-xl p-3 ${theme === 'sweet' ? sweetInner : 'bg-white/50'}`}>
           <p className="text-[10px] font-bold uppercase tracking-wider text-pink-600/60 mb-1">Live FPS</p>
-          <p className={`text-2xl font-black ${fps < 40 ? 'text-red-500' : fps < 55 ? 'text-amber-500' : 'text-green-600'}`}>
-            {fps}
-          </p>
+          <LiveFpsValue />
         </div>
         <div className={`rounded-xl p-3 ${theme === 'sweet' ? sweetInner : 'bg-white/50'}`}>
           <p className="text-[10px] font-bold uppercase tracking-wider text-pink-600/60 mb-1">Device Tier</p>
@@ -1204,422 +1100,26 @@ export function Settings({ onClose, theme, setTheme, faceLockEnabled, setFaceLoc
   </div>
 )}
 
-{activeTab === 'locked' && (
-            <div className={`p-6 space-y-6 animate-fadeIn transition-colors ${
-              theme === 'sweet' ? 'text-[#4B004B]' : theme === 'dark' ? 'text-gray-200' : 'text-gray-700'
-            }`}>
-              {/* Biometric FaceID Overlay Controller */}
-              {showFaceScanner && (
-                <StrictLock
-                  userId={user?.id || 'guest'}
-                  mode={faceScannerMode}
-                  savedDescriptor={profile?.face_descriptor || null}
-                  onSaveDescriptor={async (uid, descriptorArray) => {
-                    try {
-                      const { error } = await supabase
-                        .from('profiles')
-                        .update({ 
-                          face_descriptor: descriptorArray,
-                          chat_security_type: 'biometric',
-                          chat_biometric_type: 'face'
-                        })
-                        .eq('id', uid);
+{/* The vault settings can switch the lock off or replace the PIN, so
+    they're guarded by the same check as the locked chats themselves —
+    otherwise anyone holding the unlocked phone could just turn it off. */}
+{activeTab === 'locked' && !lockedTabUnlocked && user?.id && (
+  <VaultGate
+    theme={theme}
+    userId={user.id}
+    purpose="settings"
+    onUnlock={() => setLockedTabUnlocked(true)}
+    onCancel={leaveLockedTab}
+  />
+)}
 
-                      if (error) throw error;
-                      setSecurityType('biometric');
-                      setShowFaceScanner(false);
-                    } catch (err) {
-                      console.error("Cloud saving descriptor failed:", err);
-                      showError("Could not sync biometric information to cloud.");
-                    }
-                  }}
-                  onUnlock={() => {
-                    if (faceScannerMode === 'verify') {
-                      const updateSecurity = async () => {
-                        await supabase
-                          .from('profiles')
-                          .update({ chat_security_type: 'biometric', chat_biometric_type: 'face' })
-                          .eq('id', user?.id);
-                        setSecurityType('biometric');
-                      };
-                      updateSecurity();
-                    }
-                    setShowFaceScanner(false);
-                  }}
-                  onRegisterSuccess={() => {
-                    setSecurityType('biometric');
-                    setShowFaceScanner(false);
-                  }}
-                />
-              )}
-
-              {/* Header Navigation Bar */}
-              <div className={`flex items-center justify-between border-b pb-3 transition-colors ${
-                theme === 'sweet' ? 'border-[#FFB6C1]' : theme === 'dark' ? 'border-gray-800' : 'border-gray-100'
-              }`}>
-                <button
-                  onClick={() => {
-                    setPinModal(false);
-                    setShowPasswordModal(false);
-                    if (typeof onCloseLockedPanel === 'function') {
-                      onCloseLockedPanel(); // Closes standalone overlay if opened directly
-                    } else {
-                      setActiveTab('main'); // Falls back to standard settings navigation
-                    }
-                  }}
-                  className={`flex items-center gap-2 font-medium transition-colors select-none ${
-                    theme === 'sweet' ? 'text-[#FF69B4] hover:text-[#FF1493]' : theme === 'dark' ? 'text-gray-400 hover:text-gray-200' : 'text-gray-600 hover:text-gray-900'
-                  }`}
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                  <span className="text-sm">Back</span>
-                </button>
-                <span className={`text-xs font-bold px-2 py-1 rounded-full border transition-colors ${
-                  theme === 'sweet' ? 'bg-[#FFC0CB]/30 text-[#8B004B] border-[#FFB6C1]' : theme === 'dark' ? 'bg-gray-800 text-gray-400 border-gray-700' : 'bg-gray-100 text-gray-600 border-gray-200'
-                }`}>
-                  Vault Security 🔒
-                </span>
-              </div>
-
-              {/* Primary Controls Interface */}
-              {!showPinModal && !showPasswordModal && (
-                <div className="space-y-3">
-                  <div className={`p-4 rounded-2xl transition-colors ${
-                    theme === 'sweet' ? sweetCard : theme === 'dark' ? 'border bg-gray-800/30 border-gray-800' : 'border bg-gray-50 border-gray-200'
-                  }`}>
-                    <p className={`text-xs font-medium leading-relaxed ${
-                      theme === 'sweet' ? 'text-[#8B004B]' : theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
-                    }`}>
-                      Choose your signature security barrier configuration. Secured chats are decoupled from the main thread rendering layout until authentic responses are verified.
-                    </p>
-                  </div>
-
-                  {/* OPTION 1: REMOVE LOCK PROTECTION */}
-                  <label className={`flex items-center justify-between p-3.5 rounded-2xl cursor-pointer transition-all ${
-                    theme === 'sweet'
-                      ? securityType === 'none' ? sweetCardSelected : `${sweetCard} ${sweetCardHover}`
-                      : theme === 'dark'
-                        ? securityType === 'none' ? 'border border-gray-600 bg-gray-800' : 'border border-gray-800 bg-gray-900/50 hover:border-gray-700'
-                        : securityType === 'none' ? 'border border-gray-400 bg-gray-50' : 'border border-gray-200 bg-white hover:border-gray-300'
-                  }`}>
-                    <div className="flex items-center gap-3">
-                      <div className={`text-lg p-2 rounded-xl ${theme === 'dark' ? 'bg-gray-800' : theme === 'sweet' ? sweetInner : 'bg-gray-100'}`}>
-                        🔓
-                      </div>
-                      <div className="space-y-0.5">
-                        <h4 className={`text-sm font-bold ${theme === 'dark' ? 'text-gray-200' : theme === 'sweet' ? 'text-[#4B004B]' : 'text-gray-800'}`}>Unprotected</h4>
-                        <p className={`text-[11px] ${theme === 'sweet' ? 'text-[#8B004B]' : theme === 'dark' ? 'text-gray-500' : 'text-gray-400'}`}>Chats stay visible inside your standard lists.</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className={`text-xs font-semibold ${securityType === 'none' ? (theme === 'sweet' ? 'text-[#FF69B4]' : theme === 'dark' ? 'text-gray-300' : 'text-gray-700') : 'text-gray-400'}`}>
-                        {securityType === 'none' ? 'Active' : ''}
-                      </span>
-                      <input 
-                        type="radio" 
-                        name="security_type" 
-                        checked={securityType === 'none'}
-                        onChange={async () => {
-                          setSecurityType('none');
-                          await supabase.from('profiles').update({ chat_security_type: 'none' }).eq('id', user?.id);
-                        }}
-                        className={`h-4 w-4 ${theme === 'sweet' ? 'accent-[#FF69B4]' : theme === 'dark' ? 'accent-gray-400' : 'accent-gray-800'}`}
-                      />
-                    </div>
-                  </label>
-
-                  {/* OPTION 2: THE 4-DIGIT PIN */}
-                  <label className={`flex items-center justify-between p-3.5 rounded-2xl cursor-pointer transition-all ${
-                    theme === 'sweet'
-                      ? securityType === 'pin' ? sweetCardSelected : `${sweetCard} ${sweetCardHover}`
-                      : theme === 'dark'
-                        ? securityType === 'pin' ? 'border border-gray-600 bg-gray-800' : 'border border-gray-800 bg-gray-900/50 hover:border-gray-700'
-                        : securityType === 'pin' ? 'border border-gray-400 bg-gray-50' : 'border border-gray-200 bg-white hover:border-gray-300'
-                  }`}>
-                    <div className="flex items-center gap-3">
-                      <div className={`text-lg p-2 rounded-xl ${theme === 'dark' ? 'bg-gray-800' : theme === 'sweet' ? sweetInner : 'bg-gray-100'}`}>
-                        🔢
-                      </div>
-                      <div className="space-y-0.5">
-                        <h4 className={`text-sm font-bold ${theme === 'dark' ? 'text-gray-200' : theme === 'sweet' ? 'text-[#4B004B]' : 'text-gray-800'}`}>4-Digit Security PIN</h4>
-                        <p className={`text-[11px] ${theme === 'sweet' ? 'text-[#8B004B]' : theme === 'dark' ? 'text-gray-500' : 'text-gray-400'}`}>Secure entry using lightweight numbers code sequence.</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className={`text-xs font-semibold ${securityType === 'pin' ? (theme === 'sweet' ? 'text-[#FF69B4]' : theme === 'dark' ? 'text-gray-300' : 'text-gray-700') : 'text-gray-400'}`}>
-                        {securityType === 'pin' ? 'Engaged' : ''}
-                      </span>
-                      <input 
-                        type="radio" 
-                        name="security_type" 
-                        checked={securityType === 'pin'}
-                        onChange={() => {
-                          setTempPin("");
-                          setPinStep('enter');
-                          setPinModal(true);
-                        }}
-                        className={`h-4 w-4 ${theme === 'sweet' ? 'accent-[#FF69B4]' : theme === 'dark' ? 'accent-gray-400' : 'accent-gray-800'}`}
-                      />
-                    </div>
-                  </label>
-
-                  {/* OPTION 3: THE COMPACT TEXT PASSWORD PROTECTOR */}
-                  <label className={`flex items-center justify-between p-3.5 rounded-2xl cursor-pointer transition-all ${
-                    theme === 'sweet'
-                      ? securityType === 'password' ? sweetCardSelected : `${sweetCard} ${sweetCardHover}`
-                      : theme === 'dark'
-                        ? securityType === 'password' ? 'border border-gray-600 bg-gray-800' : 'border border-gray-800 bg-gray-900/50 hover:border-gray-700'
-                        : securityType === 'password' ? 'border border-gray-400 bg-gray-50' : 'border border-gray-200 bg-white hover:border-gray-300'
-                  }`}>
-                    <div className="flex items-center gap-3">
-                      <div className={`text-lg p-2 rounded-xl ${theme === 'dark' ? 'bg-gray-800' : theme === 'sweet' ? sweetInner : 'bg-gray-100'}`}>
-                        🔏
-                      </div>
-                      <div className="space-y-0.5">
-                        <h4 className={`text-sm font-bold ${theme === 'dark' ? 'text-gray-200' : theme === 'sweet' ? 'text-[#4B004B]' : 'text-gray-800'}`}>Text Alphanumeric Password</h4>
-                        <p className={`text-[11px] ${theme === 'sweet' ? 'text-[#8B004B]' : theme === 'dark' ? 'text-gray-500' : 'text-gray-400'}`}>Deploy custom string codes rules.</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className={`text-xs font-semibold ${securityType === 'password' ? (theme === 'sweet' ? 'text-[#FF69B4]' : theme === 'dark' ? 'text-gray-300' : 'text-gray-700') : 'text-gray-400'}`}>
-                        {securityType === 'password' ? 'Active' : ''}
-                      </span>
-                      <input 
-                        type="radio" 
-                        name="security_type" 
-                        checked={securityType === 'password'}
-                        onChange={() => {
-                          setTempPassword("");
-                          setShowPasswordModal(true);
-                        }}
-                        className={`h-4 w-4 ${theme === 'sweet' ? 'accent-[#FF69B4]' : theme === 'dark' ? 'accent-gray-400' : 'accent-gray-800'}`}
-                      />
-                    </div>
-                  </label>
-
-                  {/* OPTION 4: BIOMETRIC RECOGNITION PANEL */}
-                  <div className={`p-3.5 rounded-2xl transition-all space-y-3 ${
-                    theme === 'sweet'
-                      ? securityType === 'biometric' ? sweetCardSelected : sweetCard
-                      : theme === 'dark'
-                        ? securityType === 'biometric' ? 'border border-gray-600 bg-gray-800/40' : 'border border-gray-800 bg-gray-900/50'
-                        : securityType === 'biometric' ? 'border border-gray-400 bg-gray-50' : 'border border-gray-200 bg-white'
-                  }`}>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className={`text-lg p-2 rounded-xl ${theme === 'dark' ? 'bg-gray-800' : theme === 'sweet' ? sweetInner : 'bg-gray-100'}`}>
-                          🧬
-                        </div>
-                        <div className="space-y-0.5">
-                          <h4 className={`text-sm font-bold ${theme === 'dark' ? 'text-gray-200' : theme === 'sweet' ? 'text-[#4B004B]' : 'text-gray-800'}`}>Biometric Verification Array</h4>
-                          <p className={`text-[11px] ${theme === 'sweet' ? 'text-[#8B004B]' : theme === 'dark' ? 'text-gray-500' : 'text-gray-400'}`}>Locks conversational nodes using biometric configurations.</p>
-                        </div>
-                      </div>
-                      <input 
-                        type="radio" 
-                        name="security_type" 
-                        checked={securityType === 'biometric'}
-                        onChange={() => {
-                          const runtimeDescriptor = profile?.face_descriptor;
-                          if (Array.isArray(runtimeDescriptor) && runtimeDescriptor.length > 0) {
-                            setFaceScannerMode('verify');
-                          } else {
-                            setFaceScannerMode('register');
-                          }
-                          setShowFaceScanner(true);
-                        }}
-                        className={`h-4 w-4 ${theme === 'sweet' ? 'accent-[#FF69B4]' : theme === 'dark' ? 'accent-gray-400' : 'accent-gray-800'}`}
-                      />
-                    </div>
-
-                    {/* Sub-choices configuration panel */}
-                    <div className="grid grid-cols-2 gap-2.5 pt-1">
-                      {/* FACE VECTOR TOGGLE */}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const runtimeDescriptor = profile?.face_descriptor;
-                          if (Array.isArray(runtimeDescriptor) && runtimeDescriptor.length > 0) {
-                            setFaceScannerMode('verify');
-                          } else {
-                            setFaceScannerMode('register');
-                          }
-                          setShowFaceScanner(true);
-                        }}
-                        className={`p-3 text-left rounded-xl border flex flex-col gap-1 transition-all ${
-                          theme === 'sweet'
-                            ? securityType === 'biometric' && profile?.chat_biometric_type === 'face' ? 'border-[#FF1493] bg-white' : 'border-[#FFB6C1] bg-[#FFE4E1] hover:bg-white'
-                            : theme === 'dark'
-                              ? securityType === 'biometric' && profile?.chat_biometric_type === 'face' ? 'border-gray-500 bg-gray-900' : 'border-gray-700 bg-gray-800/30'
-                              : securityType === 'biometric' && profile?.chat_biometric_type === 'face' ? 'border-gray-400 bg-gray-100' : 'border-gray-200 bg-white'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between w-full">
-                          <span className={`text-xs font-bold ${theme === 'sweet' ? 'text-[#4B004B]' : theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>📸 FaceID Map</span>
-                          <div className={`w-2 h-2 rounded-full ${profile?.face_descriptor ? 'bg-emerald-500' : 'bg-amber-400'}`} />
-                        </div>
-                        <span className={`text-[10px] ${theme === 'sweet' ? 'text-[#8B004B]' : 'text-gray-400'}`}>
-                          {profile?.face_descriptor ? "Verified & Saved" : "Setup Missing"}
-                        </span>
-                      </button>
-
-                      {/* TOUCH MATRIX TOGGLE */}
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          if (window.PublicKeyCredential) {
-                            try {
-                              const nativeHardwareAvailable = await window.PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
-                              if (nativeHardwareAvailable) {
-                                setSecurityType('biometric');
-                                await supabase.from('profiles').update({ 
-                                  chat_security_type: 'biometric',
-                                  chat_biometric_type: 'fingerprint'
-                                }).eq('id', user?.id);
-                                showSuccess("Fingerprint hardware checked successfully!");
-                              } else {
-                                showError("Biometric module missing on current device profile.");
-                              }
-                            } catch (e) {
-                              console.warn(e);
-                            }
-                          } else {
-                            showError("Authentication framework not supported by container layers.");
-                          }
-                        }}
-                        className={`p-3 text-left rounded-xl border flex flex-col gap-1 transition-all ${
-                          theme === 'sweet'
-                            ? securityType === 'biometric' && profile?.chat_biometric_type === 'fingerprint' ? 'border-[#FF1493] bg-white' : 'border-[#FFB6C1] bg-[#FFE4E1] hover:bg-white'
-                            : theme === 'dark'
-                              ? securityType === 'biometric' && profile?.chat_biometric_type === 'fingerprint' ? 'border-gray-500 bg-gray-900' : 'border-gray-700 bg-gray-800/30'
-                              : securityType === 'biometric' && profile?.chat_biometric_type === 'fingerprint' ? 'border-gray-400 bg-gray-100' : 'border-gray-200 bg-white'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between w-full">
-                          <span className={`text-xs font-bold ${theme === 'sweet' ? 'text-[#4B004B]' : theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>☝️ TouchID Matrix</span>
-                          <div className={`w-2 h-2 rounded-full ${securityType === 'biometric' && profile?.chat_biometric_type === 'fingerprint' ? 'bg-emerald-500' : theme === 'sweet' ? 'bg-[#FFB6C1]' : 'bg-gray-300'}`} />
-                        </div>
-                        <span className={`text-[10px] ${theme === 'sweet' ? 'text-[#8B004B]' : 'text-gray-400'}`}>
-                          Hardware Matrix Check
-                        </span>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* INLINE PIN NUMPAD DESIGN VIEW */}
-              {showPinModal && (
-                <div className={`text-center space-y-4 py-4 rounded-2xl p-4 shadow-sm animate-scaleIn transition-colors ${
-                  theme === 'sweet' ? sweetCard : theme === 'dark' ? 'border bg-gray-900 border-gray-800' : 'border bg-white border-gray-200'
-                }`}>
-                  <p className={`text-sm font-black ${theme === 'sweet' ? 'text-[#FF69B4]' : theme === 'dark' ? 'text-gray-200' : 'text-gray-800'}`}>
-                    {pinStep === 'enter' ? 'Create Secure Vault PIN 🔑' : 'Confirm Your Secure Vault PIN 🌸'}
-                  </p>
-                  
-                  <div className="flex justify-center gap-4 py-2">
-                    {[0, 1, 2, 3].map((index) => (
-                      <div 
-                        key={index} 
-                        className={`w-3 h-3 rounded-full border-2 transition-all duration-150 ${
-                          tempPin.length > index 
-                            ? theme === 'sweet' ? 'bg-[#FF69B4] border-[#FF69B4]' : theme === 'dark' ? 'bg-gray-400 border-gray-400' : 'bg-gray-800 border-gray-800 scale-110 shadow-sm' 
-                            : theme === 'sweet' ? 'border-[#FFB6C1] bg-white' : theme === 'dark' ? 'border-gray-700 bg-gray-800' : 'border-gray-300 bg-gray-50'
-                        }`}
-                      />
-                    ))}
-                  </div>
-
-                  <div className="max-w-[220px] mx-auto grid grid-cols-3 gap-3 pt-2">
-                    {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => (
-                      <button
-                        key={num}
-                        onClick={() => handlePinKeyPress(num.toString())}
-                        className={`h-11 w-11 mx-auto flex items-center justify-center rounded-full font-bold transition-all text-sm active:scale-90 border ${
-                          theme === 'sweet' ? 'bg-[#FFE4E1] border-[#FFB6C1] text-[#4B004B] hover:border-[#FF69B4] hover:bg-white' : theme === 'dark' ? 'bg-gray-800 border-gray-700 text-gray-200 hover:border-gray-500' : 'bg-gray-50 border border-gray-200 text-gray-700 hover:border-gray-400'
-                        }`}
-                      >
-                        {num}
-                      </button>
-                    ))}
-                    <button
-                      onClick={() => setTempPin(prev => prev.slice(0, -1))}
-                      className={`h-11 w-11 mx-auto flex items-center justify-center text-xs font-semibold hover:text-red-500 select-none ${theme === 'sweet' ? 'text-[#8B004B]' : 'text-gray-400'}`}
-                    >
-                      Clear
-                    </button>
-                    <button
-                      onClick={() => handlePinKeyPress("0")}
-                      className={`h-11 w-11 mx-auto flex items-center justify-center rounded-full font-bold text-sm active:scale-90 border ${
-                        theme === 'sweet' ? 'bg-[#FFE4E1] border-[#FFB6C1] text-[#4B004B] hover:border-[#FF69B4] hover:bg-white' : theme === 'dark' ? 'bg-gray-800 border-gray-700 text-gray-200' : 'bg-gray-50 border border-gray-200 text-gray-700'
-                      }`}
-                    >
-                      0
-                    </button>
-                    <button
-                      onClick={() => {
-                        setPinModal(false);
-                        setTempPin('');
-                        setPinStep('enter');
-                      }}
-                      className={`h-11 w-11 mx-auto flex items-center justify-center text-xs font-semibold select-none ${theme === 'sweet' ? 'text-[#8B004B] hover:text-[#4B004B]' : 'text-gray-400 hover:text-gray-600'}`}
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* ALPHANUMERIC PASSWORD VIEW MODAL */}
-              {showPasswordModal && (
-                <div className={`rounded-2xl p-5 shadow-sm space-y-4 animate-scaleIn transition-colors ${
-                  theme === 'sweet' ? sweetCard : theme === 'dark' ? 'border bg-gray-900 border-gray-800' : 'border bg-white border-gray-200'
-                }`}>
-                  <div className="space-y-1">
-                    <h4 className={`text-sm font-black ${theme === 'sweet' ? 'text-[#FF69B4]' : theme === 'dark' ? 'text-gray-200' : 'text-gray-800'}`}>Establish Alphanumeric Password</h4>
-                    <p className={`text-[11px] ${theme === 'sweet' ? 'text-[#8B004B]' : theme === 'dark' ? 'text-gray-500' : 'text-gray-400'}`}>Type structural sequence keys to hide conversation trees.</p>
-                  </div>
-                  <input 
-                    type="password"
-                    placeholder="Enter secret phrase..."
-                    value={tempPassword}
-                    onChange={(e) => setTempPassword(e.target.value)}
-                    className={`w-full px-4 py-2.5 rounded-xl text-sm outline-none transition-all border ${
-                      theme === 'sweet' ? 'bg-[#FFE4E1] border-[#FFB6C1] focus:ring-2 focus:ring-[#FF69B4] text-[#4B004B]' : theme === 'dark' ? 'bg-gray-800 border-gray-700 focus:ring-2 focus:ring-gray-600 text-gray-100' : 'bg-gray-50 border border-gray-200 focus:ring-2 focus:ring-gray-400 focus:bg-white text-gray-800'
-                    }`}
-                  />
-                  <div className="flex gap-2 pt-1">
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        if (!tempPassword.trim()) return showError("Password configuration requirements can't be blank!");
-                        setSecurityType('password');
-                        const hashedPassword = await hashSecret(tempPassword, user?.id || '');
-                        await supabase.from('profiles').update({ 
-                          chat_password: hashedPassword,
-                          chat_security_type: 'password'
-                        }).eq('id', user?.id);
-                        setShowPasswordModal(false);
-                      }}
-                      className={`flex-1 py-2 text-white rounded-xl text-xs font-bold transition-colors ${
-                        theme === 'sweet' ? 'bg-[#FF1493] hover:bg-[#FF69B4]' : theme === 'dark' ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-800 hover:bg-gray-900'
-                      }`}
-                    >
-                      Apply Protection
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setShowPasswordModal(false)}
-                      className={`px-4 py-2 rounded-xl text-xs font-bold transition-colors ${
-                        theme === 'sweet' ? `${sweetInner} hover:bg-white text-[#4B004B]` : theme === 'dark' ? 'bg-gray-800 hover:bg-gray-700 text-gray-300' : 'bg-gray-100 hover:bg-gray-200 text-gray-600'
-                      }`}
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
+{activeTab === 'locked' && lockedTabUnlocked && user?.id && (
+            <LockedChatsSettings
+              theme={theme}
+              userId={user.id}
+              displayName={profile?.display_name || ''}
+              onBack={leaveLockedTab}
+            />
           )}
         </div>
       </div>

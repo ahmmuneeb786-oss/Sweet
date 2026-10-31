@@ -3,6 +3,7 @@ import { X, Search, Eye, Lock, Unlock, Trash2, Bell, BellOff, MoreVertical } fro
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { localDB } from '../db';
+import { requestChatListRefresh } from '../hooks/chatListRefresh';
 import { useNotify } from '../contexts/NotificationContext';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { usePerformance } from '../contexts/PerformanceContext';
@@ -90,24 +91,21 @@ export function ChatMenu({ theme, chatId, onClose, onViewProfile }: ChatMenuProp
 
       if (error) throw error;
 
-      // 🔴 SYNC SYSTEM: Instantly update internal phone memory files
-      if (newLockState) {
-        // If locked, remove it completely from the local main feed storage cache
-        await localDB.chats.delete(chatId);
-        showSuccess('Conversation moved to your secure Locked Chats vault! 🔒');
-      } else {
-        showSuccess('Conversation restored to your main chat feed! 🔓');
-      }
-      
+      // Flip the flag on the cached row instead of deleting it — the vault
+      // reads this same row offline, and ChatList filters on it.
+      await localDB.chats.update(chatId, { is_locked: newLockState });
+      requestChatListRefresh();
+
+      showSuccess(newLockState
+        ? 'Conversation moved to your secure Locked Chats vault! 🔒'
+        : 'Conversation restored to your main chat feed! 🔓');
+
       setIsLocked(newLockState);
       setShowMenu(false);
       onClose();
-
-      // Force reload layout smoothly to re-trigger localDB.chats.toArray()
-      window.location.reload(); 
     } catch (error) {
       console.error('Error locking conversation:', error);
-      showError('Failed to lock conversation.');
+      showError(newLockState ? 'Failed to lock conversation.' : 'Failed to unlock conversation.');
     }
   }
 

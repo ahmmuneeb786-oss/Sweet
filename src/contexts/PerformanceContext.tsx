@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useRef, ReactNode } from 'react';
+import { createContext, useContext, useState, useRef, useCallback, useMemo, ReactNode } from 'react';
 import { usePerformanceMonitor, type DeviceTier } from '../hooks/usePerformanceMonitor';
 import { useIsMobile } from '../hooks/useIsMobile';
 
@@ -7,8 +7,10 @@ const STORAGE_KEY = 'sweet_perf_override';
 const OVERLAY_STORAGE_KEY = 'sweet_perf_overlay';
 const OVERLAY_POSITION_KEY = 'sweet_perf_overlay_position';
 
+// fps lives in its own context because it changes every second. Keeping it
+// out of PerformanceContext means components that only read isLowPerfMode
+// (every Message, ChatList, etc.) don't re-render once per second.
 interface PerformanceContextType {
-  fps: number;
   deviceTier: DeviceTier;
   isLowPerfMode: boolean; // what components should actually read to decide behavior
   override: PerfOverride;
@@ -18,6 +20,7 @@ interface PerformanceContextType {
 }
 
 const PerformanceContext = createContext<PerformanceContextType | undefined>(undefined);
+const FpsContext = createContext<number | undefined>(undefined);
 
 export function PerformanceProvider({ children }: { children: ReactNode }) {
   const { fps, deviceTier, isLowPerfMode: autoLowPerf } = usePerformanceMonitor();
@@ -28,29 +31,31 @@ export function PerformanceProvider({ children }: { children: ReactNode }) {
     return localStorage.getItem(OVERLAY_STORAGE_KEY) === 'true';
   });
 
-  function setOverride(o: PerfOverride) {
+  const setOverride = useCallback((o: PerfOverride) => {
     setOverrideState(o);
     localStorage.setItem(STORAGE_KEY, o);
-  }
+  }, []);
 
-  function setShowOverlay(v: boolean) {
+  const setShowOverlay = useCallback((v: boolean) => {
     setShowOverlayState(v);
     localStorage.setItem(OVERLAY_STORAGE_KEY, String(v));
-  }
+  }, []);
 
   const isLowPerfMode =
     override === 'force-low' ? true :
     override === 'force-high' ? false :
     autoLowPerf;
 
-  const value: PerformanceContextType = {
-    fps, deviceTier, isLowPerfMode, override, setOverride, showOverlay, setShowOverlay
-  };
+  const value = useMemo<PerformanceContextType>(() => ({
+    deviceTier, isLowPerfMode, override, setOverride, showOverlay, setShowOverlay
+  }), [deviceTier, isLowPerfMode, override, setOverride, showOverlay, setShowOverlay]);
 
   return (
     <PerformanceContext.Provider value={value}>
-      {children}
-      {showOverlay && <PerformanceOverlay fps={fps} deviceTier={deviceTier} isLowPerfMode={isLowPerfMode} />}
+      <FpsContext.Provider value={fps}>
+        {children}
+        {showOverlay && <PerformanceOverlay fps={fps} deviceTier={deviceTier} isLowPerfMode={isLowPerfMode} />}
+      </FpsContext.Provider>
     </PerformanceContext.Provider>
   );
 }
@@ -144,4 +149,13 @@ export function usePerformance() {
     throw new Error('usePerformance must be used within a PerformanceProvider');
   }
   return ctx;
+}
+
+// Re-renders the caller every second — use it only in small leaf components.
+export function useFps() {
+  const fps = useContext(FpsContext);
+  if (fps === undefined) {
+    throw new Error('useFps must be used within a PerformanceProvider');
+  }
+  return fps;
 }

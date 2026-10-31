@@ -1,12 +1,13 @@
-import { useState, useEffect } from 'react';
-import { ArrowLeft, Lock, MessageSquare, ShieldAlert } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { ArrowLeft, Lock, MessageSquare } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { localDB } from '../db';
-import { StrictLock } from './StrictLock';
-import { VaultVerify } from './VaultVerify';
+import { VaultGate } from './VaultGate';
 import { OfflineBadge } from './OfflineBadge';
 import { useNotify } from '../contexts/NotificationContext';
+import { grantChatAccess } from '../lib/vault';
+import { onChatListRefresh } from '../hooks/chatListRefresh';
 
 interface LockedChatsPanelProps {
   theme: 'light' | 'dark' | 'sweet';
@@ -27,76 +28,54 @@ interface Chat {
 }
 
 export function LockedChatsPanel({ theme, onClose, onSelectChat }: LockedChatsPanelProps) {
-  const { user, profile } = useAuth();
+  const { user } = useAuth();
   const { showError } = useNotify();
   const [lockedChats, setLockedChats] = useState<Chat[]>([]);
   const [loading, setLoading] = useState(true);
+  // Chat being verified — the panel stays open behind the gate so
+  // cancelling lands back here, not on the main list.
   const [verifyingChatId, setVerifyingChatId] = useState<string | null>(null);
-  const [vaultVerify, setVaultVerify] = useState<{ chatId: string; mode: 'pin' | 'password' } | null>(null);
-  const [unsupportedNotice, setUnsupportedNotice] = useState(false);
 
-  // These columns exist on the profiles row (select('*') in AuthContext)
-  // but aren't declared on its TS type, since they're specific to the
-  // locked-chats vault rather than general profile fields.
-  const secureProfile = profile as any;
-
-  const [localFaceDescriptor, setLocalFaceDescriptor] = useState<number[] | null>(null);
-  useEffect(() => {
-    if (!user?.id) return;
-    localDB.getFaceLockDataLocally(user.id).then((cached) => {
-      if (cached?.descriptor) setLocalFaceDescriptor(cached.descriptor);
-    });
-  }, [user?.id]);
-
-  // Local cache first (instant, works offline) — falls back to whatever
-  // AuthContext's profile currently has if nothing's cached locally yet.
-  const effectiveFaceDescriptor = localFaceDescriptor ?? secureProfile?.face_descriptor;
-
-  function handleOpenLockedChat(chatId: string) {
-    const securityType = secureProfile?.chat_security_type || 'none';
-
-    if (securityType === 'none') {
-      // User explicitly chose no extra protection for the vault — respect that.
-      onSelectChat(chatId);
-      onClose();
-      return;
-    }
-
-    if (securityType === 'biometric' && effectiveFaceDescriptor) {
-      // Reuse the same registered face as the app lock — one registration,
-      // both places, rather than a second separate enrollment flow.
-      setVerifyingChatId(chatId);
-      return;
-    }
-
-    if (securityType === 'pin' && secureProfile?.chat_pin) {
-      setVaultVerify({ chatId, mode: 'pin' });
-      return;
-    }
-
-    if (securityType === 'password' && secureProfile?.chat_password) {
-      setVaultVerify({ chatId, mode: 'password' });
-      return;
-    }
-
-    // Configured but missing the actual saved secret (edge case, e.g. an
-    // interrupted setup) — don't silently let them in or silently fail.
-    setUnsupportedNotice(true);
-  }
+  // Overlapping reloads (e.g. realtime + reconnect at once) — only the
+  // newest one may update the list.
+  const loadSeqRef = useRef(0);
 
   useEffect(() => {
-    if (user) {
-      loadLockedChats();
-    }
+    if (!user) return;
+    loadLockedChats();
+
+    // Keep the list current while the panel is open: a chat locked or
+    // unlocked here (ChatMenu fires the chat-list refresh) or on another
+    // device (realtime), or a reconnect after being offline.
+    const unsubscribeRefresh = onChatListRefresh(() => loadLockedChats());
+    const onReconnect = () => loadLockedChats();
+    window.addEventListener('online', onReconnect);
+    const channel = supabase
+      .channel(`locked-chats-${user.id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'chat_participants', filter: `user_id=eq.${user.id}` },
+        () => loadLockedChats()
+      )
+      .subscribe();
+
+    return () => {
+      unsubscribeRefresh();
+      window.removeEventListener('online', onReconnect);
+      supabase.removeChannel(channel);
+    };
   }, [user]);
 
   async function loadLockedChats() {
     if (!user) return;
 
+    const seq = ++loadSeqRef.current;
+    const isLatest = () => seq === loadSeqRef.current;
     let hadCache = false;
 
     try {
-      setLoading(true);
+      // No setLoading(true) here: the first load starts with the spinner
+      // already on, and background refreshes shouldn't blank the list.
 
       // =========================================================
       // STEP 1: OFFLINE CACHE LAYER (Load from localDB instantly!)
@@ -109,8 +88,8 @@ export function LockedChatsPanel({ theme, onClose, onSelectChat }: LockedChatsPa
       // If your localDB doesn't have an explicit 'is_locked' property on the chat yet, 
       // it will fall back to the online sync below. If it does, we map them immediately:
       const cachedLockedChats = allLocalChats
-        .filter((c: any) => c.is_locked === true || c.theme === 'locked-vault') 
-        .map((chat: any) => ({
+        .filter((c) => c.is_locked === true)
+        .map((chat) => ({
           id: chat.id,
           type: chat.type,
           name: chat.name || 'Private Chat',
@@ -124,7 +103,7 @@ export function LockedChatsPanel({ theme, onClose, onSelectChat }: LockedChatsPa
 
       if (cachedLockedChats.length > 0) {
         hadCache = true;
-        setLockedChats(cachedLockedChats);
+        if (isLatest()) setLockedChats(cachedLockedChats);
       }
 
       // =========================================================
@@ -144,7 +123,8 @@ export function LockedChatsPanel({ theme, onClose, onSelectChat }: LockedChatsPa
             )
           `)
           .eq('user_id', user.id)
-          .eq('is_locked', true);
+          .eq('is_locked', true)
+          .is('left_at', null);
 
         if (pError) throw pError;
 
@@ -192,25 +172,38 @@ export function LockedChatsPanel({ theme, onClose, onSelectChat }: LockedChatsPa
 
             formattedChats.push(structuredChat);
 
-            // Cache the locked conversation structure locally.
-            // We append an 'is_locked: true' property so our offline fallback can identify it later, 
-            // while your main ChatList filter ignores it to prevent it from leaking onto the public feed!
+            // Cache the locked conversation locally for the offline fallback
+            // above. is_locked keeps it out of ChatList. Merged onto the
+            // existing row so the real last-message preview/time/unread
+            // survive — this panel doesn't fetch messages itself.
+            const existing = await localDB.chats.get(structuredChat.id);
             await localDB.chats.put({
+              ...existing,
               id: structuredChat.id,
               type: structuredChat.type,
               name: structuredChat.name || (structuredChat.otherUser?.display_name ?? 'Private Chat'),
               avatar_url: structuredChat.avatar_url || (structuredChat.otherUser?.avatar_url ?? null),
               theme: structuredChat.theme || 'sweet',
-              last_message_content: "Encrypted Vault Message 🔒",
-              last_message_time: new Date().toISOString(),
-              is_locked: true, // 🌟 Flag saved locally to separate this room from public chats
+              is_locked: true,
               other_user_id: otherUserId,
               other_user_name: structuredChat.otherUser?.display_name,
               other_user_avatar: structuredChat.otherUser?.avatar_url,
-            } as any);
+            });
           }
 
-          setLockedChats(formattedChats);
+          // This panel owns the locked rows in the shared cache (ChatList
+          // owns the rest): drop ones the server no longer has as locked —
+          // unlocked or left elsewhere. An unlocked one gets re-cached by
+          // ChatList's own refresh.
+          const freshIds = new Set(formattedChats.map(c => c.id));
+          const goneIds = allLocalChats
+            .filter(c => c.is_locked && !freshIds.has(c.id))
+            .map(c => c.id);
+          if (goneIds.length > 0) {
+            await localDB.chats.bulkDelete(goneIds);
+          }
+
+          if (isLatest()) setLockedChats(formattedChats);
         }
       }
     } catch (err) {
@@ -273,7 +266,7 @@ export function LockedChatsPanel({ theme, onClose, onSelectChat }: LockedChatsPa
               {lockedChats.map((chat) => (
                 <button
                   key={chat.id}
-                  onClick={() => handleOpenLockedChat(chat.id)}
+                  onClick={() => setVerifyingChatId(chat.id)}
                   className={`w-full p-4 flex items-center gap-3 text-left transition-colors ${
                     theme === 'sweet' ? 'hover:bg-[#FFC0CB]/20' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'
                   }`}
@@ -294,63 +287,22 @@ export function LockedChatsPanel({ theme, onClose, onSelectChat }: LockedChatsPa
         </div>
       </div>
 
-      {/* Verification gate — chat only opens after onUnlock fires */}
+      {/* Verification gate — chat only opens after onUnlock fires. The
+          grant tells ChatWindow this open was already verified, so it
+          doesn't ask a second time. */}
       {verifyingChatId && user && (
-        <StrictLock
-          mode="verify"
+        <VaultGate
+          theme={theme}
           userId={user.id}
-          savedDescriptor={effectiveFaceDescriptor}
-          onSaveDescriptor={async () => {}} // not used in verify mode
           onUnlock={() => {
             const chatId = verifyingChatId;
             setVerifyingChatId(null);
+            grantChatAccess(chatId);
             onSelectChat(chatId);
             onClose();
           }}
           onCancel={() => setVerifyingChatId(null)}
         />
-      )}
-
-      {vaultVerify && user && (
-        <VaultVerify
-          mode={vaultVerify.mode}
-          userId={user.id}
-          expectedHash={vaultVerify.mode === 'pin' ? secureProfile?.chat_pin : secureProfile?.chat_password}
-          onUnlock={() => {
-            const chatId = vaultVerify.chatId;
-            setVaultVerify(null);
-            onSelectChat(chatId);
-            onClose();
-          }}
-          onCancel={() => setVaultVerify(null)}
-        />
-      )}
-
-      {/* PIN/password verification doesn't exist yet anywhere in the app —
-          told honestly rather than silently bypassing or doing nothing. */}
-      {unsupportedNotice && (
-        <div className="fixed inset-0 z-[9999] bg-black/40 flex items-center justify-center p-6" onClick={() => setUnsupportedNotice(false)}>
-          <div
-            className={`max-w-sm w-full rounded-2xl p-6 text-center space-y-3 ${
-              theme === 'sweet' ? 'bg-[#FFF0F5]' : 'bg-white dark:bg-gray-900'
-            }`}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <ShieldAlert className="w-10 h-10 text-pink-500 mx-auto" />
-            <h3 className={`font-bold ${theme === 'sweet' ? 'text-[#4B004B]' : 'text-gray-900 dark:text-white'}`}>
-              Security setup looks incomplete
-            </h3>
-            <p className={`text-sm ${theme === 'sweet' ? 'text-[#8B004B]' : 'text-gray-500'}`}>
-              This chat is set to require a security method, but the actual PIN/password/face wasn't saved properly. Go to Settings and set it up again.
-            </p>
-            <button
-              onClick={() => setUnsupportedNotice(false)}
-              className="mt-2 px-5 py-2 rounded-xl bg-pink-500 text-white text-sm font-bold hover:bg-pink-600 transition-colors"
-            >
-              Got it
-            </button>
-          </div>
-        </div>
       )}
     </>
   );

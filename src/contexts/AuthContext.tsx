@@ -14,8 +14,6 @@ interface Profile {
   last_seen: string;
   is_online: boolean;
   created_at: string;
-  chat_biometric_type?: 'fingerprint' | 'face';
-
 }
 
 interface AuthContextType {
