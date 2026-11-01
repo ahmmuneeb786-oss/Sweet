@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { localDB } from '../db';
 import { emitMessageStored } from './messageBus';
+import { prefetchChatImages } from '../lib/mediaCache';
 
 /**
  * App-wide message sync. Mount ONCE at the app root (alongside useOfflineSync).
@@ -63,6 +64,8 @@ export async function catchUpMessages(userId: string): Promise<void> {
 
     if (data.length > 0) {
       await localDB.messages.bulkPut(data as any);
+      // Save the photos too, so these chats open with them already on the device.
+      prefetchChatImages(data as any);
       // Advance the watermark to the newest change we saw.
       const newest = (data[data.length - 1] as any).updated_at;
       if (newest) localStorage.setItem(key, newest);
@@ -102,6 +105,9 @@ export function useMessageSync(userId: string | undefined) {
               .single();
             if (!error && data) {
               await localDB.messages.put(data as any);
+              // Download and save its photo now, while we're online, so it's
+              // already on the device when the chat is opened (even offline).
+              prefetchChatImages([data as any]);
               // Push it into the open ChatWindow (if this chat is open) so a
               // message that landed just before the chat was opened still shows
               // without a reload.

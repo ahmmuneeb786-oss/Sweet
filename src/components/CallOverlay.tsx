@@ -137,7 +137,7 @@ export function CallOverlay({
           </div>
         ) : (
           <div className="relative">
-            {/* Pulsing visual circles matching Telegram call styles */}
+            {/* Pulsing visual circles */}
             <div className="absolute inset-0 rounded-full bg-current opacity-10 animate-ping" style={{ animationDuration: '2s' }} />
             {userAvatar ? (
               <img

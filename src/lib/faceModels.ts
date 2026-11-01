@@ -1,5 +1,3 @@
-import * as faceapi from 'face-api.js';
-
 /**
  * Face-api model loading, shared across the whole app instead of each
  * StrictLock mount starting its own fresh load.
@@ -15,24 +13,33 @@ import * as faceapi from 'face-api.js';
  * moment the app opens, if face lock is enabled) so the download happens
  * quietly in the background during normal app use — by the time someone
  * actually opens the scanner, it's often already done.
+ *
+ * The face-api.js library itself (~1MB+ with TensorFlow) is also loaded
+ * here on demand via import(), never with a static import anywhere in the
+ * app. That keeps it out of the main bundle, so users without face lock
+ * never parse or run it. Callers get the module from preloadFaceModels().
  */
+
+export type FaceApi = typeof import('face-api.js');
 
 const MODEL_URL = '/models';
 
-let loadPromise: Promise<void> | null = null;
-let isLoaded = false;
+let loadPromise: Promise<FaceApi> | null = null;
+let loadedApi: FaceApi | null = null;
 
-export function preloadFaceModels(): Promise<void> {
-  if (isLoaded) return Promise.resolve();
+export function preloadFaceModels(): Promise<FaceApi> {
+  if (loadedApi) return Promise.resolve(loadedApi);
   if (loadPromise) return loadPromise; // already in flight — share it, don't duplicate
 
-  loadPromise = Promise.all([
-    faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
-    faceapi.nets.faceExpressionNet.loadFromUri(MODEL_URL),
-    faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
-    faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
-  ]).then(() => {
-    isLoaded = true;
+  loadPromise = import('face-api.js').then(async (faceapi) => {
+    await Promise.all([
+      faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
+      faceapi.nets.faceExpressionNet.loadFromUri(MODEL_URL),
+      faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
+      faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
+    ]);
+    loadedApi = faceapi;
+    return faceapi;
   }).catch((err) => {
     // Let the next call retry from scratch instead of being permanently
     // stuck on a rejected promise.
@@ -44,5 +51,5 @@ export function preloadFaceModels(): Promise<void> {
 }
 
 export function areFaceModelsLoaded(): boolean {
-  return isLoaded;
+  return loadedApi !== null;
 }

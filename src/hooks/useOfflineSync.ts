@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { localDB, type PendingMessage } from '../db';
+import { saveMediaBlob } from '../lib/mediaCache';
 
 /**
  * The offline send queue.
@@ -62,6 +63,8 @@ async function uploadPendingMedia(pending: PendingMessage): Promise<string | nul
   if (uploadError) throw uploadError;
 
   const { data } = supabase.storage.from(bucket).getPublicUrl(filePath);
+  // Keep our own copy of a sent photo, so the sender never downloads it.
+  if (pending.message_type === 'image') void saveMediaBlob(data.publicUrl, pending.media_blob);
   return data.publicUrl;
 }
 

@@ -57,7 +57,7 @@ export function Settings({ onClose, theme, setTheme, user, onCloseLockedPanel }:
   // 3. Destructure and apply the typecast ('as SecureProfile')
   const { profile: rawProfile, updateProfile, signOut } = useAuth();
   const { showSuccess, showInfo } = useNotify();
-  const { deviceTier, isLowPerfMode, override, setOverride, showOverlay, setShowOverlay } = usePerformance();
+  const { deviceTier, perfLevel, override, setOverride, showOverlay, setShowOverlay } = usePerformance();
   const profile = rawProfile as SecureProfile; // ✨ This instantly cleans up all profile red marks!
 
   const [activeTab, setActiveTab] = useState<SettingsTab>('main');
@@ -1023,50 +1023,62 @@ export function Settings({ onClose, theme, setTheme, user, onCloseLockedPanel }:
       <span className="text-sm">Back</span>
     </button>
 
-    <div className={`relative overflow-hidden p-5 rounded-2xl shadow-sm ${theme === 'sweet' ? sweetCard : 'bg-gradient-to-br from-pink-50 via-purple-50 to-pink-100/50 border border-pink-200/60'}`}>
+    <div className={`relative overflow-hidden p-5 rounded-2xl shadow-sm ${
+      theme === 'sweet' ? sweetCard
+      : theme === 'dark' ? 'border bg-gray-800/50 border-gray-700'
+      : 'bg-gradient-to-br from-pink-50 via-purple-50 to-pink-100/50 border border-pink-200/60'
+    }`}>
       <div className="flex items-center gap-2.5 mb-3">
         <span className="text-base" role="img" aria-label="performance">⚡</span>
-        <p className="text-xs font-bold uppercase tracking-wider text-pink-600/80">
+        <p className={`text-xs font-bold uppercase tracking-wider ${theme === 'dark' ? 'text-pink-300/80' : 'text-pink-600/80'}`}>
           App Performance
         </p>
       </div>
 
       <div className="grid grid-cols-2 gap-3 mb-3">
-        <div className={`rounded-xl p-3 ${theme === 'sweet' ? sweetInner : 'bg-white/50'}`}>
-          <p className="text-[10px] font-bold uppercase tracking-wider text-pink-600/60 mb-1">Live FPS</p>
+        <div className={`rounded-xl p-3 ${theme === 'sweet' ? sweetInner : theme === 'dark' ? 'bg-gray-900/40' : 'bg-white/50'}`}>
+          <p className={`text-[10px] font-bold uppercase tracking-wider mb-1 ${theme === 'dark' ? 'text-pink-300/60' : 'text-pink-600/60'}`}>Live FPS</p>
           <LiveFpsValue />
         </div>
-        <div className={`rounded-xl p-3 ${theme === 'sweet' ? sweetInner : 'bg-white/50'}`}>
-          <p className="text-[10px] font-bold uppercase tracking-wider text-pink-600/60 mb-1">Device Tier</p>
-          <p className="text-2xl font-black capitalize text-[#4B004B]">{deviceTier}</p>
+        <div className={`rounded-xl p-3 ${theme === 'sweet' ? sweetInner : theme === 'dark' ? 'bg-gray-900/40' : 'bg-white/50'}`}>
+          <p className={`text-[10px] font-bold uppercase tracking-wider mb-1 ${theme === 'dark' ? 'text-pink-300/60' : 'text-pink-600/60'}`}>Device Guess</p>
+          <p className={`text-2xl font-black capitalize ${theme === 'dark' ? 'text-gray-100' : 'text-[#4B004B]'}`}>{deviceTier}</p>
         </div>
       </div>
 
-      <p className="text-[11px] text-pink-600/70 mb-3">
-        {override === 'auto' && isLowPerfMode &&
-          '✨ Auto: currently running reduced effects because we detected low performance.'}
-        {override === 'auto' && !isLowPerfMode &&
+      <p className={`text-[11px] mb-3 ${theme === 'dark' ? 'text-pink-300/70' : 'text-pink-600/70'}`}>
+        {/* Auto steps back up at most once per session (see
+            usePerformanceMonitor), so say so — otherwise a good FPS reading
+            next to "reduced effects" looks like a bug. */}
+        {override === 'auto' && perfLevel !== 'full' &&
+          `✨ Auto: running ${perfLevel} effects to keep this device smooth (it lagged before, or your device asks for less motion or data). If things stay smooth for 30 seconds, it can step back up once per session.`}
+        {override === 'auto' && perfLevel === 'full' &&
           '✨ Auto: currently running full effects — performance looks good.'}
-        {override === 'force-low' &&
-          'Manually locked to reduced effects, regardless of measured performance.'}
         {override === 'force-high' &&
-          'Manually locked to full effects, even if performance is measured as poor.'}
+          'Manually locked to full effects, even if this device lags.'}
+        {override === 'force-low' &&
+          'Manually locked to reduced effects: no blur, decorative animations paused.'}
+        {override === 'force-minimal' &&
+          'Manually locked to minimal effects: reduced, plus no transitions and no floating hearts.'}
       </p>
 
-      <div className="flex gap-2">
-        {(['auto', 'force-low', 'force-high'] as const).map((opt) => (
+      <div className="grid grid-cols-2 gap-2" role="group" aria-label="Effects mode">
+        {(['auto', 'force-high', 'force-low', 'force-minimal'] as const).map((opt) => (
           <button
             key={opt}
             onClick={() => setOverride(opt)}
-            className={`flex-1 py-2 rounded-xl text-[11px] font-bold transition-colors ${
+            aria-pressed={override === opt}
+            className={`py-2 rounded-xl text-[11px] font-bold transition-colors ${
               override === opt
                 ? 'bg-pink-500 text-white'
                 : theme === 'sweet'
                 ? `${sweetInner} text-pink-600/70 hover:bg-white`
+                : theme === 'dark'
+                ? 'bg-gray-900/40 text-pink-300/80 hover:bg-gray-700'
                 : 'bg-white/60 text-pink-600/70 hover:bg-white'
             }`}
           >
-            {opt === 'auto' ? 'Auto' : opt === 'force-low' ? 'Low Effects' : 'Full Effects'}
+            {opt === 'auto' ? 'Auto' : opt === 'force-high' ? 'Full Effects' : opt === 'force-low' ? 'Reduced' : 'Minimal'}
           </button>
         ))}
       </div>
@@ -1077,12 +1089,17 @@ export function Settings({ onClose, theme, setTheme, user, onCloseLockedPanel }:
       theme === 'sweet' ? sweetCard : theme === 'dark' ? 'border bg-gray-800/50 border-gray-700' : 'border bg-white/50 border-pink-200/60'
     }`}>
       <div>
-        <p className="text-sm font-bold">Show FPS on screen</p>
-        <p className={`text-[11px] mt-0.5 ${theme === 'sweet' ? 'text-[#8B004B]' : theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+        <p id="perf-overlay-label" className="text-sm font-bold">Show FPS on screen</p>
+        <p id="perf-overlay-desc" className={`text-[11px] mt-0.5 ${theme === 'sweet' ? 'text-[#8B004B]' : theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
           A small live readout stays visible on every screen, positioned out of the way of your chats.
         </p>
       </div>
       <button
+        type="button"
+        role="switch"
+        aria-checked={showOverlay}
+        aria-labelledby="perf-overlay-label"
+        aria-describedby="perf-overlay-desc"
         onClick={() => setShowOverlay(!showOverlay)}
         className={`shrink-0 w-12 h-7 rounded-full transition-colors relative ${
           showOverlay

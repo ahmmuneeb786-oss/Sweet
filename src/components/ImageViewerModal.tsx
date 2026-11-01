@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, ChevronLeft, ChevronRight, MoreVertical, Trash2, Download, Star } from 'lucide-react';
+import { ChatImage } from './ChatImage';
 
 interface ImageViewerModalProps {
   images: string[];
@@ -145,11 +146,13 @@ export function ImageViewerModal({ images, initialIndex = 0, alt, onClose, onRem
         </button>
       )}
 
-      <img
+      <ChatImage
         src={images[index]}
         alt={alt || 'Photo'}
+        eager
         onClick={(e) => e.stopPropagation()}
         className="max-w-full max-h-full rounded-2xl object-contain"
+        placeholderClassName="w-64 h-64 rounded-2xl"
       />
     </div>,
     document.body

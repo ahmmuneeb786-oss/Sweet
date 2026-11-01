@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase';
 import { localDB } from '../db';
 import { usePerformance } from '../contexts/PerformanceContext';
 import { formatMessagePreview } from '../lib/messagePreview';
+import { ChatImage } from './ChatImage';
 
 export interface Reaction {
   reaction: string;
@@ -370,6 +371,8 @@ function MessageComponent({
                 <img
                   src={message.profiles.avatar_url}
                   alt={message.profiles.display_name}
+                  loading="lazy"
+                  decoding="async"
                   className="w-6 h-6 rounded-full object-cover border border-pink-200"
                 />
               ) : (
@@ -464,6 +467,8 @@ function MessageComponent({
               <img
                 src={message.profiles.avatar_url}
                 alt={message.profiles.display_name}
+                loading="lazy"
+                decoding="async"
                 className="w-6 h-6 rounded-full object-cover border border-pink-200"
               />
             ) : (
@@ -516,10 +521,11 @@ function MessageComponent({
                     onViewMedia?.(message.id);
                   }}
                 >
-                  <img
+                  <ChatImage
                     src={message.media_url}
                     alt="GIF"
                     className="max-h-64 w-full object-cover"
+                    placeholderClassName="h-40 w-56"
                   />
                   <span className="absolute top-2 left-2 px-1.5 py-0.5 bg-black/60 rounded-md text-white text-[9px] font-black uppercase tracking-widest">
                     Gif
@@ -536,10 +542,11 @@ function MessageComponent({
                     onViewMedia?.(message.id);
                   }}
                 >
-                  <img
+                  <ChatImage
                     src={message.media_url}
                     alt="Shared"
                     className="max-h-80 w-full object-cover transition-transform duration-700 group-hover:scale-110"
+                    placeholderClassName="h-56 w-56"
                   />
                   <div className="absolute inset-0 bg-pink-500/0 group-hover:bg-pink-500/10 transition-colors duration-300 flex items-center justify-center">
                     <span className="opacity-0 group-hover:opacity-100 scale-50 group-hover:scale-100 transition-all duration-500 text-white drop-shadow-md font-bold text-xs uppercase tracking-widest bg-black/20 px-3 py-1 rounded-full backdrop-blur-sm">
@@ -583,6 +590,8 @@ function MessageComponent({
                           <img
                             src={mapPreviewUrl}
                             alt="Map"
+                            loading="lazy"
+                            decoding="async"
                             className="w-full h-full object-cover transform-gpu transition-transform duration-700 hover:scale-105"
                           />
                         ) : (
@@ -641,8 +650,8 @@ function MessageComponent({
                     >
                       {isPlaying ? (
                         <div className="flex gap-1 rotate-[-90deg]">
-                          <div className="w-1 h-3.5 bg-current rounded-full animate-[bounce_1s_infinite_0.1s]" />
-                          <div className="w-1 h-3.5 bg-current rounded-full animate-[bounce_1s_infinite_0.3s]" />
+                          <div className="perf-keep w-1 h-3.5 bg-current rounded-full animate-[bounce_1s_infinite_0.1s]" />
+                          <div className="perf-keep w-1 h-3.5 bg-current rounded-full animate-[bounce_1s_infinite_0.3s]" />
                         </div>
                       ) : (
                         <Play size={20} className="ml-1 fill-current" />

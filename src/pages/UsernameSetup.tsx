@@ -6,11 +6,10 @@ import { supabase } from '../lib/supabase';
 import { useNotify } from '../contexts/NotificationContext';
 import { usePerformance } from '../contexts/PerformanceContext';
 
-// Shown to a Telegram Mini App user whose account has no username yet —
-// either they never set one in Telegram, or their Telegram username was
-// already claimed by someone else in Sweet. Deliberately never assigns one
-// automatically: the user must pick it themselves, same as email signup.
-export function TelegramUsernameSetup({ theme = 'light' }: { theme?: 'light' | 'dark' | 'sweet' }) {
+// Safety net for a signed-in account whose profile has no username — email
+// signup always sets one, so normally this never shows. Blocks entry until
+// the user picks one; never assigns one automatically.
+export function UsernameSetup({ theme = 'light' }: { theme?: 'light' | 'dark' | 'sweet' }) {
   const { updateProfile } = useAuth();
   const { showError, showSuccess } = useNotify();
   const { isLowPerfMode } = usePerformance();
@@ -134,7 +133,7 @@ export function TelegramUsernameSetup({ theme = 'light' }: { theme?: 'light' | '
               Choose your username
             </h1>
             <p className={`text-sm ${isSweet ? 'text-[#8B004B]' : 'text-gray-600'}`}>
-              We couldn't find (or already claimed) a Telegram username for you. You'll need to set one to continue — it's how friends find and add you in Sweet.
+              Your account doesn't have a username yet. You'll need to set one to continue — it's how friends find and add you in Sweet.
             </p>
           </div>
 

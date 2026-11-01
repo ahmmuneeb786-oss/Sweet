@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import * as faceapi from 'face-api.js';
 import { Lock, Smile, AlertCircle, ShieldCheck, UserPlus } from 'lucide-react';
 import { PermissionManager } from '../services/PermissionManager';
 import { useNotify } from '../contexts/NotificationContext';
-import { preloadFaceModels } from '../lib/faceModels';
+import { preloadFaceModels, type FaceApi } from '../lib/faceModels';
 
 interface StrictLockProps {
   onUnlock: () => void;
@@ -29,6 +28,13 @@ interface StrictLockProps {
 // (blink, turned head) doesn't.
 const MISMATCH_FRAMES_PER_ATTEMPT = 5;
 
+// A new scan starts 700ms after the previous one STARTED — or right after it
+// finished, if it took longer than that. Scans never overlap: a fixed
+// setInterval used to start a new one every 700ms regardless, which on slow
+// phones piled scans up (frozen screen) and could let two in-flight scans
+// both unlock, or both save a registration.
+const SCAN_INTERVAL_MS = 700;
+
 export const StrictLock = ({ 
   onUnlock, 
   mode = 'verify', 
@@ -41,13 +47,19 @@ export const StrictLock = ({
   onMismatch
 }: StrictLockProps) => {
   const { showError } = useNotify();
-  // The detection loop is a setInterval created once, so it would see a
+  // The detection loop is created once, so it would see a
   // stale onMismatch — read the latest through a ref instead.
   const onMismatchRef = useRef(onMismatch);
   onMismatchRef.current = onMismatch;
   const mismatchStreakRef = useRef(0);
   const videoRef = useRef<HTMLVideoElement>(null);
-  const detectionIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const scanTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // True while the scan loop is running; set false to stop it. A scan that's
+  // mid-flight when this flips ignores its own result.
+  const scanLoopActiveRef = useRef(false);
+  // face-api.js is loaded on demand (see lib/faceModels), so the module
+  // arrives with the models instead of through a static import.
+  const faceapiRef = useRef<FaceApi | null>(null);
   const [isModelLoaded, setIsModelLoaded] = useState(false);
   const [feedback, setFeedback] = useState('Initializing FaceID...');
   const [isPulsing, setIsPulsing] = useState(false);
@@ -60,7 +72,7 @@ export const StrictLock = ({
         // in the background when the app opened, this just picks up that
         // same in-flight (or already-finished) load instead of starting a
         // second one from a third-party URL.
-        await preloadFaceModels();
+        faceapiRef.current = await preloadFaceModels();
         setIsModelLoaded(true);
         startCamera();
       } catch (err) {
@@ -70,12 +82,9 @@ export const StrictLock = ({
     };
     loadModels();
 
-    // Cleanup camera AND the detection interval on unmount
+    // Cleanup camera AND the detection loop on unmount
     return () => {
-      if (detectionIntervalRef.current) {
-        clearInterval(detectionIntervalRef.current);
-        detectionIntervalRef.current = null;
-      }
+      stopScanning();
       if (videoRef.current && videoRef.current.srcObject) {
         const stream = videoRef.current.srcObject as MediaStream;
         stream.getTracks().forEach(track => track.stop());
@@ -127,26 +136,51 @@ export const StrictLock = ({
   };
 
 const handleDetection = async () => {
-  if (!videoRef.current || !isModelLoaded) return;
+  const faceapi = faceapiRef.current;
+  if (!videoRef.current || !isModelLoaded || !faceapi) return;
 
   // onPlay can fire more than once in some browsers (e.g. after any
-  // pause/replay cycle). Without this guard, each firing stacked another
-  // concurrent setInterval scanning the same feed — the previous version's
-  // returned cleanup function was silently discarded, since onPlay is a DOM
-  // event handler, not a useEffect.
-  if (detectionIntervalRef.current) return;
+  // pause/replay cycle). Without this guard, each firing would start another
+  // loop scanning the same feed.
+  if (scanLoopActiveRef.current) return;
+  scanLoopActiveRef.current = true;
 
-  const interval = setInterval(async () => {
+  const runScan = async () => {
+    scanTimerRef.current = null;
+    if (!scanLoopActiveRef.current) return;
     if (!videoRef.current) {
-      clearInterval(interval);
-      detectionIntervalRef.current = null;
+      stopScanning();
       return;
     }
 
+    const startedAt = performance.now();
+    try {
+      await scanOnce(faceapi);
+    } catch (err) {
+      console.warn('Face scan failed, trying again:', err);
+    }
+
+    // Unlocked, registered, cancelled or unmounted during this scan — done.
+    if (!scanLoopActiveRef.current) return;
+    const wait = Math.max(0, SCAN_INTERVAL_MS - (performance.now() - startedAt));
+    scanTimerRef.current = setTimeout(runScan, wait);
+  };
+
+  runScan();
+};
+
+// One scan of the current camera frame. Returning early just means "keep
+// scanning"; stopScanning() is what ends the loop.
+const scanOnce = async (faceapi: FaceApi) => {
+    if (!videoRef.current) return;
     const detections = await faceapi.detectAllFaces(
-      videoRef.current!,
+      videoRef.current,
       new faceapi.TinyFaceDetectorOptions()
     ).withFaceLandmarks().withFaceExpressions().withFaceDescriptors();
+
+    // Stopped while this scan was running — its result no longer applies
+    // (this is what prevents a second unlock or a second save).
+    if (!scanLoopActiveRef.current) return;
 
     if (detections.length > 1) {
       setFeedback('Privacy Alert: Multiple people detected! 🔒');
@@ -172,8 +206,7 @@ const handleDetection = async () => {
          console.error("Critical: Cannot register face because userId is missing!");
          setFeedback('Error: User session lost. Please log in again.');
          setErrorState(true);
-         clearInterval(interval);
-      detectionIntervalRef.current = null;
+         stopScanning();
          return;
        }
         setFeedback('Smile Captured! Syncing to Cloud...');
@@ -181,9 +214,8 @@ const handleDetection = async () => {
         try {
           const descriptorArray = Array.from(currentDescriptor);
 
-          // Clear interval immediately so it stops scanning during network latency
-          clearInterval(interval);
-      detectionIntervalRef.current = null;
+          // Stop scanning immediately so it doesn't scan during network latency
+          stopScanning();
 
           // Delegate saving entirely to the app's centralized prop function
           await onSaveDescriptor(userId, descriptorArray);
@@ -217,10 +249,8 @@ const handleDetection = async () => {
         if (smileValue > 0.85) {
           setFeedback('Identity Verified! Opening...');
           setIsPulsing(true);
-          
-          clearInterval(interval);
-      detectionIntervalRef.current = null;
-          stopCamera(); 
+
+          stopCamera();
           setTimeout(() => onUnlock(), 1000);
         } else {
           setFeedback('Hi! Just smile to enter 😊');
@@ -237,18 +267,21 @@ const handleDetection = async () => {
           onMismatchRef.current?.();
         }
       }
-    } 
-  }, 700);
+    }
+};
 
-  detectionIntervalRef.current = interval;
+// Ends the scan loop; a scan already in progress ignores its result.
+const stopScanning = () => {
+  scanLoopActiveRef.current = false;
+  if (scanTimerRef.current) {
+    clearTimeout(scanTimerRef.current);
+    scanTimerRef.current = null;
+  }
 };
 
 // HELPER FUNCTION: kills the camera AND the detection loop together
 const stopCamera = () => {
-  if (detectionIntervalRef.current) {
-    clearInterval(detectionIntervalRef.current);
-    detectionIntervalRef.current = null;
-  }
+  stopScanning();
   if (videoRef.current && videoRef.current.srcObject) {
     const stream = videoRef.current.srcObject as MediaStream;
     const tracks = stream.getTracks();

@@ -36,5 +36,38 @@
   border: none !important;
 }
 
+/* Effects levels, app-wide. PerformanceProvider sets <html data-perf=
+   "full" | "reduced" | "minimal">, so every effect is covered here —
+   including ones no component checks isLowPerfMode for.
+
+   reduced + minimal: no backdrop blur (the expensive one — re-sampled every
+   frame behind the element) and endless decorative animations frozen. Add
+   `perf-keep` to one that shows status (typing dots, playing voice note) to
+   keep it moving. Spinners (animate-spin) are never touched. */
+html:is([data-perf='reduced'], [data-perf='minimal']) *,
+html:is([data-perf='reduced'], [data-perf='minimal']) *::before,
+html:is([data-perf='reduced'], [data-perf='minimal']) *::after {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+html:is([data-perf='reduced'], [data-perf='minimal']) :is(
+  .animate-pulse, .animate-bounce, .animate-ping, .animate-heartbeat,
+  .animate-sparkle, .animate-wave,
+  [class*='animate-[bounce'], [class*='animate-[float']
+):not(.perf-keep) {
+  animation: none !important;
+}
+
+/* minimal only: no transitions either — every hover, colour change and
+   slide is drawn as one frame instead of ~15. (Floating hearts are also
+   removed entirely, in FloatingHearts.tsx.) */
+html[data-perf='minimal'] *,
+html[data-perf='minimal'] *::before,
+html[data-perf='minimal'] *::after {
+  transition-duration: 0s !important;
+  transition-delay: 0s !important;
+}
+
 .scrollbar-hide::-webkit-scrollbar { display: none; }
 .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }

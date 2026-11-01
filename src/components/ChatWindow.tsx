@@ -1,7 +1,6 @@
-import { useState, useEffect, useRef, useCallback, useLayoutEffect } from 'react';
+import { useState, useEffect, useRef, useCallback, useLayoutEffect, useMemo, memo, lazy, Suspense } from 'react';
 import { Send, Phone, Video, FileText, X, Mic, AlertCircle, Check, ArrowLeft, Pencil, Reply, Lock } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import LocationPicker from './LocationPicker';
 import { supabase } from '../lib/supabase';
 import { Message, type Reaction, type MessageReactionState } from './Message';
 import { ChatMenu } from './ChatMenu';
@@ -14,6 +13,12 @@ import { CallOverlay } from './CallOverlay';
 import { ImageViewerModal } from './ImageViewerModal';
 import { OfflineBadge } from './OfflineBadge';
 import { usePresence } from '../hooks/usePresence';
+import { compressImage } from '../lib/imageCompression';
+import { saveMediaBlob } from '../lib/mediaCache';
+
+// Leaflet (map library + its CSS) only loads the first time someone opens
+// the location picker, instead of with every chat.
+const LocationPicker = lazy(() => import('./LocationPicker'));
 import { useBackableState } from '../hooks/useBackableState';
 import { queuePendingMessage, retryPendingMessage, subscribeToSyncEvents } from '../hooks/useOfflineSync';
 import { useNotify } from '../contexts/NotificationContext';
@@ -91,6 +96,138 @@ function formatLastSeen(lastSeenTimestamp: string | null | undefined): string {
   if (days > 7 && days <= 30) return 'last seen within a month';
   return 'last seen long time ago';
 }
+
+// Updates only itself on a timer so "last seen 5m ago" stays current —
+// previously a 10s timer re-rendered the whole chat window for this.
+function LastSeenText({ lastSeen }: { lastSeen: string | null | undefined }) {
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const timer = setInterval(() => setTick((n) => n + 1), 30000);
+    return () => clearInterval(timer);
+  }, []);
+  return <>{formatLastSeen(lastSeen)}</>;
+}
+
+interface MessageListProps {
+  messages: MessageType[];
+  replyParents: Record<string, MessageType>;
+  messageReactions: Record<string, MessageReactionState>;
+  highlightedMessageId: string | null;
+  unreadDividerId: string | null;
+  userId: string | undefined;
+  theme: 'light' | 'dark' | 'sweet';
+  onDelete: (messageId: string) => void;
+  onHide: (messageId: string) => void;
+  onEdit: (messageId: string, content: string) => void;
+  onReply: (message: MessageType) => void;
+  onJumpToReplied: (messageId: string) => void;
+  onViewMedia: (messageId: string) => void;
+  onRetry: (messageId: string) => void;
+}
+
+// Memoized so ChatWindow re-renders that don't touch the list — every
+// keystroke in the input, header updates — skip looping over every message.
+// All the handlers passed in are stable useCallbacks, so in practice this
+// only re-renders when the messages, reactions or highlight change.
+const MessageList = memo(function MessageList({
+  messages, replyParents, messageReactions, highlightedMessageId, unreadDividerId, userId, theme,
+  onDelete, onHide, onEdit, onReply, onJumpToReplied, onViewMedia, onRetry,
+}: MessageListProps) {
+  // Reply parents are looked up once per message below — a Map keeps that
+  // O(1) instead of scanning every loaded message for each reply.
+  const messagesById = useMemo(() => new Map(messages.map((m) => [m.id, m])), [messages]);
+
+  return (
+    <>
+      {messages.map((message, index) => {
+        const showAvatar = index === 0 || messages[index - 1].sender_id !== message.sender_id;
+        const msgDate = new Date(message.created_at).toDateString();
+        const prevMsgDate = index > 0 ? new Date(messages[index - 1].created_at).toDateString() : null;
+        const showDateSeparator = msgDate !== prevMsgDate;
+        const isOwn = message.sender_id === userId;
+        const isSending = message.delivery_status === 'sending';
+        const isPending = message.delivery_status === 'pending';
+        const isFailed = message.delivery_status === 'failed';
+        const reactionState = messageReactions[message.id];
+        // The message this one replies to — from the loaded window, or the
+        // on-demand-fetched parents map when it's older than the window.
+        const repliedTo = message.reply_to_id
+          ? (messagesById.get(message.reply_to_id) || replyParents[message.reply_to_id])
+          : undefined;
+
+        return (
+          <div
+            key={message.id}
+            id={`msg-${message.id}`}
+            className={`group rounded-2xl transition-colors duration-500 ${
+              highlightedMessageId === message.id ? 'bg-pink-300/30' : ''
+            }`}
+          >
+            <Message
+              message={message}
+              isOwn={isOwn}
+              showAvatar={showAvatar}
+              showDateSeparator={showDateSeparator}
+              reactions={REACTIONS_EMOJIS as unknown as string[]}
+              theme={theme}
+              onDelete={onDelete}
+              onHide={onHide}
+              onEdit={onEdit}
+              onReply={(m) => onReply(m as MessageType)}
+              repliedTo={repliedTo}
+              onJumpToReplied={onJumpToReplied}
+              showUnreadDivider={message.id === unreadDividerId}
+              currentUserId={userId}
+              onViewMedia={onViewMedia}
+              initialDbReactions={reactionState?.reactions ?? EMPTY_REACTIONS}
+              initialUserMap={reactionState?.userMap ?? EMPTY_USER_MAP}
+            />
+
+            {isOwn && (
+              <div className="flex flex-col items-end gap-1 mt-1 px-4">
+                {isSending && (
+                  <div className={`flex items-center gap-1 text-[10px] ${theme === 'sweet' ? 'text-[#8B004B]' : 'text-gray-500'}`}>
+                    <div className={`w-2.5 h-2.5 border-2 border-t-transparent rounded-full animate-spin ${theme === 'sweet' ? 'border-[#FF69B4]' : 'border-gray-400'}`} />
+                    <span>Sending...</span>
+                  </div>
+                )}
+                {isPending && (
+                  <div className={`flex items-center gap-1 text-[10px] ${theme === 'sweet' ? 'text-[#8B004B]' : 'text-gray-500'}`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${theme === 'sweet' ? 'bg-[#FF69B4]' : 'bg-gray-400'}`} />
+                    <span>Waiting to reconnect...</span>
+                  </div>
+                )}
+                {isFailed && (
+                  <button
+                    onClick={() => onRetry(message.id)}
+                    className="flex items-center gap-1 text-[10px] text-red-600 font-bold"
+                  >
+                    <AlertCircle className="w-3 h-3" />
+                    <span>Failed - Tap to retry</span>
+                  </button>
+                )}
+                {!isSending && !isPending && !isFailed && (
+                  <div className={`flex items-center gap-1 text-xs transition-colors ${
+                    theme === 'sweet' ? 'text-[#8B004B]' : 'text-gray-500 dark:text-gray-400'
+                  }`}>
+                    {message.delivery_status === 'read' ? (
+                      <div className="flex items-center">
+                        <Check className={`w-3 h-3 ${theme === 'sweet' ? 'text-[#FF1493]' : 'text-blue-500'}`} />
+                        <Check className={`w-3 h-3 -ml-1.5 ${theme === 'sweet' ? 'text-[#FF1493]' : 'text-blue-500'}`} />
+                      </div>
+                    ) : (
+                      message.delivery_status === 'sent' && <Check className="w-3 h-3 opacity-60" />
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </>
+  );
+});
 
 export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setMyGifs }: ChatWindowProps) {
   const { user } = useAuth();
@@ -321,12 +458,6 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
     loadChat(requestedChatId);
   }
 
-  useEffect(() => {
-    const tickerInterval = setInterval(() => {
-      setChatInfo((prev) => (prev ? { ...prev } : null));
-    }, 10000);
-    return () => clearInterval(tickerInterval);
-  }, []);
 
   // Scroll management on every messages change:
   //  - after prepending an older page, keep the viewport anchored,
@@ -919,6 +1050,17 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
     };
   }
 
+  // Every picked photo goes through here: shrunk once on pick (see
+  // lib/imageCompression), so the preview, the upload and the saved copy
+  // are all the small version.
+  async function pickImage(file: File) {
+    const compressed = await compressImage(file);
+    setSelectedFile(compressed);
+    const reader = new FileReader();
+    reader.onloadend = () => setImagePreview(reader.result as string);
+    reader.readAsDataURL(compressed);
+  }
+
   async function uploadImage(file: File): Promise<string | null> {
     try {
       const fileExt = file.name.split('.').pop();
@@ -1068,6 +1210,8 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
       } else if (fileToUpload) {
         finalMediaUrl = await uploadImage(fileToUpload);
         if (!finalMediaUrl) throw new Error("Image upload failed");
+        // Keep our own copy, so the sender never downloads their own photo.
+        void saveMediaBlob(finalMediaUrl, fileToUpload);
       } else if (voiceToUpload) {
         const fileName = `${user.id}/${Date.now()}.wav`;
         const { error: uploadError } = await supabase.storage.from('voice-notes').upload(fileName, voiceToUpload);
@@ -1583,10 +1727,7 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
         setSelectedVideo(input);
         setVideoPreview(URL.createObjectURL(input));
       } else {
-        setSelectedFile(input as File);
-        const reader = new FileReader();
-        reader.onloadend = () => setImagePreview(reader.result as string);
-        reader.readAsDataURL(input);
+        void pickImage(input instanceof File ? input : new File([input], 'photo', { type: input.type }));
       }
       return;
     }
@@ -1680,10 +1821,16 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
     }`}>
 
       {showLocationPicker && (
-        <LocationPicker
-          onCancel={() => setShowLocationPicker(false)}
-          onSelect={handleConfirmLocation}
-        />
+        <Suspense fallback={
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60">
+            <div className="w-8 h-8 border-3 border-pink-500 border-t-transparent rounded-full animate-spin" />
+          </div>
+        }>
+          <LocationPicker
+            onCancel={() => setShowLocationPicker(false)}
+            onSelect={handleConfirmLocation}
+          />
+        </Suspense>
       )}
 
       {isRecordingVideoNote && (
@@ -1776,7 +1923,7 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
                         online
                       </span>
                     ) : (
-                      formatLastSeen(chatInfo.otherUser.last_seen)
+                      <LastSeenText lastSeen={chatInfo.otherUser.last_seen} />
                     )}
                   </p>
                 </div>
@@ -1846,101 +1993,31 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
           </div>
         )}
 
-        {messages.map((message, index) => {
-          const showAvatar = index === 0 || messages[index - 1].sender_id !== message.sender_id;
-          const msgDate = new Date(message.created_at).toDateString();
-          const prevMsgDate = index > 0 ? new Date(messages[index - 1].created_at).toDateString() : null;
-          const showDateSeparator = msgDate !== prevMsgDate;
-          const isOwn = message.sender_id === user?.id;
-          const isSending = message.delivery_status === 'sending';
-          const isPending = message.delivery_status === 'pending';
-          const isFailed = message.delivery_status === 'failed';
-          const reactionState = messageReactions[message.id];
-          // The message this one replies to — from the loaded window, or the
-          // on-demand-fetched parents map when it's older than the window.
-          const repliedTo = message.reply_to_id
-            ? (messages.find((m) => m.id === message.reply_to_id) || replyParents[message.reply_to_id])
-            : undefined;
-
-          return (
-            <div
-              key={message.id}
-              id={`msg-${message.id}`}
-              className={`group rounded-2xl transition-colors duration-500 ${
-                highlightedMessageId === message.id ? 'bg-pink-300/30' : ''
-              }`}
-            >
-              <Message
-                message={message}
-                isOwn={isOwn}
-                showAvatar={showAvatar}
-                showDateSeparator={showDateSeparator}
-                reactions={REACTIONS_EMOJIS as unknown as string[]}
-                theme={theme}
-                onDelete={handleDeleteMessage}
-                onHide={handleHideMessage}
-                onEdit={handleEditMessage}
-                onReply={(m) => handleReply(m as MessageType)}
-                repliedTo={repliedTo}
-                onJumpToReplied={jumpToMessage}
-                showUnreadDivider={message.id === unreadDividerId}
-                currentUserId={user?.id}
-                onViewMedia={handleViewMedia}
-                initialDbReactions={reactionState?.reactions ?? EMPTY_REACTIONS}
-                initialUserMap={reactionState?.userMap ?? EMPTY_USER_MAP}
-              />
-
-              {isOwn && (
-                <div className="flex flex-col items-end gap-1 mt-1 px-4">
-                  {isSending && (
-                    <div className={`flex items-center gap-1 text-[10px] ${theme === 'sweet' ? 'text-[#8B004B]' : 'text-gray-500'}`}>
-                      <div className={`w-2.5 h-2.5 border-2 border-t-transparent rounded-full animate-spin ${theme === 'sweet' ? 'border-[#FF69B4]' : 'border-gray-400'}`} />
-                      <span>Sending...</span>
-                    </div>
-                  )}
-                  {isPending && (
-                    <div className={`flex items-center gap-1 text-[10px] ${theme === 'sweet' ? 'text-[#8B004B]' : 'text-gray-500'}`}>
-                      <span className={`w-1.5 h-1.5 rounded-full ${theme === 'sweet' ? 'bg-[#FF69B4]' : 'bg-gray-400'}`} />
-                      <span>Waiting to reconnect...</span>
-                    </div>
-                  )}
-                  {isFailed && (
-                    <button
-                      onClick={() => handleRetryMessage(message.id)}
-                      className="flex items-center gap-1 text-[10px] text-red-600 font-bold"
-                    >
-                      <AlertCircle className="w-3 h-3" />
-                      <span>Failed - Tap to retry</span>
-                    </button>
-                  )}
-                  {!isSending && !isPending && !isFailed && (
-                    <div className={`flex items-center gap-1 text-xs transition-colors ${
-                      theme === 'sweet' ? 'text-[#8B004B]' : 'text-gray-500 dark:text-gray-400'
-                    }`}>
-                      {message.delivery_status === 'read' ? (
-                        <div className="flex items-center">
-                          <Check className={`w-3 h-3 ${theme === 'sweet' ? 'text-[#FF1493]' : 'text-blue-500'}`} />
-                          <Check className={`w-3 h-3 -ml-1.5 ${theme === 'sweet' ? 'text-[#FF1493]' : 'text-blue-500'}`} />
-                        </div>
-                      ) : (
-                        message.delivery_status === 'sent' && <Check className="w-3 h-3 opacity-60" />
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          );
-        })}
+        <MessageList
+          messages={messages}
+          replyParents={replyParents}
+          messageReactions={messageReactions}
+          highlightedMessageId={highlightedMessageId}
+          unreadDividerId={unreadDividerId}
+          userId={user?.id}
+          theme={theme}
+          onDelete={handleDeleteMessage}
+          onHide={handleHideMessage}
+          onEdit={handleEditMessage}
+          onReply={handleReply}
+          onJumpToReplied={jumpToMessage}
+          onViewMedia={handleViewMedia}
+          onRetry={handleRetryMessage}
+        />
 
         {isOtherTyping && (
           <div className={`flex items-center gap-2 p-2 ml-4 mb-2 animate-in fade-in slide-in-from-left-2 duration-300 ${
             theme === 'sweet' ? 'text-[#8B004B]' : 'text-gray-500 dark:text-gray-400'
           }`}>
             <div className="flex gap-1">
-              <span className="w-1.5 h-1.5 bg-current opacity-40 rounded-full animate-bounce" />
-              <span className="w-1.5 h-1.5 bg-current opacity-60 rounded-full animate-bounce [animation-delay:0.2s]" />
-              <span className="w-1.5 h-1.5 bg-current opacity-100 rounded-full animate-bounce [animation-delay:0.4s]" />
+              <span className="perf-keep w-1.5 h-1.5 bg-current opacity-40 rounded-full animate-bounce" />
+              <span className="perf-keep w-1.5 h-1.5 bg-current opacity-60 rounded-full animate-bounce [animation-delay:0.2s]" />
+              <span className="perf-keep w-1.5 h-1.5 bg-current opacity-100 rounded-full animate-bounce [animation-delay:0.4s]" />
             </div>
             <span className="text-xs italic font-semibold">{chatInfo.otherUser?.display_name} is typing...</span>
           </div>
@@ -2059,12 +2136,7 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
             hidden
             onChange={(e) => {
               const file = e.target.files?.[0];
-              if (file) {
-                setSelectedFile(file);
-                const reader = new FileReader();
-                reader.onloadend = () => setImagePreview(reader.result as string);
-                reader.readAsDataURL(file);
-              }
+              if (file) void pickImage(file);
             }}
           />
 

@@ -3,16 +3,8 @@ import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
 import { registerSW } from 'virtual:pwa-register';
-import { init } from '@telegram-apps/sdk-react';
-import { isTelegramMiniApp } from './lib/platform';
 
 registerSW({ immediate: true });
-
-// Only runs inside Telegram's WebView — completely inert in browser/Electron,
-// since isTelegramMiniApp() returns false there and this block never executes.
-if (isTelegramMiniApp()) {
-  init();
-}
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

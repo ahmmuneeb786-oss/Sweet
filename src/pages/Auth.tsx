@@ -5,7 +5,6 @@ import { FloatingHearts } from '../components/FloatingHearts';
 import { supabase } from '../lib/supabase';
 import { useNotify } from '../contexts/NotificationContext';
 import { usePerformance } from '../contexts/PerformanceContext';
-import { isTelegramMiniApp } from '../lib/platform';
 
 type AuthMode = 'login' | 'signup' | 'forgot' | 'verify-otp';
 
@@ -33,12 +32,11 @@ function isValidEmailFormat(emailToCheck: string) {
 }
 
 export function Auth({ theme = 'light' }: { theme?: 'light' | 'dark' | 'sweet' }) {
-  const { signIn, signUp, verifySignupOtp, resendSignupOtp, completeProfileSetup, signInWithTelegram } = useAuth();
+  const { signIn, signUp, verifySignupOtp, resendSignupOtp, completeProfileSetup } = useAuth();
   const { showSuccess, showError, showInfo } = useNotify();
   const { isLowPerfMode } = usePerformance();
   const [mode, setMode] = useState<AuthMode>('login');
   const [loading, setLoading] = useState(false);
-  const [telegramLoading, setTelegramLoading] = useState(false);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -193,18 +191,6 @@ useEffect(() => {
       return email;
     }
   };
-
-  async function handleTelegramLogin() {
-    setTelegramLoading(true);
-    try {
-      await signInWithTelegram();
-      // Session now set — AuthContext picks it up automatically, same as any other login.
-    } catch (err) {
-      showError(err instanceof Error ? err.message : 'Could not log in with Telegram');
-    } finally {
-      setTelegramLoading(false);
-    }
-  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -407,26 +393,6 @@ useEffect(() => {
               <span className={`h-0.5 w-6 ${isSweet ? 'bg-[#FFB6C1]' : 'bg-pink-100'}`}></span>
             </p>
           </div>
-
-          {isTelegramMiniApp() && (
-            <button
-              type="button"
-              onClick={handleTelegramLogin}
-              disabled={telegramLoading}
-              className={`w-full py-3 px-4 mb-4 font-medium rounded-xl flex items-center justify-center gap-2 transition-all disabled:opacity-60 disabled:cursor-not-allowed ${
-                isSweet ? 'bg-[#229ED9] text-white hover:bg-[#1e8bc3]' : 'bg-[#229ED9] text-white hover:bg-[#1e8bc3]'
-              }`}
-            >
-              {telegramLoading ? (
-                <>
-                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  <span>Connecting...</span>
-                </>
-              ) : (
-                'Continue with Telegram'
-              )}
-            </button>
-          )}
 
           {mode !== 'verify-otp' && (
           <div className={`flex gap-2 p-1 rounded-full ${isSweet ? 'bg-[#FFE4E1]' : 'bg-gray-100'}`}>

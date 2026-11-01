@@ -32,7 +32,7 @@ export function getAppLockMethods(
 }
 
 // "Forgot your app password?" is only allowed right after a real sign-in:
-// proving you own the account (email/Telegram login) is what earns a reset.
+// proving you own the account (email login) is what earns a reset.
 // Someone holding an already-unlocked phone can't do that without the
 // account login itself — and with that, they could read the chats from any
 // device anyway.

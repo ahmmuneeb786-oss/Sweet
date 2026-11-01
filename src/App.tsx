@@ -5,7 +5,7 @@ import { ConfirmProvider } from './contexts/ConfirmContext';
 import { PerformanceProvider } from './contexts/PerformanceContext';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Auth } from './pages/Auth';
-import { TelegramUsernameSetup } from './pages/TelegramUsernameSetup';
+import { UsernameSetup } from './pages/UsernameSetup';
 import { Dashboard } from './pages/Dashboard';
 import { initializeDictionary } from './predictionService';
 import { Heart, Paperclip, X, Search } from 'lucide-react';
@@ -20,20 +20,36 @@ import { useMessageSync, catchUpMessages, waitAtMost } from './hooks/useMessageS
 import { useChatsReady } from './hooks/useChatsReady';
 import { localDB } from './db';
 import { preloadFaceModels } from './lib/faceModels';
-import { DEFAULT_VAULT, getCachedVault, onVaultChange, saveVault, type VaultSettings } from './lib/vault';
+import { DEFAULT_VAULT, getCachedVault, getSavedMethods, onVaultChange, saveVault, type VaultSettings } from './lib/vault';
 import { getAppLockMethods } from './lib/appLock';
 import { getDeviceFingerprintId } from './lib/fingerprint';
 import { hasCamera } from './lib/camera';
 
-// Face models are a large download. Only fetch them when the App Lock will
-// actually use the face on this device — and only hold the splash for them
-// when the face scan is the first thing shown (not just a backup behind
-// fingerprint or password, where they load quietly in the background).
+// Face models (and the face-api.js library itself) are a large download.
+// Only fetch them when the App Lock will actually use the face on this
+// device — and only hold the splash for them when the face scan is the
+// first thing shown (not just a backup behind fingerprint or password,
+// where they load quietly in the background).
 async function preloadFaceModelsIfUsed(uid: string, vault: VaultSettings | null) {
   if (!vault) return;
   const methods = getAppLockMethods(vault, vault.face_descriptor, getDeviceFingerprintId(uid), await hasCamera());
   if (methods[0] === 'face') await preloadFaceModels();
   else if (methods.includes('face')) preloadFaceModels().catch(() => {});
+}
+
+// Same idea for the Locked Chats: if they can be opened with the face on
+// this device, warm everything up in the background so the scanner opens
+// fast. Never blocks the splash. Reads the device's vault copy, so it's
+// instant and works offline; with no copy yet, VaultGate's StrictLock still
+// loads everything on demand the first time it opens.
+async function preloadFaceModelsForLockedChats(uid: string) {
+  const vault = await getCachedVault(uid);
+  if (!vault || vault.chat_security_type === 'none') return;
+  const saved = getSavedMethods(vault, vault.face_descriptor, getDeviceFingerprintId(uid), await hasCamera());
+  if (saved.face !== 'saved') return;
+  if (vault.chat_security_type === 'face' || vault.allow_other_methods) {
+    preloadFaceModels().catch(() => {});
+  }
 }
 import { VisitTrackingProvider, useVisitTracking } from './contexts/VisitTrackingContext';
 
@@ -243,6 +259,9 @@ function AppContent() {
     // what caused this bug the first time), so we deliberately do NOT fast
     // release on it — we wait for server confirmation instead. Fail-locked,
     // not fail-open.
+    // Background only — never part of what holds the splash.
+    preloadFaceModelsForLockedChats(uid).catch(() => {});
+
     const cached = await localDB.getFaceLockDataLocally(uid);
     if (cached?.enabled) {
       if (cached.descriptor) {
@@ -470,15 +489,15 @@ if (loading || profileSyncLoading) {
     );
   }
 
-  // A signed-in Telegram user with no username yet (no Telegram username was
-  // available, or it was already taken by someone else) — block here until
-  // they pick one themselves. Email signups always have a username by the
-  // time a profile row exists, so this only ever fires for that case.
+  // A signed-in account with no username — block here until they pick one.
+  // Email signups always have a username by the time a profile row exists,
+  // so this is only a safety net (e.g. accounts left over from the removed
+  // Telegram login).
   if (profile && !profile.username) {
     return (
       <div className={theme === 'dark' ? 'dark' : ''}>
         <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
-          <TelegramUsernameSetup theme={theme} />
+          <UsernameSetup theme={theme} />
         </div>
       </div>
     );
