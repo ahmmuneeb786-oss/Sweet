@@ -223,10 +223,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           display_name: displayName.trim(),
           bio: '',
           is_online: true,
-          face_lock_enabled: false,
         });
 
       if (profileError) throw profileError;
+
+      const { error: vaultError } = await supabase
+        .from('vault_settings')
+        .insert({
+          user_id: authUser.id
+        });
+
+if (vaultError) throw vaultError;
 
       const { error: privacyError } = await supabase
         .from('privacy_settings')

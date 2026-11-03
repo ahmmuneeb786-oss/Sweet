@@ -74,7 +74,6 @@ export function MobileDashboard({ theme, setTheme, onOpenGifPanel, myGifs, setMy
             <FriendList
               theme={theme}
               onClose={() => setShowFriends(false)}
-              onSelectUser={(user) => { setSelectedChatId(user.id); setShowFriends(false); }}
               setActiveChatId={setSelectedChatId}
               initialTab="search"
             />

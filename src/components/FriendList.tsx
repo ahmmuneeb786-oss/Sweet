@@ -11,7 +11,6 @@ import { OfflineBadge } from './OfflineBadge';
 interface FriendListProps {
   theme: 'light' | 'dark' | 'sweet';
   onClose: () => void;
-  onSelectUser: (user: any) => void;
   setActiveChatId: (id: string) => void;
   /** Which tab to open on. The chat list's "Friends" button opens 'search'
    *  so users can immediately look someone up to add. */
@@ -80,7 +79,7 @@ function EmptyState({
   );
 }
 
-export function FriendList({ theme, onClose, onSelectUser, setActiveChatId, initialTab = 'friends' }: FriendListProps) {
+export function FriendList({ theme, onClose, setActiveChatId, initialTab = 'friends' }: FriendListProps) {
   const { user } = useAuth();
   const { showSuccess, showError } = useNotify();
   const confirm = useConfirm();
@@ -326,67 +325,89 @@ export function FriendList({ theme, onClose, onSelectUser, setActiveChatId, init
   }
 
   async function handleStartChat(friendId: string) {
-    if (!user) return;
+  if (!user) return;
 
-    const sortedIds = [user.id, friendId].sort();
-    const consistentRoomId = `${sortedIds[0]}_${sortedIds[1]}`;
+  const sortedIds = [user.id, friendId].sort();
+  const consistentRoomId = `${sortedIds[0]}_${sortedIds[1]}`;
 
-    try {
-      const targetFriend = friends.find(f => f.id === friendId);
+  try {
+    const targetFriend = friends.find(f => f.id === friendId);
 
-      // OFFLINE FIRST LAYER
-      // Carry over an existing chat's real last message, type and unread
-      // count — the placeholder preview is only for a brand-new chat.
-      const existingRow = await localDB.chats.get(consistentRoomId);
-      await localDB.upsertChat({
-        ...existingRow,
-        id: consistentRoomId,
-        type: 'direct',
-        name: targetFriend?.display_name || 'Direct Chat',
-        avatar_url: targetFriend?.avatar_url || null,
-        theme: existingRow?.theme ?? 'sweet',
-        ...(existingRow?.last_message_time
-          ? {}
-          : { last_message_content: "No messages yet... 👋", last_message_time: new Date().toISOString() }),
-        other_user_id: targetFriend?.id,
-        other_user_name: targetFriend?.display_name,
-        other_user_avatar: targetFriend?.avatar_url,
-        other_user_last_seen: targetFriend?.last_seen,
-      });
+    const existingRow = await localDB.chats.get(consistentRoomId);
+    await localDB.upsertChat({
+      ...existingRow,
+      id: consistentRoomId,
+      type: 'direct',
+      name: targetFriend?.display_name || 'Direct Chat',
+      avatar_url: targetFriend?.avatar_url || null,
+      theme: existingRow?.theme ?? 'sweet',
+      ...(existingRow?.last_message_time
+        ? {}
+        : { last_message_content: "No messages yet... 👋", last_message_time: new Date().toISOString() }),
+      other_user_id: targetFriend?.id,
+      other_user_name: targetFriend?.display_name,
+      other_user_avatar: targetFriend?.avatar_url,
+      other_user_last_seen: targetFriend?.last_seen,
+    });
 
-      // Navigate into the chat window immediately
-      setActiveChatId(consistentRoomId);
+    setActiveChatId(consistentRoomId);
 
-      // BACKGROUND ONLINE LAYER
-      if (navigator.onLine) {
-        const { data: existingChat } = await supabase
+    if (navigator.onLine) {
+      const { data: existingChat } = await supabase
+        .from('chats')
+        .select('id')
+        .eq('id', consistentRoomId)
+        .maybeSingle();
+
+      if (!existingChat) {
+        const { error: chatError } = await supabase
           .from('chats')
-          .select('id')
-          .eq('id', consistentRoomId)
-          .maybeSingle();
+          .insert({ id: consistentRoomId, type: 'direct', theme: 'sweet' });
+        if (chatError) throw chatError;
 
-        if (!existingChat) {
-          const { error: chatError } = await supabase
-            .from('chats')
-            .insert({
-              id: consistentRoomId,
-              type: 'direct',
-              theme: 'sweet'
-            });
-
-          if (chatError) throw chatError;
-
-          await supabase.from('chat_participants').insert([
-            { chat_id: consistentRoomId, user_id: user.id },
-            { chat_id: consistentRoomId, user_id: friendId }
-          ]);
-        }
+        await supabase.from('chat_participants').insert([
+          { chat_id: consistentRoomId, user_id: user.id },
+          { chat_id: consistentRoomId, user_id: friendId }
+        ]);
       }
+    }
+  } catch (err: any) {
+    console.warn("Background server syncing failed, continuing on local offline cache:", err);
+  }
+}
 
-    } catch (err: any) {
-      console.warn("Background server syncing failed, continuing on local offline cache:", err);
+async function handleOpenSavedMessages() {
+  if (!user) return;
+  const selfId = `self-${user.id}`;
+
+  const existing = await localDB.chats.get(selfId);
+  await localDB.upsertChat({
+    ...existing,
+    id: selfId,
+    type: 'direct',
+    name: 'Saved Messages',
+    avatar_url: null,
+    theme: existing?.theme ?? 'sweet',
+  });
+
+  setActiveChatId(selfId);
+  onClose();
+
+  if (navigator.onLine) {
+    try {
+      await supabase.from('chats').upsert(
+        { id: selfId, type: 'direct', name: 'Saved Messages', created_by: user.id },
+        { onConflict: 'id', ignoreDuplicates: true }
+      );
+      await supabase.from('chat_participants').upsert(
+        { chat_id: selfId, user_id: user.id, role: 'admin' },
+        { onConflict: 'chat_id,user_id', ignoreDuplicates: true }
+      );
+    } catch (e) {
+      console.warn('Saved Messages sync failed:', e);
     }
   }
+}
 
   return (
     <>
@@ -477,16 +498,7 @@ export function FriendList({ theme, onClose, onSelectUser, setActiveChatId, init
                       ? 'border-[#FFB6C1]/20 hover:bg-[#FFC0CB]/20'
                       : 'border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50'
                   }`}
-                  onClick={() => {
-                    onSelectUser({
-                      id: user.id,
-                      username: user.user_metadata?.username || 'me',
-                      display_name: 'Saved Messages',
-                      avatar_url: user.user_metadata?.avatar_url,
-                      is_self_chat: true
-                    });
-                    onClose();
-                  }}
+                  onClick={handleOpenSavedMessages}
                 >
                   <div className="relative">
                     {user.user_metadata?.avatar_url ? (

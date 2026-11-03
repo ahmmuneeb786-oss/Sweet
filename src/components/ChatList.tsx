@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Search, MoreVertical, MessageSquarePlus, Users, User as UserIcon, Settings, Lock, LogOut, Heart } from 'lucide-react';
+import { Search, MoreVertical, MessageSquarePlus, Users, User as UserIcon, Settings, Lock, LogOut, Heart, Bookmark } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { localDB } from '../db';
@@ -93,6 +93,12 @@ export function ChatList({ selectedChatId, onSelectChat, onShowProfile, onShowFr
     }
     hydrateMyProfile();
   }, [user?.id, profile]);
+
+  const isSelfChat = (chat: Chat) => chat.id.startsWith('self-');
+  const getTitle = (chat: Chat) =>
+    isSelfChat(chat) ? (chat.name || 'Saved Messages')
+    : chat.type === 'direct' ? chat.otherUser?.display_name || ''
+    : chat.name || '';
 
   // Refresh the list the moment the connection returns. (The "Offline Mode"
   // badge tracks the network state itself — see OfflineBadge.)
@@ -461,9 +467,7 @@ export function ChatList({ selectedChatId, onSelectChat, onShowProfile, onShowFr
   }
 
   const filteredChats = chats.filter(chat => {
-    const chatName = chat.type === 'direct'
-      ? chat.otherUser?.display_name || ''
-      : chat.name || '';
+    const chatName = getTitle(chat);
     return chatName.toLowerCase().includes(searchQuery.toLowerCase());
   });
 
@@ -687,7 +691,11 @@ export function ChatList({ selectedChatId, onSelectChat, onShowProfile, onShowFr
                   } ${getThemeColor(chat.theme)}`}
                 >
                   <div className="relative flex-shrink-0">
-                    {chat.type === 'direct' && chat.otherUser ? (
+                    {isSelfChat(chat) ? (
+                      <div className={`w-12 h-12 rounded-full bg-gradient-to-br flex items-center justify-center text-white ${theme === 'sweet' ? 'from-[#FF69B4] to-[#FF1493]' : 'from-pink-400 to-purple-500'}`}>
+                        <Bookmark className="w-6 h-6" />
+                      </div>
+                    ) : chat.type === 'direct' && chat.otherUser ? (
                       <>
                         {chat.otherUser.avatar_url ? (
                           <img
@@ -722,7 +730,7 @@ export function ChatList({ selectedChatId, onSelectChat, onShowProfile, onShowFr
                           ? (unread > 0 ? 'font-extrabold text-[#4B004B]' : 'font-semibold text-[#4B004B]')
                           : (unread > 0 ? 'font-extrabold text-gray-900 dark:text-white' : 'font-semibold text-gray-900 dark:text-gray-100')
                       }`}>
-                        {chat.type === 'direct' ? chat.otherUser?.display_name : chat.name}
+                        {getTitle(chat)}
                       </h3>
                       {chat.lastMessage?.created_at && (
                         <span className={`text-xs shrink-0 ${unread > 0 ? 'text-[#FF1493] font-bold' : theme === 'sweet' ? 'text-[#8B004B]' : 'text-gray-500'}`}>

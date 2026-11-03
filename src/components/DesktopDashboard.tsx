@@ -172,10 +172,6 @@ export function DesktopDashboard({ theme, setTheme, onOpenGifPanel, myGifs, setM
         <FriendList 
           theme={theme} 
           onClose={() => setShowFriends(false)} 
-          onSelectUser={(selectedUser) => {
-            setSelectedChatId(selectedUser.id); 
-            setShowFriends(false);
-          }}
           setActiveChatId={setSelectedChatId}
           initialTab="search"
         />
