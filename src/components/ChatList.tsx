@@ -11,6 +11,10 @@ import { formatMessagePreview } from '../lib/messagePreview';
 import { loadHiddenMessageIds } from '../lib/hiddenMessages';
 import { onChatListRefresh } from '../hooks/chatListRefresh';
 import { OfflineBadge } from './OfflineBadge';
+import { ensureSelfChat, isSelfChatId, SELF_CHAT_NAME } from '../lib/selfChat';
+
+// Account id whose Saved Messages chat was already ensured this session.
+let selfChatEnsuredFor: string | null = null;
 
 interface Chat {
   id: string;
@@ -94,9 +98,9 @@ export function ChatList({ selectedChatId, onSelectChat, onShowProfile, onShowFr
     hydrateMyProfile();
   }, [user?.id, profile]);
 
-  const isSelfChat = (chat: Chat) => chat.id.startsWith('self-');
+  const isSelfChat = (chat: Chat) => isSelfChatId(chat.id);
   const getTitle = (chat: Chat) =>
-    isSelfChat(chat) ? (chat.name || 'Saved Messages')
+    isSelfChat(chat) ? SELF_CHAT_NAME
     : chat.type === 'direct' ? chat.otherUser?.display_name || ''
     : chat.name || '';
 
@@ -345,6 +349,19 @@ export function ChatList({ selectedChatId, onSelectChat, onShowProfile, onShowFr
 
       // PHASE 2: Quietly ask Supabase if there are new changes over the network
       if (!navigator.onLine) return;
+
+      // Make sure Saved Messages exists (and is visible via its participant
+      // row) before fetching — otherwise a missing row means it never shows
+      // here, and the prune below would delete its local copy. Once per
+      // session per account; failures just retry on the next load.
+      if (selfChatEnsuredFor !== user.id) {
+        try {
+          await ensureSelfChat(user.id);
+          selfChatEnsuredFor = user.id;
+        } catch (e) {
+          console.warn('Saved Messages sync failed:', e);
+        }
+      }
 
       const { data: participants, error: pError } = await supabase
         .from('chat_participants')

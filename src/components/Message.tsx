@@ -6,6 +6,7 @@ import { localDB } from '../db';
 import { usePerformance } from '../contexts/PerformanceContext';
 import { formatMessagePreview } from '../lib/messagePreview';
 import { ChatImage } from './ChatImage';
+import { isPrivateMediaUrl, openMediaInNewTab, resolveMediaUrl } from '../lib/signedMedia';
 
 export interface Reaction {
   reaction: string;
@@ -118,6 +119,17 @@ function MessageComponent({
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const audioRef = useRef<HTMLAudioElement>(null);
+  // Voice notes live in a private bucket: play them from a signed URL.
+  const [audioSrc, setAudioSrc] = useState<string | undefined>(() =>
+    message.media_url && !isPrivateMediaUrl(message.media_url) ? message.media_url : undefined
+  );
+  const audioRetriedRef = useRef(false);
+  useEffect(() => {
+    if (message.type !== 'voice' || !message.media_url || !isPrivateMediaUrl(message.media_url)) return;
+    let cancelled = false;
+    resolveMediaUrl(message.media_url).then((u) => { if (!cancelled) setAudioSrc(u); });
+    return () => { cancelled = true; };
+  }, [message.type, message.media_url]);
   const [waveform, setWaveform] = useState<number[]>([]);
   const lastActionTime = useRef<number>(0);
 
@@ -139,7 +151,7 @@ function MessageComponent({
     if (waveform.length > 0 || message.type !== 'voice' || !message.media_url) return;
     try {
       const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-      const response = await fetch(message.media_url);
+      const response = await fetch(await resolveMediaUrl(message.media_url));
       const data = await response.arrayBuffer();
       const buffer = await audioContext.decodeAudioData(data);
       const rawData = buffer.getChannelData(0);
@@ -562,7 +574,18 @@ function MessageComponent({
                   )}
                 </div>
               ) : (message.type === 'file' || message.type === 'doc') ? (
-                <a href={message.media_url || '#'} target="_blank" className="flex items-center gap-4 py-2 min-w-[220px]">
+                <a
+                  href={message.media_url || '#'}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  // Documents are private: open them through a signed URL.
+                  onClick={(e) => {
+                    if (!message.media_url) return;
+                    e.preventDefault();
+                    openMediaInNewTab(message.media_url);
+                  }}
+                  className="flex items-center gap-4 py-2 min-w-[220px]"
+                >
                   <div className="relative">
                     <div className={`p-3 rounded-full ${isOwn ? 'bg-white/30' : 'bg-[#FF69B4]/20'}`}>
                       <Star className={`${isOwn ? 'text-white' : 'text-[#FF69B4]'} w-6 h-6 animate-pulse`} />
@@ -634,7 +657,18 @@ function MessageComponent({
                           audioRef.current?.pause();
                         } else {
                           loadWaveformIfNeeded();
-                          audioRef.current?.play();
+                          const el = audioRef.current;
+                          if (!el) return;
+                          if (el.getAttribute('src')) {
+                            el.play().catch(() => {});
+                          } else if (message.media_url) {
+                            // Signed URL not ready yet — fetch it, then play.
+                            resolveMediaUrl(message.media_url).then((u) => {
+                              setAudioSrc(u);
+                              el.src = u;
+                              el.play().catch(() => {});
+                            });
+                          }
                         }
                       }}
                       className={`
@@ -681,7 +715,13 @@ function MessageComponent({
                   </div>
                   <audio
                     ref={audioRef}
-                    src={message.media_url}
+                    src={audioSrc}
+                    // A signed URL can expire if the chat stays open a long time — re-sign once.
+                    onError={() => {
+                      if (audioRetriedRef.current || !message.media_url || !isPrivateMediaUrl(message.media_url)) return;
+                      audioRetriedRef.current = true;
+                      resolveMediaUrl(message.media_url).then(setAudioSrc);
+                    }}
                     onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
                     onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
                     onEnded={() => setIsPlaying(false)}

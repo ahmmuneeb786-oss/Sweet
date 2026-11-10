@@ -3,6 +3,7 @@ import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { resetChatsReady, markChatsReady } from '../hooks/useChatsReady';
 import { localDB } from '../db';
+import { ensureSelfChat } from '../lib/selfChat';
 
 interface Profile {
   id: string;
@@ -243,23 +244,13 @@ if (vaultError) throw vaultError;
 
       if (privacyError) throw privacyError;
 
-      const { error: selfChatError } = await supabase
-        .from('chats')
-        .insert({
-          id: `self-${authUser.id}`,
-          type: 'direct',
-          name: 'Saved Messages',
-          created_by: authUser.id
-        });
-
-      if (!selfChatError) {
-        await supabase
-          .from('chat_participants')
-          .insert({
-            chat_id: `self-${authUser.id}`,
-            user_id: authUser.id,
-            role: 'admin'
-          });
+      // Non-fatal: the account itself is complete at this point, and the
+      // self chat is re-ensured (idempotently) whenever the chat list loads
+      // or Saved Messages is opened, so a hiccup here self-heals.
+      try {
+        await ensureSelfChat(authUser.id);
+      } catch (selfChatError) {
+        console.warn('Saved Messages setup failed (will retry later):', selfChatError);
       }
 
       // A brand-new account has nothing worth waiting on ChatList's network

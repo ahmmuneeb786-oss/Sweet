@@ -37,34 +37,24 @@ export function VisitTrackingProvider({ children }: { children: ReactNode }) {
       }
       const hasLoggedInBefore = localStorage.getItem('app_has_logged_in_before') === 'true';
 
-      const { data, error } = await supabase.from('visits').insert([{
-        session_id: visitorId,
-        visitor_id: visitorId,
-        has_logged_in_before: hasLoggedInBefore,
-        was_authenticated: false, // updated below if user is already logged in
-        entry_path: window.location.pathname,
-        referrer: document.referrer || null,
-        user_agent: navigator.userAgent,
-      }]).select('id').single();
+      // Via a function: visitors can create their own visit but never read
+      // or change anyone else's (the visits table itself isn't readable).
+      const { data, error } = await supabase.rpc('start_visit', {
+        p_visitor_id: visitorId,
+        p_has_logged_in_before: hasLoggedInBefore,
+        p_entry_path: window.location.pathname,
+        p_referrer: document.referrer || null,
+        p_user_agent: navigator.userAgent,
+      });
 
-      if (error) {
-        console.error('Failed to start visit:', error.message);
+      if (error || !data) {
+        console.error('Failed to start visit:', error?.message);
         return;
       }
-      visitIdRef.current = data.id;
+      visitIdRef.current = data as string;
       setReady(true);
     }
     startVisit();
-
-    // mark visit ended on tab close
-    const handleUnload = () => {
-      if (!visitIdRef.current) return;
-      navigator.sendBeacon?.(
-        `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/visits?id=eq.${visitIdRef.current}`,
-      );
-    };
-    window.addEventListener('beforeunload', handleUnload);
-    return () => window.removeEventListener('beforeunload', handleUnload);
   }, []);
 
   // Heartbeat — keeps last_seen_at fresh so you can tell active vs abandoned
@@ -72,10 +62,7 @@ export function VisitTrackingProvider({ children }: { children: ReactNode }) {
     if (!ready) return;
     const interval = setInterval(() => {
       if (!visitIdRef.current) return;
-      supabase.from('visits')
-        .update({ last_seen_at: new Date().toISOString() })
-        .eq('id', visitIdRef.current)
-        .then(() => {});
+      supabase.rpc('touch_visit', { p_visit_id: visitIdRef.current }).then(() => {});
     }, HEARTBEAT_MS);
     return () => clearInterval(interval);
   }, [ready]);
@@ -85,10 +72,7 @@ export function VisitTrackingProvider({ children }: { children: ReactNode }) {
     if (!ready || !visitIdRef.current) return;
     if (user) {
       localStorage.setItem('app_has_logged_in_before', 'true');
-      supabase.from('visits').update({
-        user_id: user.id,
-        was_authenticated: true,
-      }).eq('id', visitIdRef.current).then(() => {});
+      supabase.rpc('link_visit_to_user', { p_visit_id: visitIdRef.current }).then(() => {});
       logEvent('auth_change', { status: 'logged_in' });
     }
   }, [ready, user]);

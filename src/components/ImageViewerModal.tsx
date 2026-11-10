@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, ChevronLeft, ChevronRight, MoreVertical, Trash2, Download, Star } from 'lucide-react';
 import { ChatImage } from './ChatImage';
+import { openMediaInNewTab, resolveMediaUrl } from '../lib/signedMedia';
 
 interface ImageViewerModalProps {
   images: string[];
@@ -42,7 +43,7 @@ export function ImageViewerModal({ images, initialIndex = 0, alt, onClose, onRem
 
   const handleDownload = async () => {
     try {
-      const res = await fetch(images[index]);
+      const res = await fetch(await resolveMediaUrl(images[index]));
       const blob = await res.blob();
       const blobUrl = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -55,7 +56,7 @@ export function ImageViewerModal({ images, initialIndex = 0, alt, onClose, onRem
     } catch {
       // Cross-origin fetch blocked or failed — fall back to just opening it,
       // still lets the user save it manually.
-      window.open(images[index], '_blank');
+      openMediaInNewTab(images[index]);
     }
     setShowActions(false);
   };

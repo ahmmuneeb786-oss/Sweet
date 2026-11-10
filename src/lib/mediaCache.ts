@@ -19,6 +19,8 @@
  * ones are kept around for instant re-display; the rest are released.
  */
 
+import { resolveMediaUrl } from './signedMedia';
+
 const CACHE_NAME = 'sweet-chat-media-v1';
 const MAX_CACHED_IMAGES = 800; // ~200MB at the usual compressed size
 const MAX_IDLE_OBJECT_URLS = 40; // decoded-ready copies kept in memory when not on screen
@@ -70,7 +72,9 @@ async function ensureSaved(src: string): Promise<Response | null> {
   const cache = await caches.open(CACHE_NAME);
   const hit = await cache.match(src);
   if (hit) return hit;
-  const res = await fetch(src, { mode: 'cors' });
+  // Saved under the stable storage URL, downloaded via a signed one (chat
+  // media buckets are private — see signedMedia.ts).
+  const res = await fetch(await resolveMediaUrl(src), { mode: 'cors' });
   if (!res.ok) return null;
   await cache.put(src, res.clone());
   scheduleTrim();
@@ -105,12 +109,12 @@ export function acquireMediaUrl(src: string): Promise<string> {
   if (!pending) {
     pending = getBlob(src)
       .then((blob) => {
-        if (!blob) return src;
+        if (!blob) return resolveMediaUrl(src);
         const entry = objectUrls.get(src) ?? { url: URL.createObjectURL(blob), refs: 0 };
         objectUrls.set(src, entry);
         return entry.url;
       })
-      .catch(() => src)
+      .catch(() => resolveMediaUrl(src))
       .finally(() => inflight.delete(src));
     inflight.set(src, pending);
   }

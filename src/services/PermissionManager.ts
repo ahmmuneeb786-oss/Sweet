@@ -112,11 +112,14 @@ class PermissionManagerService {
         });
       }
 
-      // Sync credential structure to your Supabase profiles table
+      // Stored in its own owner-only table — never on the profile row, which
+      // every signed-in user can read.
       const { error } = await supabase
-        .from('profiles')
-        .update({ push_subscription: JSON.stringify(subscription) })
-        .eq('id', userId);
+        .from('push_subscriptions')
+        .upsert(
+          { user_id: userId, subscription: JSON.stringify(subscription), updated_at: new Date().toISOString() },
+          { onConflict: 'user_id' }
+        );
 
       if (error) throw error;
     } catch (err) {

@@ -102,11 +102,12 @@ useEffect(() => {
 
         try {
           // 2. The Bug Fix: Clean the input and explicitly capture potential database errors
-          const { data, error: fetchError } = await supabase
-            .from('profiles')
-            .select('username')
-            .eq('username', username.toLowerCase().trim()) // Added .trim() to prevent space bypass bugs
-            .maybeSingle();
+          // Signed-out visitors can't read profiles, so ask a yes/no function
+          // instead. (data === true means the name is free.)
+          const { data: isFree, error: fetchError } = await supabase.rpc('is_username_available', {
+            p_username: username.toLowerCase().trim(),
+          });
+          const data = isFree === false; // "taken" — keeps the checks below unchanged
 
           // 3. The Bug Fix: If the database throws an error, stop and handle it safely
           if (fetchError) {

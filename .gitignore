@@ -26,3 +26,5 @@ dist/
 dist-electron/
 node_modules/
 .env
+# Local database backups (contain user data)
+backups/

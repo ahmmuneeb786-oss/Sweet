@@ -7,6 +7,7 @@ import { useNotify } from '../contexts/NotificationContext';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { usePresence } from '../hooks/usePresence';
 import { OfflineBadge } from './OfflineBadge';
+import { selfChatId } from '../lib/selfChat';
 
 interface FriendListProps {
   theme: 'light' | 'dark' | 'sweet';
@@ -376,37 +377,14 @@ export function FriendList({ theme, onClose, setActiveChatId, initialTab = 'frie
   }
 }
 
-async function handleOpenSavedMessages() {
+// Opens the exact same chat the chat list shows as "Saved Messages" — it
+// only navigates. Creating/repairing the chat is ChatWindow's job (via
+// ensureSelfChat), so there's a single code path and no race between this
+// panel's writes and the window's first load.
+function handleOpenSavedMessages() {
   if (!user) return;
-  const selfId = `self-${user.id}`;
-
-  const existing = await localDB.chats.get(selfId);
-  await localDB.upsertChat({
-    ...existing,
-    id: selfId,
-    type: 'direct',
-    name: 'Saved Messages',
-    avatar_url: null,
-    theme: existing?.theme ?? 'sweet',
-  });
-
-  setActiveChatId(selfId);
+  setActiveChatId(selfChatId(user.id));
   onClose();
-
-  if (navigator.onLine) {
-    try {
-      await supabase.from('chats').upsert(
-        { id: selfId, type: 'direct', name: 'Saved Messages', created_by: user.id },
-        { onConflict: 'id', ignoreDuplicates: true }
-      );
-      await supabase.from('chat_participants').upsert(
-        { chat_id: selfId, user_id: user.id, role: 'admin' },
-        { onConflict: 'chat_id,user_id', ignoreDuplicates: true }
-      );
-    } catch (e) {
-      console.warn('Saved Messages sync failed:', e);
-    }
-  }
 }
 
   return (

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ImageOff } from 'lucide-react';
 import { acquireMediaUrl, peekMediaUrl, releaseMediaUrl } from '../lib/mediaCache';
+import { resolveMediaUrl } from '../lib/signedMedia';
 
 interface ChatImageProps {
   src: string;
@@ -33,6 +34,7 @@ function ChatImageInner({ src, alt, className, placeholderClassName = 'h-48 w-fu
   const [near, setNear] = useState(eager || url !== null);
   const [failed, setFailed] = useState(false);
   const holderRef = useRef<HTMLDivElement>(null);
+  const triedNetworkRef = useRef(false);
 
   useEffect(() => {
     if (near || !isRemote) return;
@@ -92,8 +94,15 @@ function ChatImageInner({ src, alt, className, placeholderClassName = 'h-48 w-fu
       decoding="async"
       className={className}
       onClick={onClick}
-      // The saved copy failed to display → try the network URL once, then give up.
-      onError={() => (url !== src ? setUrl(src) : setFailed(true))}
+      // The saved copy failed to display → try the network (signed) URL once, then give up.
+      onError={() => {
+        if (triedNetworkRef.current) {
+          setFailed(true);
+          return;
+        }
+        triedNetworkRef.current = true;
+        resolveMediaUrl(src).then(setUrl);
+      }}
     />
   );
 }

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useLayoutEffect, useMemo, memo, lazy, Suspense } from 'react';
-import { Send, Phone, Video, FileText, X, Mic, AlertCircle, Check, ArrowLeft, Pencil, Reply, Lock } from 'lucide-react';
+import { Send, Phone, Video, FileText, X, Mic, AlertCircle, Check, ArrowLeft, Pencil, Reply, Lock, Bookmark } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { Message, type Reaction, type MessageReactionState } from './Message';
@@ -29,6 +29,7 @@ import { onMessageStored } from '../hooks/messageBus';
 import { formatMessagePreview } from '../lib/messagePreview';
 import { consumeChatAccess, getCachedVault, peekVault } from '../lib/vault';
 import { VaultGate } from './VaultGate';
+import { ensureSelfChat, isSelfChatId, selfChatId, SELF_CHAT_NAME } from '../lib/selfChat';
 
 interface ChatWindowProps {
   onOpenGifPanel: () => void;
@@ -635,21 +636,50 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
     const isStale = () => latestChatIdRef.current !== requestedChatId;
 
     try {
-      if (requestedChatId === user.id) {
-        await supabase.from('chats').upsert({ id: user.id, type: 'direct', name: 'Saved Messages', theme: 'love' });
+      // Saved Messages: always the single `self-<uid>` chat. Handled here so
+      // it can never fall through to the "treat the id as a friend's user
+      // id" fallback below, which used to mint a second, separate
+      // `<uid>_self-<uid>` chat whenever the self chat wasn't visible yet.
+      if (isSelfChatId(requestedChatId)) {
+        if (requestedChatId !== selfChatId(user.id)) return; // someone else's self chat — never open
+        let theme = cachedForThisChat?.theme ?? 'sweet';
+        let avatarUrl = cachedForThisChat?.avatar_url ?? null;
+        if (navigator.onLine) {
+          try {
+            await ensureSelfChat(user.id);
+            const { data: row } = await supabase
+              .from('chats')
+              .select('theme, avatar_url')
+              .eq('id', requestedChatId)
+              .maybeSingle();
+            if (row?.theme) theme = row.theme;
+            if (row) avatarUrl = row.avatar_url ?? null;
+          } catch (e) {
+            // Still open it — sends queue offline-style and the next
+            // open/list load retries the repair.
+            console.warn('Saved Messages sync failed:', e);
+          }
+        }
         if (isStale()) return;
-        setChatInfo({
-          id: user.id,
+        setChatInfo({ id: requestedChatId, type: 'direct', name: SELF_CHAT_NAME, theme });
+        await localDB.upsertChat({
+          ...cachedForThisChat,
+          id: requestedChatId,
           type: 'direct',
-          name: 'Saved Messages',
-          theme: 'love',
-          otherUser: { id: user.id, display_name: 'Saved Messages', avatar_url: user.user_metadata?.avatar_url || null, is_online: true, last_seen: new Date().toISOString() }
+          name: SELF_CHAT_NAME,
+          avatar_url: avatarUrl,
+          theme,
         });
-        setLoading(false);
         return;
       }
 
       let { data: chat } = await supabase.from('chats').select('*').eq('id', requestedChatId).maybeSingle();
+
+      // Fallback: a bare user id was passed (open a DM with that user). Only
+      // for real user ids — never for a room id that's just not visible yet,
+      // and never for our own id, or it would create a bogus extra chat.
+      const looksLikeUserId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(requestedChatId);
+      if (!chat && (!looksLikeUserId || requestedChatId === user.id)) return;
 
       if (!chat) {
         const sortedIds = [user.id, requestedChatId].sort();
@@ -1894,7 +1924,17 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
               <ArrowLeft className="w-6 h-6" />
             </button>
 
-            {chatInfo.type === 'direct' && chatInfo.otherUser ? (
+            {isSelfChatId(chatInfo.id) ? (
+              <div className="flex items-center gap-2 md:gap-3 min-w-0">
+                <div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center text-white border-2 border-white/50">
+                  <Bookmark className="w-5 h-5" />
+                </div>
+                <div className="min-w-0">
+                  <h2 className="text-base md:text-lg font-bold text-white truncate">{SELF_CHAT_NAME}</h2>
+                  <p className="text-[10px] text-white/80 uppercase tracking-widest font-bold mt-0.5">Notes to self</p>
+                </div>
+              </div>
+            ) : chatInfo.type === 'direct' && chatInfo.otherUser ? (
               <button
                 onClick={() => setShowProfileView(true)}
                 className="flex items-center gap-2 md:gap-3 min-w-0 text-left rounded-xl hover:bg-white/10 transition-colors px-1 -mx-1 py-1"
@@ -1942,17 +1982,26 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
           </div>
 
           <div className="flex items-center gap-1 md:gap-2">
-            <button
-              onClick={() => handleInitiateCall('audio')}
-              className="flex p-2 hover:bg-white/20 backdrop-blur-sm rounded-full transition-colors">
-              <Phone className="w-5 h-5 text-white" />
-            </button>
-            <button
-              onClick={() => handleInitiateCall('video')}
-              className="flex p-2 hover:bg-white/20 backdrop-blur-sm rounded-full transition-colors">
-              <Video className="w-5 h-5 text-white" />
-            </button>
-            <ChatMenu chatId={chatInfo.id} onClose={() => { }} theme={theme} onViewProfile={() => setShowProfileView(true)} />
+            {!isSelfChatId(chatInfo.id) && (
+              <>
+                <button
+                  onClick={() => handleInitiateCall('audio')}
+                  className="flex p-2 hover:bg-white/20 backdrop-blur-sm rounded-full transition-colors">
+                  <Phone className="w-5 h-5 text-white" />
+                </button>
+                <button
+                  onClick={() => handleInitiateCall('video')}
+                  className="flex p-2 hover:bg-white/20 backdrop-blur-sm rounded-full transition-colors">
+                  <Video className="w-5 h-5 text-white" />
+                </button>
+              </>
+            )}
+            <ChatMenu
+              chatId={chatInfo.id}
+              onClose={() => { }}
+              theme={theme}
+              onViewProfile={chatInfo.otherUser ? () => setShowProfileView(true) : undefined}
+            />
           </div>
         </div>
       </div>

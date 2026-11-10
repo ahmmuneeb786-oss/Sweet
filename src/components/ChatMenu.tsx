@@ -7,6 +7,7 @@ import { requestChatListRefresh } from '../hooks/chatListRefresh';
 import { useNotify } from '../contexts/NotificationContext';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { usePerformance } from '../contexts/PerformanceContext';
+import { isSelfChatId } from '../lib/selfChat';
 
 interface ChatMenuProps {
   theme: 'light' | 'dark' | 'sweet'
@@ -143,10 +144,12 @@ export function ChatMenu({ theme, chatId, onClose, onViewProfile }: ChatMenuProp
     }
   }
 
+  const isSelf = isSelfChatId(chatId);
   const menuItems = [
     { icon: Search, label: 'Search Messages', action: () => setShowSearch(true) },
-    { icon: Eye, label: 'View Profile', action: () => onViewProfile?.() },
-    { icon: muteStatus ? BellOff : Bell, label: muteStatus ? 'Unmute Chat' : 'Mute Chat', action: () => {} },
+    // No profile to view in Saved Messages / groups, and nothing to mute in your own notes.
+    ...(onViewProfile ? [{ icon: Eye, label: 'View Profile', action: () => onViewProfile() }] : []),
+    ...(isSelf ? [] : [{ icon: muteStatus ? BellOff : Bell, label: muteStatus ? 'Unmute Chat' : 'Mute Chat', action: () => {} }]),
     { icon: isLocked ? Unlock : Lock, 
       label: isLocked ? 'Unlock Chat' : 'Lock Chat', 
       action: handleLockChat 
