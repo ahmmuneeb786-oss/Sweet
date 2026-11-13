@@ -112,8 +112,25 @@ export interface LocalVault {
   cached_at: string;
 }
 
+// One row per chat image saved on this device (lib/mediaCache). The bytes
+// themselves live in Cache Storage — this index is what makes sizes, per-chat
+// totals, keepsakes and least-recently-viewed cleanup cheap to read.
+export interface LocalMediaEntry {
+  url: string; // the stable storage URL — same key as in Cache Storage
+  // null until we learn which chat it belongs to; '' = looked, couldn't tell
+  chat_id: string | null;
+  bytes: number;
+  saved_at: number; // ms epoch
+  last_viewed: number; // ms epoch; equals saved_at until it's actually shown
+  // How it got here: the user sent it, it was auto-downloaded in the
+  // background, or it was downloaded because it was shown.
+  source: 'sent' | 'auto' | 'viewed';
+  keepsake: 0 | 1; // 1 = hearted in the Keepsake Box, never cleaned up
+}
+
 class OfflineChatDatabase extends Dexie {
   chats!: Table<LocalChat>;
+  mediaIndex!: Table<LocalMediaEntry, string>;
   messages!: Table<LocalMessage, string>;
   profiles!: Table<LocalProfile, string>;
   pendingMessages!: Table<PendingMessage, string>;
@@ -153,6 +170,16 @@ class OfflineChatDatabase extends Dexie {
       profiles: 'id, username',
       pendingMessages: 'id, chat_id, created_at',
       vault: 'user_id'
+    });
+
+    // v6: index of saved chat images, for the Storage & Media tab.
+    this.version(6).stores({
+      chats: 'id, type, other_user_id',
+      messages: 'id, chat_id, created_at',
+      profiles: 'id, username',
+      pendingMessages: 'id, chat_id, created_at',
+      vault: 'user_id',
+      mediaIndex: 'url, chat_id, last_viewed, keepsake'
     });
   }
 

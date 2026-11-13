@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, ChevronLeft, ChevronRight, MoreVertical, Trash2, Download, Star } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, MoreVertical, Trash2, Download, Star, Heart } from 'lucide-react';
 import { ChatImage } from './ChatImage';
 import { openMediaInNewTab, resolveMediaUrl } from '../lib/signedMedia';
+import { isKeepsake, setKeepsake } from '../lib/mediaCache';
+import { useNotify } from '../contexts/NotificationContext';
 
 interface ImageViewerModalProps {
   images: string[];
@@ -12,11 +14,43 @@ interface ImageViewerModalProps {
   /** Only relevant to viewing your OWN profile photos — omit for chat media / other users' profiles */
   onRemove?: (index: number) => void;
   onSetMain?: (index: number) => void;
+  /** Chat photos only: shows the 💝 keepsake heart for these URLs (not GIFs). */
+  keepsake?: { chatId: string; urls: Set<string> };
 }
 
-export function ImageViewerModal({ images, initialIndex = 0, alt, onClose, onRemove, onSetMain }: ImageViewerModalProps) {
+export function ImageViewerModal({ images, initialIndex = 0, alt, onClose, onRemove, onSetMain, keepsake }: ImageViewerModalProps) {
   const [index, setIndex] = useState(initialIndex);
   const [showActions, setShowActions] = useState(false);
+  const { showSuccess, showError } = useNotify();
+  const currentUrl = images[index];
+  const canKeep = !!keepsake && !!currentUrl && /^https?:/.test(currentUrl) && keepsake.urls.has(currentUrl);
+  const [kept, setKept] = useState(false);
+  const [keepBusy, setKeepBusy] = useState(false);
+
+  useEffect(() => {
+    if (!canKeep) return;
+    let cancelled = false;
+    setKept(false);
+    isKeepsake(currentUrl).then((k) => !cancelled && setKept(k)).catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [canKeep, currentUrl]);
+
+  const toggleKeep = async () => {
+    if (!keepsake || keepBusy) return;
+    setKeepBusy(true);
+    const next = !kept;
+    setKept(next);
+    const ok = await setKeepsake(currentUrl, next, keepsake.chatId).catch(() => false);
+    setKeepBusy(false);
+    if (!ok) {
+      setKept(!next);
+      showError('Couldn\'t save this photo to your Keepsake Box. Try again when you\'re online.');
+    } else if (next) {
+      showSuccess('💝 Added to your Keepsake Box. It\'ll never be cleaned up.');
+    }
+  };
 
   // Keeps the viewer in sync as `images` shrinks (e.g. removing a photo) —
   // clamps to the last remaining one, or closes entirely if none are left.
@@ -78,6 +112,19 @@ export function ImageViewerModal({ images, initialIndex = 0, alt, onClose, onRem
       >
         <X className="w-6 h-6 text-white" />
       </button>
+
+      {canKeep && (
+        <button
+          onClick={(e) => { e.stopPropagation(); void toggleKeep(); }}
+          disabled={keepBusy}
+          aria-pressed={kept}
+          aria-label={kept ? 'Remove from Keepsake Box' : 'Keep forever (Keepsake Box)'}
+          title={kept ? 'In your Keepsake Box' : 'Keep forever'}
+          className="absolute top-4 right-16 p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors z-10"
+        >
+          <Heart className={`w-6 h-6 transition-colors ${kept ? 'text-pink-400 fill-pink-400' : 'text-white'}`} />
+        </button>
+      )}
 
       {hasActions && (
         <div className="absolute top-4 right-16 z-10" onClick={(e) => e.stopPropagation()}>

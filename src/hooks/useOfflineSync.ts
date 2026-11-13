@@ -64,7 +64,7 @@ async function uploadPendingMedia(pending: PendingMessage): Promise<string | nul
 
   const { data } = supabase.storage.from(bucket).getPublicUrl(filePath);
   // Keep our own copy of a sent photo, so the sender never downloads it.
-  if (pending.message_type === 'image') void saveMediaBlob(data.publicUrl, pending.media_blob);
+  if (pending.message_type === 'image') void saveMediaBlob(data.publicUrl, pending.media_blob, pending.chat_id);
   return data.publicUrl;
 }
 

@@ -13,6 +13,9 @@ interface ChatImageProps {
   // Load right away instead of waiting until it's near the screen (viewer).
   eager?: boolean;
   onClick?: React.MouseEventHandler<HTMLElement>;
+  // false = showing it doesn't count as the user viewing it (storage
+  // manager grids), so it doesn't change what cleanup removes first.
+  countAsView?: boolean;
 }
 
 /**
@@ -27,7 +30,7 @@ export function ChatImage(props: ChatImageProps) {
   return <ChatImageInner key={props.src} {...props} />;
 }
 
-function ChatImageInner({ src, alt, className, placeholderClassName = 'h-48 w-full', eager = false, onClick }: ChatImageProps) {
+function ChatImageInner({ src, alt, className, placeholderClassName = 'h-48 w-full', eager = false, onClick, countAsView = true }: ChatImageProps) {
   // data:/blob: previews of a photo being sent are already local.
   const isRemote = /^https?:/.test(src);
   const [url, setUrl] = useState<string | null>(() => (isRemote ? peekMediaUrl(src) : src));
@@ -60,7 +63,7 @@ function ChatImageInner({ src, alt, className, placeholderClassName = 'h-48 w-fu
     if (!isRemote || !near) return;
     let cancelled = false;
     let acquired = false;
-    acquireMediaUrl(src).then((resolved) => {
+    acquireMediaUrl(src, { touch: countAsView }).then((resolved) => {
       if (cancelled) {
         releaseMediaUrl(src);
         return;
@@ -72,7 +75,7 @@ function ChatImageInner({ src, alt, className, placeholderClassName = 'h-48 w-fu
       cancelled = true;
       if (acquired) releaseMediaUrl(src);
     };
-  }, [src, near, isRemote]);
+  }, [src, near, isRemote, countAsView]);
 
   if (failed) {
     return (

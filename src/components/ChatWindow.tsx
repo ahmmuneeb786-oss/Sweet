@@ -297,7 +297,7 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
   const [loading, setLoading] = useState(true);
   const [showProfileView, setShowProfileView] = useState(false);
   useBackableState(showProfileView, () => setShowProfileView(false));
-  const [mediaViewer, setMediaViewer] = useState<{ urls: string[]; index: number } | null>(null);
+  const [mediaViewer, setMediaViewer] = useState<{ urls: string[]; index: number; photoUrls: Set<string> } | null>(null);
   useBackableState(mediaViewer !== null, () => setMediaViewer(null));
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -1241,7 +1241,7 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
         finalMediaUrl = await uploadImage(fileToUpload);
         if (!finalMediaUrl) throw new Error("Image upload failed");
         // Keep our own copy, so the sender never downloads their own photo.
-        void saveMediaBlob(finalMediaUrl, fileToUpload);
+        void saveMediaBlob(finalMediaUrl, fileToUpload, chatInfo.id);
       } else if (voiceToUpload) {
         const fileName = `${user.id}/${Date.now()}.wav`;
         const { error: uploadError } = await supabase.storage.from('voice-notes').upload(fileName, voiceToUpload);
@@ -1495,7 +1495,12 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
     const mediaMessages = messages.filter((m) => (m.type === 'image' || m.type === 'gif') && m.media_url);
     const index = mediaMessages.findIndex((m) => m.id === messageId);
     if (index === -1) return;
-    setMediaViewer({ urls: mediaMessages.map((m) => m.media_url as string), index });
+    setMediaViewer({
+      urls: mediaMessages.map((m) => m.media_url as string),
+      index,
+      // Only real photos can be keepsakes — GIFs are hosted elsewhere.
+      photoUrls: new Set(mediaMessages.filter((m) => m.type === 'image').map((m) => m.media_url as string)),
+    });
   }, [messages]);
 
   // Throttled typing broadcast — fires at most once per 2500ms
@@ -2363,6 +2368,7 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
           images={mediaViewer.urls}
           initialIndex={mediaViewer.index}
           onClose={() => setMediaViewer(null)}
+          keepsake={chatInfo ? { chatId: chatInfo.id, urls: mediaViewer.photoUrls } : undefined}
         />
       )}
     </div>

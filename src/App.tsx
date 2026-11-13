@@ -23,6 +23,7 @@ import { DEFAULT_VAULT, getCachedVault, getSavedMethods, onVaultChange, saveVaul
 import { getAppLockMethods } from './lib/appLock';
 import { getDeviceFingerprintId } from './lib/fingerprint';
 import { hasCamera } from './lib/camera';
+import { runStorageMaintenance } from './lib/storage/manager';
 
 // Face models (and the face-api.js library itself) are a large download.
 // Only fetch them when the App Lock will actually use the face on this
@@ -157,6 +158,22 @@ function AppContent() {
   usePresence(user?.id);
   useOfflineSync();
   useMessageSync(user?.id);
+
+  // Storage tidy-up (Candy Jar): index saved photos, apply the Sugar Diet
+  // limits and record today's forecast snapshot. Waits until the app has
+  // settled so it never competes with the launch.
+  useEffect(() => {
+    if (!user?.id) return;
+    const run = () => void runStorageMaintenance();
+    const w = window as any;
+    if (typeof w.requestIdleCallback === 'function') {
+      const id = w.requestIdleCallback(run, { timeout: 15000 });
+      return () => w.cancelIdleCallback?.(id);
+    }
+    const timer = setTimeout(run, 8000);
+    return () => clearTimeout(timer);
+  }, [user?.id]);
+
   const [showGifPanel, setShowGifPanel] = useState(false);
   const [gifSearch, setGifSearch] = useState('');
   const { logEvent } = useVisitTracking();

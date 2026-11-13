@@ -11,6 +11,7 @@ import { OfflineBadge } from '../components/OfflineBadge';
 import { localDB } from '../db';
 import { useNotify } from '../contexts/NotificationContext';
 import { usePerformance, useFps } from '../contexts/PerformanceContext';
+import { StorageTab } from '../components/storage/StorageTab';
 
 // Kept as its own component so only this number re-renders every second,
 // not the whole Settings page.
@@ -71,16 +72,8 @@ export function Settings({ onClose, theme, setTheme, user, onCloseLockedPanel }:
   const [usernameAvailable, setUsernameAvailable] = useState(false);
   const [checkingUsername, setCheckingUsername] = useState(false);
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
-  const [storageUsed, setStorageUsed] = React.useState<string>('Calculating...');
-  const [isClearing, setIsClearing] = React.useState<boolean>(false);
   const [loading, setLoading] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
-
-  React.useEffect(() => {
-    if (activeTab === 'storage') {
-      getStorageEstimate();
-    }
-  }, [activeTab]);
 
   const [privacySettings, setPrivacySettings] = useState({
     lastSeenVisibility: 'everyone',
@@ -94,97 +87,6 @@ export function Settings({ onClose, theme, setTheme, user, onCloseLockedPanel }:
     callNotifications: true,
     muteAll: false
   });
-
-  const getBytesOf = async (records: any[]) =>
-    records.reduce((sum, r) => sum + new Blob([JSON.stringify(r)]).size, 0);
-
-  const getCacheStorageBytes = async () => {
-    if (!window.caches) return 0;
-    let total = 0;
-    const cacheNames = await caches.keys();
-    for (const name of cacheNames) {
-      const cache = await caches.open(name);
-      const requests = await cache.keys();
-      for (const req of requests) {
-        const res = await cache.match(req);
-        if (res) total += (await res.blob()).size;
-      }
-    }
-    return total;
-  };
-
-  const getStorageEstimate = async () => {
-    try {
-      const [cacheBytes, chats, messages, profiles] = await Promise.all([
-        getCacheStorageBytes(),
-        localDB.chats.toArray(),
-        localDB.messages.toArray(),
-        localDB.profiles.toArray(),
-      ]);
-
-      const clearableProfiles = profiles.filter(p => !p.pending_sync);
-
-      const totalBytes =
-        cacheBytes +
-        (await getBytesOf(chats)) +
-        (await getBytesOf(messages)) +
-        (await getBytesOf(clearableProfiles));
-
-      if (totalBytes < 1024 * 1024) {
-        setStorageUsed(`${(totalBytes / 1024).toFixed(1)} KB`);
-      } else {
-        setStorageUsed(`${(totalBytes / (1024 * 1024)).toFixed(1)} MB`);
-      }
-    } catch (err) {
-      console.error("Failed to estimate storage usage:", err);
-      setStorageUsed('Unknown');
-    }
-  };
-
-  const handleClearCache = async () => {
-    setIsClearing(true);
-    try {
-      // 1. Service worker asset cache (images/JS/CSS for offline loading) —
-      // purely disposable, already handled.
-      if (window.caches) {
-        const cacheNames = await caches.keys();
-        await Promise.all(cacheNames.map(name => caches.delete(name)));
-      }
-
-      // 2. The actual local chat cache — this is the part that was missing,
-      // and where most of the storage usage actually lives. `chats` and
-      // `messages` are pure mirrors of what's already on the server, so
-      // wiping them is safe: the next app open just falls back to a real
-      // network fetch, exactly like a first-ever login.
-      await localDB.messages.clear();
-      await localDB.chats.clear();
-
-      // 3. Profiles cache — only delete entries that are fully synced.
-      // A profile edit made while offline (pending_sync: true) hasn't
-      // reached the server yet. That's real unsaved data, not cache, so
-      // it's deliberately left alone here rather than silently discarded.
-      const allProfiles = await localDB.profiles.toArray();
-      const safeToDeleteIds = allProfiles.filter(p => !p.pending_sync).map(p => p.id);
-      if (safeToDeleteIds.length > 0) {
-        await localDB.profiles.bulkDelete(safeToDeleteIds);
-      }
-
-      // NOTE: localDB.pendingMessages is deliberately NEVER touched by this
-      // button. It's the offline send queue — messages the user actually
-      // tried to send that haven't reached the server yet. That's real user
-      // data, not cache, and clearing it here would silently drop messages.
-
-      // Give the browser a moment to update, then recalculate metrics
-      setTimeout(async () => {
-        await getStorageEstimate();
-        setIsClearing(false);
-      }, 600);
-
-    } catch (err) {
-      console.error("Error clearing application cache:", err);
-      setIsClearing(false);
-    }
-  };
 
   useEffect(() => {
     const CleanedUsername = newUsername.trim().toLowerCase();
@@ -959,55 +861,7 @@ export function Settings({ onClose, theme, setTheme, user, onCloseLockedPanel }:
           )}
 
 {activeTab === 'storage' && (
-  <div className={`p-6 space-y-6 animate-fadeIn ${theme === 'sweet' ? 'text-[#4B004B]' : 'text-gray-700'}`}>
-    {/* Soft Back Button */}
-    <button
-      onClick={() => setActiveTab('main')}
-      className="flex items-center gap-2 text-pink-500 hover:text-pink-600 font-medium transition-colors group select-none"
-    >
-      <ChevronLeft className="w-4 h-4 transition-transform group-hover:scale-110" />
-      <span className="text-sm">Back</span>
-    </button>
-
-    {/* Sweetened Storage Display Card */}
-    <div className={`relative overflow-hidden p-5 rounded-2xl shadow-sm backdrop-blur-sm ${theme === 'sweet' ? sweetCard : 'bg-gradient-to-br from-pink-50 via-purple-50 to-pink-100/50 border border-pink-200/60'}`}>
-      {/* Decorative background candy element */}
-      <div className="absolute -right-2 -bottom-2 text-6xl opacity-10 select-none pointer-events-none transform rotate-12">
-        🍬
-      </div>
-      
-      <div className="flex items-center gap-2.5 mb-2">
-        <span className="text-base" role="img" aria-label="storage">📦</span>
-        <p className="text-xs font-bold uppercase tracking-wider text-pink-600/80">
-          Local Storage Occupied
-        </p>
-      </div>
-      
-      <p className="text-3xl font-black bg-gradient-to-r from-pink-600 to-purple-600 bg-clip-text text-transparent tracking-tight">
-        {storageUsed}
-      </p>
-    </div>
-
-    {/* Candy-Styled Action Button */}
-    <button 
-      onClick={handleClearCache}
-      disabled={isClearing}
-      className={`w-full px-5 py-3.5 rounded-2xl font-bold transition-all duration-300 border shadow-sm select-none flex items-center justify-center gap-2
-        ${isClearing 
-          ? 'bg-pink-50/50 border-pink-100 text-pink-300 cursor-not-allowed animate-pulse' 
-          : 'bg-gradient-to-r from-pink-500 to-rose-500 border-pink-400 text-white hover:from-pink-600 hover:to-rose-600 hover:shadow-pink-200 hover:shadow-md active:scale-[0.97]'
-        }`}
-    >
-      <span>{isClearing ? '✨ Sweeping Cache...' : '🧹 Clear Application Cache'}</span>
-    </button>
-    
-    {/* Cozy Helper Text */}
-    <div className={`border border-dashed rounded-xl p-3 ${theme === 'sweet' ? 'bg-[#FFF0F5] border-[#FFB6C1]' : 'bg-pink-50/30 border-pink-200/60'}`}>
-      <p className="text-center text-[11px] text-pink-600/70 leading-relaxed">
-        💝 <strong>No worries:</strong> Your chats live safely on our servers forever — clearing local storage just re-downloads them next time you're online. Messages you're still waiting to send are never touched.
-      </p>
-    </div>
-  </div>
+  <StorageTab theme={theme} userId={user?.id} onBack={() => setActiveTab('main')} />
 )}
 
 {activeTab === 'performance' && (
