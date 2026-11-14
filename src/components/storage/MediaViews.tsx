@@ -65,7 +65,7 @@ function PhotoGrid({ items, t, selecting, selected, onSelect, onKeepsake, captio
               )}
               {selecting && !isKeep ? (
                 <span className="absolute top-1 right-1 pointer-events-none">
-                  {isSel ? <CheckCircle2 className="w-6 h-6 text-white fill-[#FF1493]" /> : <Circle className="w-6 h-6 text-white" />}
+                  {isSel ? <CheckCircle2 className="w-6 h-6 text-white fill-th-primary" /> : <Circle className="w-6 h-6 text-white" />}
                 </span>
               ) : (
                 <button
@@ -74,7 +74,7 @@ function PhotoGrid({ items, t, selecting, selected, onSelect, onKeepsake, captio
                   aria-pressed={isKeep}
                   className="absolute top-1 right-1 p-1 rounded-full bg-black/35"
                 >
-                  <Heart className={`w-4 h-4 ${isKeep ? 'text-pink-400 fill-pink-400' : 'text-white'}`} />
+                  <Heart className={`w-4 h-4 ${isKeep ? 'text-th-primary fill-th-primary' : 'text-white'}`} />
                 </button>
               )}
             </div>
@@ -108,7 +108,7 @@ function PhotoGrid({ items, t, selecting, selected, onSelect, onKeepsake, captio
                 aria-label={viewing.keepsake === 1 ? 'Remove from keepsakes' : 'Keep forever'}
                 aria-pressed={viewing.keepsake === 1}
               >
-                <Heart className={`w-6 h-6 ${viewing.keepsake === 1 ? 'text-pink-400 fill-pink-400' : 'text-white'}`} />
+                <Heart className={`w-6 h-6 ${viewing.keepsake === 1 ? 'text-th-primary fill-th-primary' : 'text-white'}`} />
               </button>
             </div>
             <div className="flex-1 flex items-center justify-center p-4 min-h-0" onClick={() => setViewing(null)}>
@@ -300,7 +300,7 @@ export function ChatJarView({ row, t, dark, refreshKey, onBack, onClean }: ChatJ
 
       <div className={`p-5 rounded-3xl flex items-center gap-3 ${t.intro}`}>
         {row.avatar ? (
-          <img src={row.avatar} alt="" className="w-12 h-12 rounded-full object-cover ring-2 ring-pink-300 shrink-0" />
+          <img src={row.avatar} alt="" className="w-12 h-12 rounded-full object-cover ring-2 ring-th-border shrink-0" />
         ) : (
           <MiniJar ratio={1} k="photos" t={t} />
         )}
@@ -355,7 +355,7 @@ export function ChatJarView({ row, t, dark, refreshKey, onBack, onClean }: ChatJ
         <div className="sticky bottom-4 z-10">
           <button
             onClick={() => onClean({ title: 'Unwrap selected photos', subtitle: row.name, target: { kind: 'photos', urls: [...selected] }, filters: false })}
-            className={`w-full py-3.5 rounded-2xl text-xs font-bold shadow-lg shadow-pink-200/50 ${t.primary}`}
+            className={`w-full py-3.5 rounded-2xl text-xs font-bold shadow-lg shadow-th-primary/20 ${t.primary}`}
           >
             Unwrap {selected.size} selected · {formatBytes(selectedBytes)}
           </button>

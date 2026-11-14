@@ -64,15 +64,15 @@ export function VaultVerify({ mode, vault, userId, onUnlock, onFailedAttempt, on
   }
 
   return (
-    <div className="fixed inset-0 z-[9999] bg-[#FFF0F3] flex flex-col items-center justify-center p-8">
-      <div className="absolute top-10 flex items-center gap-2 bg-white/50 px-4 py-2 rounded-full backdrop-blur-md border border-white">
-        <Lock className="w-4 h-4 text-pink-500" />
-        <span className="text-pink-600 text-xs font-bold uppercase tracking-widest">
+    <div className="fixed inset-0 z-[9999] bg-th-bg flex flex-col items-center justify-center p-8">
+      <div className="absolute top-10 flex items-center gap-2 bg-th-card/60 px-4 py-2 rounded-full backdrop-blur-md border border-th-border">
+        <Lock className="w-4 h-4 text-th-primary" />
+        <span className="text-th-link text-xs font-bold uppercase tracking-widest">
           {mode === 'pin' ? 'Enter Vault PIN' : mode === 'password' ? 'Enter Vault Password' : 'Enter App Password'}
         </span>
       </div>
 
-      <div className="bg-white/80 backdrop-blur-sm p-6 rounded-[32px] shadow-xl border border-white max-w-xs w-full mt-16">
+      <div className="bg-th-card/95 text-th-ink backdrop-blur-sm p-6 rounded-[32px] shadow-xl border border-th-border max-w-xs w-full mt-16">
         {error && (
           <div className="flex items-center gap-2 text-red-500 text-xs font-bold mb-3 justify-center">
             <AlertCircle className="w-4 h-4" /> {error}
@@ -86,7 +86,7 @@ export function VaultVerify({ mode, vault, userId, onUnlock, onFailedAttempt, on
                 <div
                   key={i}
                   className={`w-3 h-3 rounded-full border-2 transition-all ${
-                    value.length > i ? 'bg-[#FF69B4] border-[#FF69B4] scale-110' : 'border-gray-300 bg-gray-50'
+                    value.length > i ? 'bg-th-primary border-th-primary scale-110' : 'border-th-border bg-th-input'
                   }`}
                 />
               ))}
@@ -97,7 +97,7 @@ export function VaultVerify({ mode, vault, userId, onUnlock, onFailedAttempt, on
                   key={num}
                   disabled={checking}
                   onClick={() => handleKeyPress(num.toString())}
-                  className="h-11 w-11 mx-auto flex items-center justify-center rounded-full font-bold text-sm bg-[#FFC0CB]/40 border border-[#FFB6C1] text-[#4B004B] active:scale-90 transition-all disabled:opacity-50"
+                  className="h-11 w-11 mx-auto flex items-center justify-center rounded-full font-bold text-sm bg-th-secondary border border-th-border text-th-on-secondary active:scale-90 transition-all disabled:opacity-50"
                 >
                   {num}
                 </button>
@@ -105,21 +105,21 @@ export function VaultVerify({ mode, vault, userId, onUnlock, onFailedAttempt, on
               <button
                 disabled={checking}
                 onClick={() => setValue((v) => v.slice(0, -1))}
-                className="h-11 w-11 mx-auto flex items-center justify-center text-xs font-semibold text-gray-400 hover:text-red-500 disabled:opacity-50"
+                className="h-11 w-11 mx-auto flex items-center justify-center text-xs font-semibold text-th-ink-faint hover:text-th-danger disabled:opacity-50"
               >
                 Clear
               </button>
               <button
                 disabled={checking}
                 onClick={() => handleKeyPress('0')}
-                className="h-11 w-11 mx-auto flex items-center justify-center rounded-full font-bold text-sm bg-[#FFC0CB]/40 border border-[#FFB6C1] text-[#4B004B] active:scale-90 transition-all disabled:opacity-50"
+                className="h-11 w-11 mx-auto flex items-center justify-center rounded-full font-bold text-sm bg-th-secondary border border-th-border text-th-on-secondary active:scale-90 transition-all disabled:opacity-50"
               >
                 0
               </button>
               {onCancel ? (
                 <button
                   onClick={onCancel}
-                  className="h-11 w-11 mx-auto flex items-center justify-center text-xs font-semibold text-gray-400 hover:text-gray-600"
+                  className="h-11 w-11 mx-auto flex items-center justify-center text-xs font-semibold text-th-ink-faint hover:text-th-ink"
                 >
                   Cancel
                 </button>
@@ -140,20 +140,20 @@ export function VaultVerify({ mode, vault, userId, onUnlock, onFailedAttempt, on
                 if (e.key === 'Enter' && value && !checking) verify(value);
               }}
               placeholder="Enter password..."
-              className="w-full px-4 py-2.5 rounded-xl text-sm outline-none border border-[#FFB6C1] bg-[#FFC0CB]/20 text-[#4B004B] mb-3"
+              className="w-full px-4 py-2.5 rounded-xl text-sm outline-none border border-th-border bg-th-input text-th-ink mb-3"
             />
             <div className="flex gap-2">
               <button
                 disabled={checking || !value}
                 onClick={() => verify(value)}
-                className="flex-1 py-2 rounded-xl text-xs font-bold text-white bg-[#FF1493] hover:bg-[#FF69B4] transition-colors disabled:opacity-50"
+                className="flex-1 py-2 rounded-xl text-xs font-bold text-th-on-primary bg-th-primary hover:opacity-90 transition-colors disabled:opacity-50"
               >
                 {checking ? 'Checking...' : 'Unlock'}
               </button>
               {onCancel && (
                 <button
                   onClick={onCancel}
-                  className="px-4 py-2 rounded-xl text-xs font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 transition-colors"
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-th-on-secondary bg-th-secondary hover:bg-th-card-hover transition-colors"
                 >
                   Cancel
                 </button>

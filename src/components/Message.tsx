@@ -76,7 +76,8 @@ function MessageComponent({
   isOwn,
   showAvatar,
   reactions,
-  theme,
+  // `theme` is still a prop (the memo below re-renders on it) but colours
+  // now come from the chat's th-* CSS variables, not from this value.
   onDelete,
   onHide,
   onEdit,
@@ -323,11 +324,11 @@ function MessageComponent({
 
   const unreadDivider = showUnreadDivider ? (
     <div className="flex items-center gap-2 my-3 w-full px-2 animate-in fade-in duration-300">
-      <div className="h-[1px] flex-1 bg-gradient-to-r from-transparent to-pink-300/60" />
-      <span className="text-[10px] font-black uppercase tracking-[2px] text-[#FF1493] bg-white/70 px-3 py-1 rounded-full shadow-sm whitespace-nowrap">
+      <div className="h-[1px] flex-1 bg-gradient-to-r from-transparent to-th-primary/40" />
+      <span className="text-[10px] font-black uppercase tracking-[2px] text-th-link bg-th-card/80 px-3 py-1 rounded-full shadow-sm whitespace-nowrap">
         Unread messages
       </span>
-      <div className="h-[1px] flex-1 bg-gradient-to-l from-transparent to-pink-300/60" />
+      <div className="h-[1px] flex-1 bg-gradient-to-l from-transparent to-th-primary/40" />
     </div>
   ) : null;
 
@@ -340,21 +341,17 @@ function MessageComponent({
 
   const getMessageClasses = (own: boolean) => {
     const shape = "rounded-[32px]";
-    if (theme === 'sweet') {
-      // backdrop-blur-xl is one of the most GPU-expensive CSS properties
-      // that exists — it forces continuous re-sampling of everything behind
-      // every bubble, every frame. In low-perf mode, fall back to a plain
-      // higher-opacity background instead: same visual language, no blur.
-      return own
-        ? `${shape} bg-gradient-to-br from-[#FF85A1] via-[#FF69B4] to-[#FF1493] text-white shadow-[0_4px_15px_rgba(255,20,147,0.3)] border border-white/20`
-        : isLowPerfMode
-        ? `${shape} bg-white/80 border border-white/60 text-[#8B004B] shadow-[0_4px_10px_rgba(0,0,0,0.05)]`
-        : `${shape} bg-white/40 backdrop-blur-xl border border-white/40 text-[#8B004B] shadow-[0_4px_10px_rgba(0,0,0,0.05)]`;
-    } else if (theme === 'dark') {
-      return own ? `${shape} bg-pink-500 text-white` : `${shape} bg-gray-100 text-gray-900`;
-    } else {
-      return own ? `${shape} bg-pink-500 text-white` : `${shape} bg-gray-100 text-gray-900`;
-    }
+    // Colours come from the chat's theme (th-* = CSS variables), so this
+    // follows presets, custom themes and per-chat themes.
+    // backdrop-blur-xl is one of the most GPU-expensive CSS properties
+    // that exists — it forces continuous re-sampling of everything behind
+    // every bubble, every frame. In low-perf mode, fall back to a plain
+    // solid background instead: same visual language, no blur.
+    return own
+      ? `${shape} bg-gradient-to-br from-th-bubble-mine to-th-bubble-mine-to text-th-on-bubble-mine shadow-[0_4px_15px_rgb(var(--th-bubble-mine)/0.3)] border border-white/20`
+      : isLowPerfMode
+      ? `${shape} bg-th-bubble-theirs border border-th-border text-th-on-bubble-theirs shadow-[0_4px_10px_rgba(0,0,0,0.05)]`
+      : `${shape} bg-th-bubble-theirs/80 group-data-[hearts=true]/chat:backdrop-blur-xl border border-th-border/60 text-th-on-bubble-theirs shadow-[0_4px_10px_rgba(0,0,0,0.05)]`;
   };
 
   if (message.is_deleted) {
@@ -363,13 +360,13 @@ function MessageComponent({
         {showDateSeparator && (
           <div className="flex items-center justify-center my-6 w-full">
             <div className="flex items-center gap-3 w-full max-w-[200px]">
-              <div className="h-[1px] flex-1 bg-gradient-to-r from-transparent via-pink-300/50 to-transparent" />
+              <div className="h-[1px] flex-1 bg-gradient-to-r from-transparent via-th-primary/40 to-transparent" />
               <span className={`text-[10px] font-black uppercase tracking-[2px] whitespace-nowrap
-                ${theme === 'sweet' ? 'text-[#FF1493] bg-white/50 px-3 py-1 rounded-full backdrop-blur-sm shadow-sm' : 'text-gray-400'}
+                text-th-link bg-th-card/70 px-3 py-1 rounded-full backdrop-blur-sm shadow-sm
               `}>
                 {formatStickyDate(message.created_at)}
               </span>
-              <div className="h-[1px] flex-1 bg-gradient-to-r from-transparent via-pink-300/50 to-transparent" />
+              <div className="h-[1px] flex-1 bg-gradient-to-r from-transparent via-th-primary/40 to-transparent" />
             </div>
           </div>
         )}
@@ -385,14 +382,14 @@ function MessageComponent({
                   alt={message.profiles.display_name}
                   loading="lazy"
                   decoding="async"
-                  className="w-6 h-6 rounded-full object-cover border border-pink-200"
+                  className="w-6 h-6 rounded-full object-cover border border-th-border"
                 />
               ) : (
-                <div className={`w-6 h-6 rounded-full bg-gradient-to-br flex items-center justify-center text-white text-[10px] font-bold ${theme === 'sweet' ? 'from-[#FF69B4] to-[#FF1493]' : 'from-pink-400 to-purple-500'}`}>
+                <div className="w-6 h-6 rounded-full bg-gradient-to-br from-th-bubble-mine to-th-bubble-mine-to flex items-center justify-center text-th-on-bubble-mine text-[10px] font-bold">
                   {message.profiles.display_name[0]}
                 </div>
               )}
-              <span className={`text-[10px] font-bold uppercase tracking-wider ${theme === 'sweet' ? 'text-[#FF1493]' : 'text-gray-500'}`}>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-th-link">
                 {message.profiles.display_name}
               </span>
             </div>
@@ -403,7 +400,7 @@ function MessageComponent({
               {/* Same bubble shell as a real message, just muted + an italic
                   "deleted" line instead of content. */}
               <div className={`px-4 py-2.5 shadow-sm ${getMessageClasses(isOwn)} opacity-80`}>
-                <p className={`flex items-center gap-2 text-[14px] italic ${isOwn ? 'text-white/90' : theme === 'sweet' ? 'text-[#8B004B]/70' : 'text-gray-400'}`}>
+                <p className={`flex items-center gap-2 text-[14px] italic ${isOwn ? 'text-th-on-bubble-mine/90' : 'text-th-on-bubble-theirs/70'}`}>
                   <Ban className="w-4 h-4 flex-shrink-0 opacity-80" />
                   This message was deleted
                 </p>
@@ -413,16 +410,14 @@ function MessageComponent({
 
           {/* Footer: timestamp + a 3-dot menu whose only action is "Delete"
               (delete-for-me — clears the tombstone on this device only). */}
-          <div className={`flex items-center gap-1 mt-1 w-full ${isOwn ? 'ml-auto flex-row-reverse' : 'mr-auto flex-row'} ${theme === 'sweet' ? 'text-[#FF69B4]/80' : 'text-gray-400'}`}>
+          <div className={`flex items-center gap-1 mt-1 w-full ${isOwn ? 'ml-auto flex-row-reverse' : 'mr-auto flex-row'} text-th-ink-soft`}>
             <span className="text-[10px] font-bold">{formatTime(message.created_at)}</span>
 
             <div className="relative opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
               <button
                 onClick={openMenu}
                 className={`p-1.5 rounded-full border-2 transition-all duration-300 ${
-                  theme === 'sweet'
-                    ? 'border-[#FFB6C1] text-[#FF69B4] hover:bg-pink-50 hover:scale-110'
-                    : 'border-gray-200 text-gray-600 dark:border-gray-700 dark:text-gray-400 hover:bg-gray-100'
+                  'border-th-border text-th-link hover:bg-th-card-hover hover:scale-110'
                 }`}
               >
                 <MoreVertical className="w-3.5 h-3.5" />
@@ -434,12 +429,12 @@ function MessageComponent({
                   <div
                     style={{ maxHeight: menuMaxHeight }}
                     className={`absolute w-40 max-w-[70vw] rounded-lg shadow-lg border py-1 z-20 overflow-y-auto ${
-                      theme === 'sweet' ? 'bg-[#FFF0F5] border-[#FFB6C1]' : theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+                      'bg-th-card border-th-border text-th-ink'
                     } ${isOwn ? 'right-0' : 'left-0'} ${menuDirection === 'up' ? 'bottom-full mb-1 origin-bottom' : 'top-full mt-1 origin-top'}`}
                   >
                     <button
                       onClick={handleDeleteForMe}
-                      className="w-full px-4 py-2 text-left flex items-center gap-2 text-red-600 text-sm border border-transparent hover:border-red-400 transition-all hover:bg-red-50 dark:hover:bg-red-900/20"
+                      className="w-full px-4 py-2 text-left flex items-center gap-2 text-th-danger text-sm border border-transparent hover:border-th-danger/50 transition-all hover:bg-th-danger/10"
                     >
                       <Trash2 className="w-4 h-4" />
                       <span>Delete</span>
@@ -459,13 +454,13 @@ function MessageComponent({
       {showDateSeparator && (
         <div className="flex items-center justify-center my-6 w-full">
           <div className="flex items-center gap-3 w-full max-w-[200px]">
-            <div className="h-[1px] flex-1 bg-gradient-to-r from-transparent via-pink-300/50 to-transparent" />
+            <div className="h-[1px] flex-1 bg-gradient-to-r from-transparent via-th-primary/40 to-transparent" />
             <span className={`text-[10px] font-black uppercase tracking-[2px] whitespace-nowrap
-              ${theme === 'sweet' ? 'text-[#FF1493] bg-white/50 px-3 py-1 rounded-full backdrop-blur-sm shadow-sm' : 'text-gray-400'}
+              text-th-link bg-th-card/70 px-3 py-1 rounded-full backdrop-blur-sm shadow-sm
             `}>
               {formatStickyDate(message.created_at)}
             </span>
-            <div className="h-[1px] flex-1 bg-gradient-to-r from-transparent via-pink-300/50 to-transparent" />
+            <div className="h-[1px] flex-1 bg-gradient-to-r from-transparent via-th-primary/40 to-transparent" />
           </div>
         </div>
       )}
@@ -481,14 +476,14 @@ function MessageComponent({
                 alt={message.profiles.display_name}
                 loading="lazy"
                 decoding="async"
-                className="w-6 h-6 rounded-full object-cover border border-pink-200"
+                className="w-6 h-6 rounded-full object-cover border border-th-border"
               />
             ) : (
-              <div className={`w-6 h-6 rounded-full bg-gradient-to-br flex items-center justify-center text-white text-[10px] font-bold ${theme === 'sweet' ? 'from-[#FF69B4] to-[#FF1493]' : 'from-pink-400 to-purple-500'}`}>
+              <div className="w-6 h-6 rounded-full bg-gradient-to-br from-th-bubble-mine to-th-bubble-mine-to flex items-center justify-center text-th-on-bubble-mine text-[10px] font-bold">
                 {message.profiles.display_name[0]}
               </div>
             )}
-            <span className={`text-[10px] font-bold uppercase tracking-wider ${theme === 'sweet' ? 'text-[#FF1493]' : 'text-gray-500'}`}>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-th-link">
               {message.profiles.display_name}
             </span>
           </div>
@@ -512,14 +507,14 @@ function MessageComponent({
                   onClick={(e) => { e.stopPropagation(); onJumpToReplied?.(repliedTo.id); }}
                   className={`w-full mb-2 rounded-lg border-l-2 pl-2 pr-2 py-1 text-left overflow-hidden transition-opacity hover:opacity-80 active:opacity-70 ${
                     isOwn
-                      ? 'bg-white/15 border-white/60'
-                      : theme === 'sweet' ? 'bg-[#FF69B4]/10 border-[#FF69B4]' : 'bg-black/5 border-pink-400'
+                      ? 'bg-th-on-bubble-mine/15 border-th-on-bubble-mine/60'
+                      : 'bg-th-primary/10 border-th-primary'
                   }`}
                 >
-                  <p className={`text-[10px] font-black uppercase tracking-wider truncate ${isOwn ? 'text-white/90' : 'text-[#FF1493]'}`}>
+                  <p className={`text-[10px] font-black uppercase tracking-wider truncate ${isOwn ? 'text-th-on-bubble-mine/90' : 'text-th-link'}`}>
                     {repliedTo.sender_id === currentUserId ? 'You' : (repliedTo.profiles?.display_name || 'Them')}
                   </p>
-                  <p className={`text-[11px] truncate ${isOwn ? 'text-white/70' : theme === 'sweet' ? 'text-[#8B004B]/70' : 'text-gray-500'}`}>
+                  <p className={`text-[11px] truncate ${isOwn ? 'text-th-on-bubble-mine/70' : 'text-th-on-bubble-theirs/70'}`}>
                     {formatMessagePreview({ content: repliedTo.content, type: repliedTo.type, is_deleted: repliedTo.is_deleted })}
                   </p>
                 </button>
@@ -560,7 +555,7 @@ function MessageComponent({
                     className="max-h-80 w-full object-cover transition-transform duration-700 group-hover:scale-110"
                     placeholderClassName="h-56 w-56"
                   />
-                  <div className="absolute inset-0 bg-pink-500/0 group-hover:bg-pink-500/10 transition-colors duration-300 flex items-center justify-center">
+                  <div className="absolute inset-0 bg-th-primary/0 group-hover:bg-th-primary/10 transition-colors duration-300 flex items-center justify-center">
                     <span className="opacity-0 group-hover:opacity-100 scale-50 group-hover:scale-100 transition-all duration-500 text-white drop-shadow-md font-bold text-xs uppercase tracking-widest bg-black/20 px-3 py-1 rounded-full backdrop-blur-sm">
                       View Sweetness
                     </span>
@@ -587,8 +582,8 @@ function MessageComponent({
                   className="flex items-center gap-4 py-2 min-w-[220px]"
                 >
                   <div className="relative">
-                    <div className={`p-3 rounded-full ${isOwn ? 'bg-white/30' : 'bg-[#FF69B4]/20'}`}>
-                      <Star className={`${isOwn ? 'text-white' : 'text-[#FF69B4]'} w-6 h-6 animate-pulse`} />
+                    <div className={`p-3 rounded-full ${isOwn ? 'bg-th-on-bubble-mine/25' : 'bg-th-primary/15'}`}>
+                      <Star className={`${isOwn ? 'text-th-on-bubble-mine' : 'text-th-link'} w-6 h-6 animate-pulse`} />
                     </div>
                     <div className="absolute -top-1 -right-1 bg-yellow-400 w-3 h-3 rounded-full border-2 border-white" />
                   </div>
@@ -618,18 +613,18 @@ function MessageComponent({
                             className="w-full h-full object-cover transform-gpu transition-transform duration-700 hover:scale-105"
                           />
                         ) : (
-                          <div className="w-full h-full bg-pink-100/50 flex items-center justify-center">
-                            <Heart className="w-8 h-8 text-pink-300 animate-pulse" fill="currentColor" />
+                          <div className="w-full h-full bg-th-primary/10 flex items-center justify-center">
+                            <Heart className="w-8 h-8 text-th-primary/50 animate-pulse" fill="currentColor" />
                           </div>
                         )}
-                        <div className="absolute bottom-2 left-2 right-2 bg-white/70 backdrop-blur-md py-1 px-2 rounded-lg text-[9px] text-center font-black text-[#FF1493] uppercase tracking-widest shadow-sm border border-white/40">
+                        <div className="absolute bottom-2 left-2 right-2 bg-th-card/80 backdrop-blur-md py-1 px-2 rounded-lg text-[9px] text-center font-black text-th-link uppercase tracking-widest shadow-sm border border-white/40">
                           {isOwn ? "Sweet Spot 📍" : "Sweet Spot 📍"}
                         </div>
                         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none drop-shadow-lg">
-                          <Heart className="w-7 h-7 text-[#FF1493] animate-bounce" fill="currentColor" />
+                          <Heart className="w-7 h-7 text-th-primary animate-bounce" fill="currentColor" />
                         </div>
                       </div>
-                      <div className={`p-2.5 ${isOwn ? 'bg-white/10' : 'bg-[#FF1493]/5'}`}>
+                      <div className={`p-2.5 ${isOwn ? 'bg-th-on-bubble-mine/10' : 'bg-th-primary/5'}`}>
                         <button
                           onClick={() => {
                             const urlMatch = message.content?.match(/https?:\/\/[^\s]+/);
@@ -638,8 +633,8 @@ function MessageComponent({
                           }}
                           className={`w-full py-2.5 rounded-xl font-black text-[10px] uppercase tracking-[2px] transition-all active:scale-95 shadow-md
                             ${isOwn
-                              ? 'bg-white text-[#FF1493] hover:shadow-lg'
-                              : 'bg-[#FF1493] text-white hover:bg-[#E61283]'
+                              ? 'bg-th-on-bubble-mine text-th-bubble-mine-to hover:shadow-lg'
+                              : 'bg-th-primary text-th-on-primary hover:opacity-90'
                             }`}
                         >
                           Open in Maps
@@ -675,10 +670,10 @@ function MessageComponent({
                         relative flex-shrink-0 w-11 h-11 flex items-center justify-center
                         transition-all duration-500 ease-out active:scale-90 shadow-lg
                         ${isPlaying
-                          ? 'bg-white text-[#FF1493] rounded-[15px] rotate-90 scale-105'
+                          ? (isOwn ? 'bg-th-on-bubble-mine text-th-bubble-mine-to' : 'bg-th-card text-th-link') + ' rounded-[15px] rotate-90 scale-105'
                           : isOwn
-                            ? 'bg-white/20 text-white rounded-[20px]'
-                            : 'bg-[#FF1493] text-white rounded-[20px]'
+                            ? 'bg-th-on-bubble-mine/20 text-th-on-bubble-mine rounded-[20px]'
+                            : 'bg-th-primary text-th-on-primary rounded-[20px]'
                         }
                       `}
                     >
@@ -695,7 +690,7 @@ function MessageComponent({
                       {(waveform.length > 0 ? waveform : Array(20).fill(0.2)).map((loudness, i) => (
                         <div
                           key={i}
-                          className={`flex-1 min-w-[2px] max-w-[4px] rounded-full transition-opacity duration-300 ${isOwn ? 'bg-white' : 'bg-[#FF1493]'}`}
+                          className={`flex-1 min-w-[2px] max-w-[4px] rounded-full transition-opacity duration-300 ${isOwn ? 'bg-th-on-bubble-mine' : 'bg-th-primary'}`}
                           style={{
                             height: `${Math.max(loudness * 100, 20)}%`,
                             maxHeight: '100%',
@@ -706,10 +701,10 @@ function MessageComponent({
                     </div>
                   </div>
                   <div className="flex justify-between items-center w-full px-0 mt-0.5">
-                    <span className={`text-[8px] font-black uppercase tracking-widest opacity-70 ${isOwn ? 'text-white' : 'text-[#FF1493]'}`}>
+                    <span className={`text-[8px] font-black uppercase tracking-widest opacity-70 ${isOwn ? 'text-th-on-bubble-mine' : 'text-th-link'}`}>
                       {isPlaying ? 'Listening' : 'Voice Note'}
                     </span>
-                    <span className={`text-[10px] font-mono font-bold ${isOwn ? 'text-white' : 'text-[#8B004B]'}`}>
+                    <span className={`text-[10px] font-mono font-bold ${isOwn ? 'text-th-on-bubble-mine' : 'text-th-on-bubble-theirs'}`}>
                       {formatAudioTime(isPlaying ? currentTime : duration)}
                     </span>
                   </div>
@@ -747,13 +742,13 @@ function MessageComponent({
                     onClick={() => handleReaction(r.reaction)}
                     className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-bold transition-all shadow-md border whitespace-nowrap ${
                       userReactionMap.get(r.reaction) === user?.id
-                        ? (theme === 'sweet' ? 'bg-[#FF69B4] text-white border-[#FF1493] scale-105' : 'bg-pink-100 dark:bg-pink-900/30 border-pink-300')
-                        : (theme === 'sweet' ? 'bg-white border-[#FFB6C1] text-[#8B004B]' : 'bg-white dark:bg-gray-800 border-gray-200')
+                        ? 'bg-th-primary text-th-on-primary border-th-primary scale-105'
+                        : 'bg-th-card border-th-border text-th-ink'
                     }`}
                   >
                     <span>{r.reaction}</span>
                     {r.count > 1 && (
-                      <span className={`font-black ${theme === 'sweet' ? 'text-white/90' : 'text-gray-500'}`}>
+                      <span className="font-black opacity-80">
                         {r.count}
                       </span>
                     )}
@@ -769,7 +764,7 @@ function MessageComponent({
         className={`
           flex items-center gap-1 mt-1 w-full
           ${isOwn ? 'ml-auto flex-row-reverse' : 'mr-auto flex-row'}
-          ${theme === 'sweet' ? 'text-[#FF69B4]/80' : 'text-gray-400'}
+          text-th-ink-soft
         `}
       >
         <span className="text-[10px] font-bold">
@@ -781,9 +776,7 @@ function MessageComponent({
           <button
             onClick={() => setShowReactions(!showReactions)}
             className={`p-1.5 rounded-full border-2 transition-all duration-300 ${
-              theme === 'sweet'
-                ? 'border-[#FFB6C1] text-[#FF69B4] hover:bg-pink-50 hover:scale-110'
-                : 'border-gray-200 text-gray-600 dark:border-gray-700 dark:text-gray-400 hover:bg-gray-100'
+              'border-th-border text-th-link hover:bg-th-card-hover hover:scale-110'
             }`}
           >
             <Heart className="w-3.5 h-3.5" />
@@ -794,7 +787,7 @@ function MessageComponent({
               <div className="fixed inset-0 z-10" onClick={() => setShowReactions(false)} />
               <div
                 className={`absolute -bottom-12 p-2 rounded-xl shadow-lg border flex gap-2 z-20 transition-colors duration-300 ${
-                  theme === 'sweet' ? 'bg-[#FFF0F5] border-[#FFB6C1]' : theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+                  'bg-th-card border-th-border text-th-ink'
                 } ${isOwn ? 'right-0' : 'left-0'}`}
               >
                 {reactions.map((emoji) => (
@@ -814,9 +807,7 @@ function MessageComponent({
             <button
               onClick={openMenu}
               className={`p-1.5 rounded-full border-2 transition-all duration-300 ${
-                theme === 'sweet'
-                  ? 'border-[#FFB6C1] text-[#FF69B4] hover:bg-pink-50 hover:scale-110'
-                  : 'border-gray-200 text-gray-600 dark:border-gray-700 dark:text-gray-400 hover:bg-gray-100'
+                'border-th-border text-th-link hover:bg-th-card-hover hover:scale-110'
               }`}
             >
               <MoreVertical className="w-3.5 h-3.5" />
@@ -828,7 +819,7 @@ function MessageComponent({
                 <div
                   style={{ maxHeight: menuMaxHeight }}
                   className={`absolute w-48 max-w-[70vw] rounded-lg shadow-lg border py-1 z-20 overflow-y-auto transition-all duration-300 ${
-                    theme === 'sweet' ? 'bg-[#FFF0F5] border-[#FFB6C1]' : theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+                    'bg-th-card border-th-border text-th-ink'
                   } ${isOwn ? 'right-0' : 'left-0'} ${
                     menuDirection === 'up' ? 'bottom-full mb-1 origin-bottom' : 'top-full mt-1 origin-top'
                   }`}
@@ -843,11 +834,7 @@ function MessageComponent({
                       key={item.label}
                       onClick={() => { item.action(); setShowMenu(false); }}
                       className={`w-full px-4 py-2 text-left flex items-center gap-2 text-sm border border-transparent transition-all ${
-                        theme === 'sweet'
-                          ? 'hover:bg-[#FFC0CB]/30 text-[#4B004B] hover:border-[#FFB6C1]'
-                          : theme === 'dark'
-                          ? 'hover:bg-gray-700 text-white'
-                          : 'hover:bg-gray-50 text-black hover:border-gray-400'
+                        'hover:bg-th-card-hover text-th-ink hover:border-th-border'
                       }`}
                     >
                       {item.icon}
@@ -855,7 +842,7 @@ function MessageComponent({
                     </button>
                   ))}
 
-                  <div className={`border-t my-1 ${theme === 'sweet' ? 'border-[#FFB6C1]' : 'border-gray-200 dark:border-gray-700'}`} />
+                  <div className="border-t my-1 border-th-border" />
 
                   {/* Edit — only your own plain text messages (not media, and
                       not a location, which is a text row holding a maps URL). */}
@@ -863,11 +850,7 @@ function MessageComponent({
                     <button
                       onClick={() => { onEdit?.(message.id, message.content || ''); setShowMenu(false); }}
                       className={`w-full px-4 py-2 text-left flex items-center gap-2 text-sm border border-transparent transition-all ${
-                        theme === 'sweet'
-                          ? 'hover:bg-[#FFC0CB]/30 text-[#4B004B] hover:border-[#FFB6C1]'
-                          : theme === 'dark'
-                          ? 'hover:bg-gray-700 text-white'
-                          : 'hover:bg-gray-50 text-black hover:border-gray-400'
+                        'hover:bg-th-card-hover text-th-ink hover:border-th-border'
                       }`}
                     >
                       <Edit3 className="w-4 h-4" />
@@ -879,7 +862,7 @@ function MessageComponent({
                       on this device. */}
                   <button
                     onClick={handleDeleteForMe}
-                    className="w-full px-4 py-2 text-left flex items-center gap-2 text-red-600 text-sm border border-transparent hover:border-red-400 transition-all hover:bg-red-50 dark:hover:bg-red-900/20"
+                    className="w-full px-4 py-2 text-left flex items-center gap-2 text-th-danger text-sm border border-transparent hover:border-th-danger/50 transition-all hover:bg-th-danger/10"
                   >
                     <UserX className="w-4 h-4" />
                     <span>Delete for me</span>
@@ -890,7 +873,7 @@ function MessageComponent({
                   {isOwn && (
                     <button
                       onClick={handleDeleteForEveryone}
-                      className="w-full px-4 py-2 text-left flex items-center gap-2 text-red-600 text-sm border border-transparent hover:border-red-400 transition-all hover:bg-red-50 dark:hover:bg-red-900/20"
+                      className="w-full px-4 py-2 text-left flex items-center gap-2 text-th-danger text-sm border border-transparent hover:border-th-danger/50 transition-all hover:bg-th-danger/10"
                     >
                       <Users2 className="w-4 h-4" />
                       <span>Delete for everyone</span>

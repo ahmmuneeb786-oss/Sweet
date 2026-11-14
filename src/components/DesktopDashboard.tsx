@@ -11,6 +11,7 @@ import { StrictLock } from './StrictLock';
 import { PermissionManager } from '../services/PermissionManager';
 import { LockedChatsPanel } from './LockedChatsPanel';
 import { useBackableState } from '../hooks/useBackableState';
+import { useAppIsSweet } from '../theme/sweetHearts';
 
 
 interface DashboardProps {
@@ -37,6 +38,7 @@ export function DesktopDashboard({ theme, setTheme, onOpenGifPanel, myGifs, setM
   const [showLockedPanel, setShowLockedPanel] = useState(false);
   const [isRegistering, setIsRegistering] = useState(false);
   const [faceLockEnabled, setFaceLockEnabled] = useState(false);
+  const appIsSweet = useAppIsSweet();
 
   useBackableState(!!selectedChatId, () => setSelectedChatId(null));
   useBackableState(showProfile, () => setShowProfile(false));
@@ -62,16 +64,8 @@ export function DesktopDashboard({ theme, setTheme, onOpenGifPanel, myGifs, setM
 
   return (
     <div
-      className={`h-screen w-full flex overflow-hidden relative ${
-        theme === 'dark'
-          ? 'bg-gray-900'
-          : theme === 'sweet'
-          ? 'bg-[#FFE4E1] text-[#4B004B]'
-          : 'bg-gray-50'
-      }`}
+      className="h-screen w-full flex overflow-hidden relative bg-th-bg text-th-ink"
     >
-      {theme === 'sweet' && <FloatingHearts />}
-
       {/* Chat list sidebar */}
       <ChatList
         theme={theme}
@@ -107,38 +101,22 @@ export function DesktopDashboard({ theme, setTheme, onOpenGifPanel, myGifs, setM
         <ChatWindow chatId={selectedChatId} theme={theme} onOpenGifPanel={onOpenGifPanel} myGifs={myGifs} setMyGifs={setMyGifs} />
       ) : (
         <div
-          className={`flex-1 flex items-center justify-center ${
-            theme === 'dark'
-              ? 'bg-gray-800'
-              : theme === 'sweet'
-              ? 'bg-[#FFE4E1] text-[#4B004B]'
-              : 'bg-white'
-          }`}
+          className="relative flex-1 flex items-center justify-center bg-th-wallpaper text-th-ink"
         >
-          <div className="text-center space-y-4">
-            <div className={`w-24 h-24 mx-auto rounded-full flex items-center justify-center bg-gradient-to-br ${theme === 'sweet' ? 'from-[#FFD1DC] to-[#FFB6C1]' : 'from-pink-100 to-purple-100'}`}>
+          {/* Hearts only in this empty pane; an open chat draws its own behind its messages. */}
+          {appIsSweet && <FloatingHearts />}
+          <div className="relative text-center space-y-4">
+            <div className={`w-24 h-24 mx-auto rounded-full flex items-center justify-center bg-gradient-to-br from-th-secondary to-th-card border border-th-border`}>
               <span className="text-4xl">💬</span>
             </div>
             <div>
               <h2
-                className={`text-2xl font-bold mb-2 ${
-                  theme === 'dark'
-                    ? 'text-white'
-                    : theme === 'sweet'
-                    ? 'text-[#4B004B]'
-                    : 'text-gray-800'
-                }`}
+                className="text-2xl font-bold mb-2 text-th-ink"
               >
                 Welcome to Sweet
               </h2>
               <p
-                className={`${
-                  theme === 'dark'
-                    ? 'text-gray-300'
-                    : theme === 'sweet'
-                    ? 'text-[#8B004B]'
-                    : 'text-gray-600'
-                }`}
+                className="text-th-ink-soft"
               >
                 Select a chat to start messaging
               </p>

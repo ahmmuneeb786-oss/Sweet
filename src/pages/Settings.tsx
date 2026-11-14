@@ -12,6 +12,7 @@ import { localDB } from '../db';
 import { useNotify } from '../contexts/NotificationContext';
 import { usePerformance, useFps } from '../contexts/PerformanceContext';
 import { StorageTab } from '../components/storage/StorageTab';
+import { ThemeTab } from '../components/theme/ThemeTab';
 
 // Kept as its own component so only this number re-renders every second,
 // not the whole Settings page.
@@ -54,7 +55,7 @@ interface SecureProfile {
 // faceLockEnabled / setFaceLockEnabled / onRegisterFace / savedDescriptor
 // are still passed by the dashboards but no longer used: App Lock settings
 // now live in AppLockSettings, which reads and saves vault_settings itself.
-export function Settings({ onClose, theme, setTheme, user, onCloseLockedPanel }: SettingsProps) {
+export function Settings({ onClose, theme, user, onCloseLockedPanel }: SettingsProps) {
   // 3. Destructure and apply the typecast ('as SecureProfile')
   const { profile: rawProfile, updateProfile, signOut } = useAuth();
   const { showSuccess, showInfo } = useNotify();
@@ -461,50 +462,51 @@ export function Settings({ onClose, theme, setTheme, user, onCloseLockedPanel }:
     }
   }, [newUsername, profile?.username, profile?.id, isOnline]);
 
-  // Sweet-theme surface levels, modelled on the Theme tab: the panel is dark
-  // pink, each card/option on it is light pink with a soft border, and any
-  // control nested INSIDE a light-pink card flips back to dark pink so it
-  // still stands out. Selected options go white with a hot-pink border.
-  const sweetCard = 'border-2 border-[#FFD1DC] bg-[#FFF0F5]';
-  const sweetCardHover = 'hover:bg-white hover:border-[#FFB6C1]';
-  const sweetInner = 'border border-[#FFB6C1] bg-[#FFE4E1]';
+  // Every colour here comes from the active theme (th-* classes = CSS
+  // variables set by ThemeProvider), so Settings follows presets and custom
+  // themes alike. Surface levels: the panel, cards on it, and a softer inner
+  // level for things nested inside a card.
+  const ui = {
+    card: 'border-2 border-th-border bg-th-card',
+    cardHover: 'hover:bg-th-card-hover',
+    inner: 'border border-th-border bg-th-secondary',
+    label: 'block text-sm font-medium mb-2 text-th-ink-soft',
+    field: 'w-full border-2 border-th-border rounded-xl bg-th-input text-th-ink placeholder:text-th-ink-faint outline-none focus:ring-2 focus:ring-th-primary/40 focus:border-th-primary',
+    back: 'flex items-center gap-2 text-th-link hover:opacity-80 mb-4',
+    mainBtn: 'bg-gradient-to-r from-th-bubble-mine to-th-bubble-mine-to text-th-on-bubble-mine hover:opacity-90 disabled:opacity-50',
+    softBtn: 'border border-th-border bg-th-secondary text-th-on-secondary hover:bg-th-card-hover',
+  };
 
   return (
     <>
       <div className="fixed inset-0 bg-black/50 z-40" onClick={onClose} />
-      <div className={`fixed right-0 top-0 h-full w-full md:w-96 shadow-2xl z-50 flex flex-col overflow-hidden transition-all duration-300 ${
-        theme === 'dark' 
-          ? 'bg-gray-900 text-white' 
-          : theme === 'sweet' 
-          ? 'bg-[#FFE4E1] text-[#4B004B]' 
-          : 'bg-white text-gray-900'
-      }`}>
-        <div className={`p-6 border-b flex items-center justify-between ${theme === 'sweet' ? 'border-[#FFB6C1]' : 'border-gray-200'}`}>
+      <div className="fixed right-0 top-0 h-full w-full md:w-96 shadow-2xl z-50 flex flex-col overflow-hidden transition-colors duration-300 bg-th-panel text-th-ink">
+        <div className="p-6 border-b border-th-border flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <h2 className={`text-2xl font-bold ${theme === 'sweet' ? 'text-[#4B004B]' : 'text-gray-900'}`}>Settings</h2>
+            <h2 className="text-2xl font-bold text-th-ink">Settings</h2>
             <OfflineBadge theme={theme} mobileOnly surface="dark" />
           </div>
-          <button onClick={onClose} className={`p-2 rounded-full ${theme === 'sweet' ? 'hover:bg-[#FFC0CB]/40' : 'hover:bg-gray-100'}`}>
+          <button onClick={onClose} aria-label="Close settings" className="p-2 rounded-full text-th-ink-soft hover:bg-th-card-hover hover:text-th-ink transition-colors">
             <X className="w-5 h-5" />
           </button>
         </div>
 
         <div className="flex-1 overflow-y-auto">
           {activeTab === 'main' && (
-            <div className={theme === 'sweet' ? 'p-4 space-y-2' : 'divide-y divide-gray-100'}>
+            <div className="p-4 space-y-2">
               {settingsSections.map((section) => {
                 const Icon = section.icon;
                 return (
                   <button
                     key={section.id}
                     onClick={() => setActiveTab(section.id as SettingsTab)}
-                    className={`w-full p-4 flex items-center justify-between transition-colors ${theme === 'sweet' ? `rounded-xl ${sweetCard} ${sweetCardHover}` : 'hover:bg-gray-50'}`}
+                    className={`w-full p-4 flex items-center justify-between transition-colors rounded-xl ${ui.card} ${ui.cardHover}`}
                   >
                     <div className="flex items-center gap-3">
-                      <Icon className={`w-5 h-5 ${theme === 'sweet' ? 'text-[#8B004B]' : 'text-gray-600'}`} />
-                      <span className={`font-medium ${theme === 'sweet' ? 'text-[#4B004B]' : 'text-gray-900'}`}>{section.label}</span>
+                      <Icon className="w-5 h-5 text-th-ink-soft" />
+                      <span className="font-medium text-th-ink">{section.label}</span>
                     </div>
-                    <ChevronRight className={`w-5 h-5 ${theme === 'sweet' ? 'text-[#FF69B4]' : 'text-gray-400'}`} />
+                    <ChevronRight className="w-5 h-5 text-th-link" />
                   </button>
                 );
               })}
@@ -513,7 +515,7 @@ export function Settings({ onClose, theme, setTheme, user, onCloseLockedPanel }:
                   await signOut();
                   onClose();
                 }}
-                className={`w-full p-4 flex items-center justify-between hover:bg-red-50 transition-colors text-red-600 ${theme === 'sweet' ? `rounded-xl ${sweetCard} hover:border-red-200` : ''}`}
+                className={`w-full p-4 flex items-center justify-between transition-colors text-th-danger rounded-xl ${ui.card} hover:bg-th-danger/10`}
               >
                 <div className="flex items-center gap-3">
                   <LogOut className="w-5 h-5" />
@@ -528,48 +530,44 @@ export function Settings({ onClose, theme, setTheme, user, onCloseLockedPanel }:
             <div className="p-6 space-y-6">
               <button
                 onClick={() => setActiveTab('main')}
-                className="flex items-center gap-2 text-pink-600 hover:text-pink-700 mb-4"
+                className={ui.back}
               >
                 <ChevronLeft className="w-4 h-4" />
                 Back
               </button>
 
               <div>
-                <label className={`block text-sm font-medium mb-2 ${theme === 'sweet' ? 'text-[#8B004B]' : 'text-gray-700'}`}>Display Name</label>
+                <label className={ui.label}>Display Name</label>
                 <input
                   type="text"
                   value={displayName}
                   onChange={(e) => setDisplayName(e.target.value)}
-                  className={`w-full px-4 py-2 border rounded-xl focus:ring-2 focus:ring-pink-500 outline-none ${
-                    theme === 'sweet'
-                      ? 'border-[#FFB6C1] focus:ring-[#FFB6C1] bg-[#FFF0F5]'
-                      : ''
-                  }`}
+                  className={`${ui.field} px-4 py-2`}
                 />
               </div>
 
               <div>
-                <label className={`block text-sm font-medium mb-2 ${theme === 'sweet' ? 'text-[#8B004B]' : 'text-gray-700'}`}>
+                <label className={ui.label}>
                   Username
                 </label>
                 <div className="relative">
                   {/* Left Side User Icon */}
-                  <User className={`absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 ${theme === 'sweet' ? 'text-[#FF69B4]' : 'text-gray-400'}`} />
+                  <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-th-ink-faint" />
 
                   <input
                     type="text"
                     value={newUsername}
                     onChange={(e) => setNewUsername(e.target.value)}
                     placeholder="sweet_alex"
-                    className={`w-full pl-10 pr-10 py-3 border rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-transparent outline-none transition-all ${theme === 'sweet' ? 'bg-[#FFF0F5]' : ''} ${
-                      usernameError ? 'border-red-500' : newUsername && usernameAvailable ? 'border-green-500' : theme === 'sweet' ? 'border-[#FFB6C1]' : 'border-gray-300'
+                    className={`${ui.field} pl-10 pr-10 py-3 transition-all ${
+                      usernameError ? '!border-th-danger' : newUsername && usernameAvailable ? '!border-green-500' : ''
                     }`}
                   />
-                  
+
                   {/* Right Side Loading Spinner */}
                   {checkingUsername && (
                     <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                      <div className="w-5 h-5 border-2 border-pink-500 border-t-transparent rounded-full animate-spin" />
+                      <div className="w-5 h-5 border-2 border-th-primary border-t-transparent rounded-full animate-spin" />
                     </div>
                   )}
                   
@@ -580,13 +578,13 @@ export function Settings({ onClose, theme, setTheme, user, onCloseLockedPanel }:
                   
                   {/* Right Side Error Icon */}
                   {!checkingUsername && usernameError && (
-                    <AlertCircle className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-red-500" />
+                    <AlertCircle className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-th-danger" />
                   )}
                 </div>
-                
+
                 {/* Error Messaging */}
                 {usernameError && (
-                  <p className="mt-1 text-sm text-red-600">{usernameError}</p>
+                  <p className="mt-1 text-sm text-th-danger">{usernameError}</p>
                 )}
                 
                 {/* Success Messaging */}
@@ -598,41 +596,35 @@ export function Settings({ onClose, theme, setTheme, user, onCloseLockedPanel }:
                   type="button"
                   onClick={handleChangeUsername}
                   disabled={loading || !usernameAvailable || checkingUsername}
-                  className="mt-3 px-4 py-2 bg-pink-500 text-white rounded-xl hover:bg-pink-600 transition disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium shadow-sm"
+                  className="mt-3 px-4 py-2 bg-th-primary text-th-on-primary rounded-xl hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium shadow-sm"
                 >
                   Save Username
                 </button>
               </div>
 
               <div>
-                <label className={`block text-sm font-medium mb-2 ${theme === 'sweet' ? 'text-[#8B004B]' : 'text-gray-700'}`}>Bio</label>
+                <label className={ui.label}>Bio</label>
                 <textarea
                   value={bio}
                   onChange={(e) => setBio(e.target.value.slice(0, 250))}
                   maxLength={250}
                   rows={4}
-                  className={`w-full px-4 py-2 border rounded-xl focus:ring-2 focus:ring-pink-500 outline-none resize-none ${
-                    theme === 'sweet'
-                      ? 'border-[#FFB6C1] focus:ring-[#FFB6C1] bg-[#FFF0F5]'
-                      : theme === 'dark'
-                      ? 'border-gray-700'
-                      : 'border-gray-300'
-                  }`}
+                  className={`${ui.field} px-4 py-2 resize-none`}
                 />
-                <p className={`text-xs mt-1 ${theme === 'sweet' ? 'text-[#8B004B]' : 'text-gray-500'}`}>{bio.length}/250</p>
+                <p className="text-xs mt-1 text-th-ink-soft">{bio.length}/250</p>
               </div>
 
               <div className="flex gap-2">
                 <button
                   onClick={handleUpdateProfile}
                   disabled={loading}
-                  className="flex-1 px-4 py-2 bg-gradient-to-r from-pink-500 to-rose-500 text-white rounded-xl hover:from-pink-600 hover:to-rose-600 disabled:opacity-50"
+                  className={`flex-1 px-4 py-2 rounded-xl ${ui.mainBtn}`}
                 >
                   {loading ? 'Saving...' : 'Save Changes'}
                 </button>
                 <button
                   onClick={() => setActiveTab('main')}
-                  className={`px-4 py-2 rounded-xl transition-colors ${theme === 'sweet' ? `${sweetCard} ${sweetCardHover} text-[#4B004B]` : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+                  className={`px-4 py-2 rounded-xl transition-colors ${ui.softBtn}`}
                 >
                   Cancel
                 </button>
@@ -666,18 +658,18 @@ export function Settings({ onClose, theme, setTheme, user, onCloseLockedPanel }:
             <div className="p-6 space-y-6">
               <button
                 onClick={() => setActiveTab('main')}
-                className="flex items-center gap-2 text-pink-600 hover:text-pink-700 mb-4"
+                className={ui.back}
               >
                 <ChevronLeft className="w-4 h-4" />
                 Back
               </button>
 
               <div>
-                <label className={`block text-sm font-medium mb-2 ${theme === 'sweet' ? 'text-[#8B004B]' : 'text-gray-700'}`}>Last Seen Visibility</label>
+                <label className={ui.label}>Last Seen Visibility</label>
                 <select
                   value={privacySettings.lastSeenVisibility}
                   onChange={(e) => setPrivacySettings({ ...privacySettings, lastSeenVisibility: e.target.value })}
-                  className={`w-full px-4 py-2 border rounded-xl focus:ring-2 focus:ring-pink-500 outline-none ${theme === 'sweet' ? 'border-[#FFB6C1] text-[#4B004B] bg-[#FFF0F5]' : 'border-gray-300'}`}
+                  className={`${ui.field} px-4 py-2`}
                 >
                   <option value="everyone">Everyone</option>
                   <option value="friends">Friends Only</option>
@@ -686,11 +678,11 @@ export function Settings({ onClose, theme, setTheme, user, onCloseLockedPanel }:
               </div>
 
               <div>
-                <label className={`block text-sm font-medium mb-2 ${theme === 'sweet' ? 'text-[#8B004B]' : 'text-gray-700'}`}>Profile Photo Visibility</label>
+                <label className={ui.label}>Profile Photo Visibility</label>
                 <select
                   value={privacySettings.profilePhotoVisibility}
                   onChange={(e) => setPrivacySettings({ ...privacySettings, profilePhotoVisibility: e.target.value })}
-                  className={`w-full px-4 py-2 border rounded-xl focus:ring-2 focus:ring-pink-500 outline-none ${theme === 'sweet' ? 'border-[#FFB6C1] text-[#4B004B] bg-[#FFF0F5]' : 'border-gray-300'}`}
+                  className={`${ui.field} px-4 py-2`}
                 >
                   <option value="everyone">Everyone</option>
                   <option value="friends">Friends Only</option>
@@ -699,11 +691,11 @@ export function Settings({ onClose, theme, setTheme, user, onCloseLockedPanel }:
               </div>
 
               <div>
-                <label className={`block text-sm font-medium mb-2 ${theme === 'sweet' ? 'text-[#8B004B]' : 'text-gray-700'}`}>Who Can Add You</label>
+                <label className={ui.label}>Who Can Add You</label>
                 <select
                   value={privacySettings.whoCanAdd}
                   onChange={(e) => setPrivacySettings({ ...privacySettings, whoCanAdd: e.target.value })}
-                  className={`w-full px-4 py-2 border rounded-xl focus:ring-2 focus:ring-pink-500 outline-none ${theme === 'sweet' ? 'border-[#FFB6C1] text-[#4B004B] bg-[#FFF0F5]' : 'border-gray-300'}`}
+                  className={`${ui.field} px-4 py-2`}
                 >
                   <option value="everyone">Everyone</option>
                   <option value="friends">Friends Only</option>
@@ -714,7 +706,7 @@ export function Settings({ onClose, theme, setTheme, user, onCloseLockedPanel }:
               <button
                 onClick={handleUpdatePrivacy}
                 disabled={loading}
-                className="w-full px-4 py-2 bg-gradient-to-r from-pink-500 to-rose-500 text-white rounded-xl hover:from-pink-600 hover:to-rose-600 disabled:opacity-50"
+                className={`w-full px-4 py-2 rounded-xl ${ui.mainBtn}`}
               >
                 {loading ? 'Saving...' : 'Save Privacy Settings'}
               </button>
@@ -725,27 +717,30 @@ export function Settings({ onClose, theme, setTheme, user, onCloseLockedPanel }:
             <div className="p-6 space-y-4">
               <button
                 onClick={() => setActiveTab('main')}
-                className="flex items-center gap-2 text-pink-600 hover:text-pink-700 mb-4"
+                className={ui.back}
               >
                 <ChevronLeft className="w-4 h-4" />
                 Back
               </button>
 
-              <div className={`p-4 rounded-2xl flex items-center justify-between shadow-sm mt-4 ${theme === 'sweet' ? sweetCard : 'bg-white border border-pink-100'}`}>
+              <div className={`p-4 rounded-2xl flex items-center justify-between shadow-sm mt-4 ${ui.card}`}>
                <div className="flex items-center gap-3">
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-pink-500 text-lg ${theme === 'sweet' ? sweetInner : 'bg-pink-50'}`}>
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg ${ui.inner}`}>
                   🍬
                 </div>
                 <div className="flex flex-col">
-                  <span className="text-xs font-black uppercase tracking-wider text-pink-600">Sweet Whispers</span>
-                  <span className="text-[10px] text-pink-400 font-bold">BACKGROUND NOTIFICATIONS</span>
+                  <span className="text-xs font-black uppercase tracking-wider text-th-link">Sweet Whispers</span>
+                  <span className="text-[10px] text-th-ink-soft font-bold">BACKGROUND NOTIFICATIONS</span>
                 </div>
               </div>
-      
+
               <button
                 onClick={handleNotificationToggle}
+                role="switch"
+                aria-checked={notificationsEnabled}
+                aria-label="Background notifications"
                 className={`w-11 h-6 rounded-full transition-colors duration-200 focus:outline-none relative ${
-                  notificationsEnabled ? 'bg-pink-500' : theme === 'sweet' ? 'bg-[#FFC0CB]' : 'bg-gray-200'
+                  notificationsEnabled ? 'bg-th-toggle-on' : 'bg-th-toggle-off'
                 }`}
               >
                 <span
@@ -755,152 +750,89 @@ export function Settings({ onClose, theme, setTheme, user, onCloseLockedPanel }:
                 />
               </button>
             </div>
-            <p className="text-[11px] text-pink-400/80 font-medium italic mt-2 px-1">
+            <p className="text-[11px] text-th-ink-soft font-medium italic mt-2 px-1">
               "Receive a sweet little notification banner whenever someone messages you, even if your browser tab is entirely closed."
         </p>
 
-              <label className={`flex items-center justify-between p-3 rounded-xl ${theme === 'sweet' ? sweetCard : 'bg-gray-50'}`}>
-                <span className={`font-medium ${theme === 'sweet' ? 'text-[#4B004B]' : 'text-gray-700'}`}>Message Notifications</span>
+              <label className={`flex items-center justify-between p-3 rounded-xl ${ui.card}`}>
+                <span className="font-medium text-th-ink">Message Notifications</span>
                 <input
                   type="checkbox"
                   checked={notificationSettings.messageNotifications}
                   onChange={(e) => setNotificationSettings({ ...notificationSettings, messageNotifications: e.target.checked })}
-                  className="w-4 h-4"
+                  className="w-4 h-4 accent-th-primary"
                 />
               </label>
 
-              <label className={`flex items-center justify-between p-3 rounded-xl ${theme === 'sweet' ? sweetCard : 'bg-gray-50'}`}>
-                <span className={`font-medium ${theme === 'sweet' ? 'text-[#4B004B]' : 'text-gray-700'}`}>Friend Requests</span>
+              <label className={`flex items-center justify-between p-3 rounded-xl ${ui.card}`}>
+                <span className="font-medium text-th-ink">Friend Requests</span>
                 <input
                   type="checkbox"
                   checked={notificationSettings.friendRequests}
                   onChange={(e) => setNotificationSettings({ ...notificationSettings, friendRequests: e.target.checked })}
-                  className="w-4 h-4"
+                  className="w-4 h-4 accent-th-primary"
                 />
               </label>
 
-              <label className={`flex items-center justify-between p-3 rounded-xl ${theme === 'sweet' ? sweetCard : 'bg-gray-50'}`}>
-                <span className={`font-medium ${theme === 'sweet' ? 'text-[#4B004B]' : 'text-gray-700'}`}>Call Notifications</span>
+              <label className={`flex items-center justify-between p-3 rounded-xl ${ui.card}`}>
+                <span className="font-medium text-th-ink">Call Notifications</span>
                 <input
                   type="checkbox"
                   checked={notificationSettings.callNotifications}
                   onChange={(e) => setNotificationSettings({ ...notificationSettings, callNotifications: e.target.checked })}
-                  className="w-4 h-4"
+                  className="w-4 h-4 accent-th-primary"
                 />
               </label>
 
-              <label className={`flex items-center justify-between p-3 rounded-xl border-2 ${theme === 'sweet' ? 'bg-[#FFF0F5] border-[#FFB6C1]' : 'bg-gray-50 border-gray-200'}`}>
-                <span className={`font-medium ${theme === 'sweet' ? 'text-[#4B004B]' : 'text-gray-700'}`}>Mute All</span>
+              <label className={`flex items-center justify-between p-3 rounded-xl ${ui.card}`}>
+                <span className="font-medium text-th-ink">Mute All</span>
                 <input
                   type="checkbox"
                   checked={notificationSettings.muteAll}
                   onChange={(e) => setNotificationSettings({ ...notificationSettings, muteAll: e.target.checked })}
-                  className="w-4 h-4"
+                  className="w-4 h-4 accent-th-primary"
                 />
               </label>
             </div>
           )}
 
-          {activeTab === 'theme' && (
-            <div className="p-6 space-y-6">
-              <button
-                onClick={() => setActiveTab('main')}
-                className="flex items-center gap-2 text-pink-600 hover:text-pink-700 mb-4"
-              >
-                <ChevronLeft className="w-4 h-4" />
-                Back
-              </button>
-
-              <div>
-                <label className={`block text-sm font-medium mb-3 tracking-wide ${theme === 'sweet' ? 'text-[#4B004B]' : 'text-gray-900'}`}>
-                  App Theme 🎨
-                </label>
-                <div className="grid grid-cols-3 gap-2">
-                  {['sweet', 'light', 'dark'].map((t) => {
-                    const isSelected = theme === t;
-                    return (
-                      <label
-                        key={t}
-                        className={`flex flex-col items-center justify-center p-3 rounded-xl border-2 cursor-pointer transition-all duration-200 text-center select-none
-                          ${isSelected
-                            ? (theme === 'sweet' ? 'border-[#FF1493] bg-white text-[#FF1493] shadow-sm scale-[1.02]' : 'border-pink-400 bg-pink-50/80 text-pink-600 shadow-sm scale-[1.02]')
-                            : (theme === 'sweet' ? 'border-[#FFD1DC] bg-[#FFF0F5] text-[#8B004B] hover:bg-white hover:border-[#FFB6C1]' : 'border-gray-300 bg-gray-50 text-gray-600 hover:bg-gray-200 hover:border-gray-400')
-                         }`}
-                      >
-                       <input
-                         type="radio"
-                         name="theme"
-                         value={t}
-                         checked={isSelected}
-                         className="sr-only" // Hidden visually, but keeps keyboard navigation active for accessibility
-                         onChange={() => setTheme(t as 'light' | 'dark' | 'sweet')}
-                       />
-                       <span className="text-xl mb-1">
-                         {t === 'sweet' ? '🍬' : t === 'light' ? '☀️' : '🌙'}
-                       </span>
-                       <span className="text-xs font-semibold capitalize">
-                         {t}
-                       </span>
-                     </label>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div>
-                <label className={`block text-sm font-medium mb-3 ${theme === 'sweet' ? 'text-[#8B004B]' : 'text-gray-700'}`}>Chat Themes</label>
-                <div className="space-y-2">
-                  {['love', 'best_friend', 'friend', 'default'].map((t) => (
-                    <div key={t} className={`p-3 rounded-xl ${theme === 'sweet' ? sweetCard : 'border border-gray-200 bg-gray-50'}`}>
-                      <p className={`font-medium capitalize ${theme === 'sweet' ? 'text-[#4B004B]' : 'text-gray-700'}`}>{t} Theme</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
+          {activeTab === 'theme' && <ThemeTab onBack={() => setActiveTab('main')} />}
 
 {activeTab === 'storage' && (
   <StorageTab theme={theme} userId={user?.id} onBack={() => setActiveTab('main')} />
 )}
 
 {activeTab === 'performance' && (
-  <div className={`p-6 space-y-6 animate-fadeIn transition-colors ${
-    theme === 'sweet' ? 'text-[#4B004B]' : theme === 'dark' ? 'text-gray-200' : 'text-gray-700'
-  }`}>
+  <div className="p-6 space-y-6 animate-fadeIn transition-colors text-th-ink">
     {/* Soft Back Button */}
     <button
       onClick={() => setActiveTab('main')}
-      className="flex items-center gap-2 text-pink-500 hover:text-pink-600 font-medium transition-colors group select-none"
+      className="flex items-center gap-2 text-th-link hover:opacity-80 font-medium transition-colors group select-none"
     >
       <ChevronLeft className="w-4 h-4 transition-transform group-hover:scale-110" />
       <span className="text-sm">Back</span>
     </button>
 
-    <div className={`relative overflow-hidden p-5 rounded-2xl shadow-sm ${
-      theme === 'sweet' ? sweetCard
-      : theme === 'dark' ? 'border bg-gray-800/50 border-gray-700'
-      : 'bg-gradient-to-br from-pink-50 via-purple-50 to-pink-100/50 border border-pink-200/60'
-    }`}>
+    <div className={`relative overflow-hidden p-5 rounded-2xl shadow-sm ${ui.card}`}>
       <div className="flex items-center gap-2.5 mb-3">
         <span className="text-base" role="img" aria-label="performance">⚡</span>
-        <p className={`text-xs font-bold uppercase tracking-wider ${theme === 'dark' ? 'text-pink-300/80' : 'text-pink-600/80'}`}>
+        <p className="text-xs font-bold uppercase tracking-wider text-th-link">
           App Performance
         </p>
       </div>
 
       <div className="grid grid-cols-2 gap-3 mb-3">
-        <div className={`rounded-xl p-3 ${theme === 'sweet' ? sweetInner : theme === 'dark' ? 'bg-gray-900/40' : 'bg-white/50'}`}>
-          <p className={`text-[10px] font-bold uppercase tracking-wider mb-1 ${theme === 'dark' ? 'text-pink-300/60' : 'text-pink-600/60'}`}>Live FPS</p>
+        <div className={`rounded-xl p-3 ${ui.inner}`}>
+          <p className="text-[10px] font-bold uppercase tracking-wider mb-1 text-th-ink-soft">Live FPS</p>
           <LiveFpsValue />
         </div>
-        <div className={`rounded-xl p-3 ${theme === 'sweet' ? sweetInner : theme === 'dark' ? 'bg-gray-900/40' : 'bg-white/50'}`}>
-          <p className={`text-[10px] font-bold uppercase tracking-wider mb-1 ${theme === 'dark' ? 'text-pink-300/60' : 'text-pink-600/60'}`}>Device Guess</p>
-          <p className={`text-2xl font-black capitalize ${theme === 'dark' ? 'text-gray-100' : 'text-[#4B004B]'}`}>{deviceTier}</p>
+        <div className={`rounded-xl p-3 ${ui.inner}`}>
+          <p className="text-[10px] font-bold uppercase tracking-wider mb-1 text-th-ink-soft">Device Guess</p>
+          <p className="text-2xl font-black capitalize text-th-ink">{deviceTier}</p>
         </div>
       </div>
 
-      <p className={`text-[11px] mb-3 ${theme === 'dark' ? 'text-pink-300/70' : 'text-pink-600/70'}`}>
+      <p className="text-[11px] mb-3 text-th-ink-soft">
         {/* Auto steps back up at most once per session (see
             usePerformanceMonitor), so say so — otherwise a good FPS reading
             next to "reduced effects" looks like a bug. */}
@@ -924,12 +856,8 @@ export function Settings({ onClose, theme, setTheme, user, onCloseLockedPanel }:
             aria-pressed={override === opt}
             className={`py-2 rounded-xl text-[11px] font-bold transition-colors ${
               override === opt
-                ? 'bg-pink-500 text-white'
-                : theme === 'sweet'
-                ? `${sweetInner} text-pink-600/70 hover:bg-white`
-                : theme === 'dark'
-                ? 'bg-gray-900/40 text-pink-300/80 hover:bg-gray-700'
-                : 'bg-white/60 text-pink-600/70 hover:bg-white'
+                ? 'bg-th-primary text-th-on-primary'
+                : `${ui.inner} text-th-on-secondary hover:bg-th-card-hover`
             }`}
           >
             {opt === 'auto' ? 'Auto' : opt === 'force-high' ? 'Full Effects' : opt === 'force-low' ? 'Reduced' : 'Minimal'}
@@ -939,12 +867,10 @@ export function Settings({ onClose, theme, setTheme, user, onCloseLockedPanel }:
     </div>
 
     {/* On-screen FPS overlay toggle */}
-    <div className={`rounded-2xl p-4 flex items-center justify-between gap-4 ${
-      theme === 'sweet' ? sweetCard : theme === 'dark' ? 'border bg-gray-800/50 border-gray-700' : 'border bg-white/50 border-pink-200/60'
-    }`}>
+    <div className={`rounded-2xl p-4 flex items-center justify-between gap-4 ${ui.card}`}>
       <div>
         <p id="perf-overlay-label" className="text-sm font-bold">Show FPS on screen</p>
-        <p id="perf-overlay-desc" className={`text-[11px] mt-0.5 ${theme === 'sweet' ? 'text-[#8B004B]' : theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+        <p id="perf-overlay-desc" className="text-[11px] mt-0.5 text-th-ink-soft">
           A small live readout stays visible on every screen, positioned out of the way of your chats.
         </p>
       </div>
@@ -956,9 +882,7 @@ export function Settings({ onClose, theme, setTheme, user, onCloseLockedPanel }:
         aria-describedby="perf-overlay-desc"
         onClick={() => setShowOverlay(!showOverlay)}
         className={`shrink-0 w-12 h-7 rounded-full transition-colors relative ${
-          showOverlay
-            ? (theme === 'sweet' ? 'bg-[#FF1493]' : 'bg-pink-500')
-            : (theme === 'sweet' ? 'bg-[#FFD1DC]' : 'bg-gray-300 dark:bg-gray-600')
+          showOverlay ? 'bg-th-toggle-on' : 'bg-th-toggle-off'
         }`}
       >
         <span

@@ -10,9 +10,9 @@ const sweetIcon = L.divIcon({
   className: 'custom-pin',
   html: `
     <div class="relative flex items-center justify-center">
-      <div class="absolute w-10 h-10 bg-pink-500/30 rounded-full animate-ping"></div>
-      <div class="relative bg-white p-1 rounded-full shadow-lg border-2 border-pink-500">
-        <div class="bg-pink-500 rounded-full p-2 text-white flex items-center justify-center">
+      <div class="absolute w-10 h-10 bg-th-primary/30 rounded-full animate-ping"></div>
+      <div class="relative bg-th-card p-1 rounded-full shadow-lg border-2 border-th-primary">
+        <div class="bg-th-primary rounded-full p-2 text-th-on-primary flex items-center justify-center">
           <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path>
             <circle cx="12" cy="10" r="3"></circle>
@@ -81,10 +81,10 @@ export default function LocationPicker({ onSelect, onCancel }: LocationPickerPro
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-      <div className="w-full max-w-lg bg-[#FFF0F5] border border-[#FFB6C1] rounded-3xl overflow-hidden shadow-2xl flex flex-col">
+      <div className="w-full max-w-lg bg-th-card text-th-ink border border-th-border rounded-3xl overflow-hidden shadow-2xl flex flex-col">
         
         {/* HEADER BAR */}
-        <div className="bg-[#8B004B] text-white p-5 flex items-center justify-between shadow-md">
+        <div className="bg-th-primary text-th-on-primary p-5 flex items-center justify-between shadow-md">
           <div className="flex items-center gap-2">
             <MapPin className="w-5 h-5 animate-bounce" />
             <span className="font-black uppercase tracking-wider text-sm">Pick Your Spot</span>
@@ -95,10 +95,10 @@ export default function LocationPicker({ onSelect, onCancel }: LocationPickerPro
         </div>
         
         {/* INTERACTIVE MAP FIELD BODY */}
-        <div className="h-[380px] w-full relative bg-gray-100 flex items-center justify-center">
+        <div className="h-[380px] w-full relative bg-th-secondary flex items-center justify-center">
           {loadingLocation ? (
-            <div className="flex flex-col items-center gap-3 z-50 text-[#8B004B]">
-              <Loader2 className="w-10 h-10 animate-spin text-pink-500" />
+            <div className="flex flex-col items-center gap-3 z-50 text-th-ink-soft">
+              <Loader2 className="w-10 h-10 animate-spin text-th-primary" />
               <p className="text-xs font-bold uppercase tracking-widest animate-pulse">Locating sweet spot...</p>
             </div>
           ) : (
@@ -113,7 +113,7 @@ export default function LocationPicker({ onSelect, onCancel }: LocationPickerPro
                 <Marker position={position} icon={sweetIcon} />
               </MapContainer>
               
-              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-[1000] bg-white/90 backdrop-blur-sm px-4 py-1.5 rounded-full shadow-md text-[10px] text-pink-600 font-extrabold border border-pink-100 uppercase tracking-wider select-none">
+              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-[1000] bg-th-card/90 backdrop-blur-sm px-4 py-1.5 rounded-full shadow-md text-[10px] text-th-link font-extrabold border border-th-border uppercase tracking-wider select-none">
                 Tap anywhere to relocate pin 📍
               </div>
             </>
@@ -121,11 +121,11 @@ export default function LocationPicker({ onSelect, onCancel }: LocationPickerPro
         </div>
 
         {/* BOTTOM CONTROLS FOOTER PANEL */}
-        <div className="p-5 bg-white border-t border-[#FFB6C1]/30">
+        <div className="p-5 bg-th-card border-t border-th-border">
           <button 
             onClick={() => onSelect(position[0], position[1])} 
             disabled={loadingLocation}
-            className="w-full py-4 bg-pink-500 hover:bg-pink-600 disabled:bg-gray-300 text-white font-black uppercase tracking-widest rounded-2xl shadow-lg transition-all active:scale-[0.98] disabled:scale-100 text-sm"
+            className="w-full py-4 bg-th-primary hover:opacity-90 disabled:bg-th-toggle-off text-th-on-primary font-black uppercase tracking-widest rounded-2xl shadow-lg transition-all active:scale-[0.98] disabled:scale-100 text-sm"
           >
             Confirm Location Choice 🌟
           </button>

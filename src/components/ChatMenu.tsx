@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, Search, Eye, Lock, Unlock, Trash2, Bell, BellOff, MoreVertical } from 'lucide-react';
+import { X, Search, Eye, Lock, Unlock, Trash2, Bell, BellOff, MoreVertical, Palette } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { localDB } from '../db';
@@ -8,19 +8,27 @@ import { useNotify } from '../contexts/NotificationContext';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { usePerformance } from '../contexts/PerformanceContext';
 import { isSelfChatId } from '../lib/selfChat';
+import { usePanelThemeStyle } from '../theme/panelTheme';
 
 interface ChatMenuProps {
   theme: 'light' | 'dark' | 'sweet'
   chatId: string;
   onClose: () => void;
   onViewProfile?: () => void;
+  /** Opens the per-chat theme sheet ("Just me" / "Both of us"). */
+  onOpenTheme?: () => void;
 }
 
-export function ChatMenu({ theme, chatId, onClose, onViewProfile }: ChatMenuProps) {
+// Colours come from the chat's theme (th-* CSS variables). `theme` stays in
+// the props for callers but no longer picks colours here.
+export function ChatMenu({ chatId, onClose, onViewProfile, onOpenTheme }: ChatMenuProps) {
   const { user } = useAuth();
   const { showSuccess, showError } = useNotify();
   const confirm = useConfirm();
   const { isLowPerfMode } = usePerformance();
+  // The search window is a panel: chat theme on a phone, app theme on desktop.
+  // (The menu itself stays in the chat's colours — it hangs off the chat header.)
+  const panelStyle = usePanelThemeStyle();
   const [showMenu, setShowMenu] = useState(false);
   const [muteStatus, setMuteStatus] = useState<'8h' | '1w' | 'forever' | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -149,6 +157,7 @@ export function ChatMenu({ theme, chatId, onClose, onViewProfile }: ChatMenuProp
     { icon: Search, label: 'Search Messages', action: () => setShowSearch(true) },
     // No profile to view in Saved Messages / groups, and nothing to mute in your own notes.
     ...(onViewProfile ? [{ icon: Eye, label: 'View Profile', action: () => onViewProfile() }] : []),
+    ...(onOpenTheme ? [{ icon: Palette, label: 'Chat Theme', action: () => onOpenTheme() }] : []),
     ...(isSelf ? [] : [{ icon: muteStatus ? BellOff : Bell, label: muteStatus ? 'Unmute Chat' : 'Mute Chat', action: () => {} }]),
     { icon: isLocked ? Unlock : Lock, 
       label: isLocked ? 'Unlock Chat' : 'Lock Chat', 
@@ -162,9 +171,11 @@ export function ChatMenu({ theme, chatId, onClose, onViewProfile }: ChatMenuProp
       {/* 1. MENU TRIGGER BUTTON */}
       <button
         onClick={() => setShowMenu(!showMenu)}
-        className="p-2 hover:bg-white/10 rounded-full transition-colors active:scale-90"
+        aria-label="Chat options"
+        className="p-2 hdr-hover rounded-full transition-colors active:scale-90"
       >
-        <MoreVertical className={`w-5 h-5 ${theme === 'sweet' ? 'text-[#8B004B]' : 'text-white'}`} />
+        {/* Inherits the header's text colour, so it reads on any header. */}
+        <MoreVertical className="w-5 h-5" />
       </button>
 
       {/* 2. MENU DROPDOWN / BOTTOM SHEET */}
@@ -185,9 +196,7 @@ export function ChatMenu({ theme, chatId, onClose, onViewProfile }: ChatMenuProp
             /* Desktop: small dropdown anchored under the trigger. */
             md:absolute md:top-full md:bottom-auto md:left-auto md:right-0 md:w-56 md:rounded-2xl md:p-1.5 md:max-h-none md:overflow-visible
             shadow-2xl border transition-all animate-in slide-in-from-bottom-4 md:slide-in-from-top-2 duration-300
-            ${theme === 'sweet'
-              ? 'bg-gradient-to-b from-[#FFF0F5] to-[#FFE4E1] border-[#FFB6C1] shadow-pink-200/60'
-              : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700'}
+            bg-gradient-to-b from-th-card to-th-panel border-th-border text-th-ink
           `}>
 
             {/* Loop through Menu Items */}
@@ -202,10 +211,8 @@ export function ChatMenu({ theme, chatId, onClose, onViewProfile }: ChatMenuProp
                     onClose();
                   }}
                   className={`w-full px-4 py-3 md:py-2 text-left flex items-center gap-3 rounded-2xl md:rounded-lg transition-colors active:scale-[0.98] ${
-                    theme === 'sweet'
-                      ? 'hover:bg-[#FFC0CB]/40 text-[#4B004B]'
-                      : 'hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200'
-                  } ${item.danger ? '!text-red-600' : ''}`}
+                    'hover:bg-th-card-hover text-th-ink'
+                  } ${item.danger ? '!text-th-danger' : ''}`}
                 >
                   <Icon className="w-5 h-5 md:w-4 md:h-4 flex-shrink-0" />
                   <span className="text-[15px] md:text-sm font-medium">{item.label}</span>
@@ -214,12 +221,10 @@ export function ChatMenu({ theme, chatId, onClose, onViewProfile }: ChatMenuProp
             })}
 
             {/* Mute Section */}
-            <div className={`border-t my-1.5 mx-2 ${theme === 'sweet' ? 'border-[#FFB6C1]/50' : 'border-gray-200 dark:border-gray-700'}`} />
+            <div className="border-t my-1.5 mx-2 border-th-border" />
 
             <div className="px-4 md:px-2 py-1.5">
-              <p className={`text-[10px] font-bold uppercase tracking-widest mb-2 ${
-                theme === 'sweet' ? 'text-[#FF1493]/70' : 'text-gray-400'
-              }`}>
+              <p className="text-[10px] font-bold uppercase tracking-widest mb-2 text-th-ink-soft">
                 Mute Notifications
               </p>
 
@@ -233,9 +238,7 @@ export function ChatMenu({ theme, chatId, onClose, onViewProfile }: ChatMenuProp
                     key={option.value}
                     onClick={() => { handleMuteChat(option.value as any); setShowMenu(false); onClose(); }}
                     className={`flex-1 md:w-full px-3 py-2.5 md:py-1.5 text-center md:text-left text-xs font-bold rounded-xl transition-colors active:scale-95 ${
-                      theme === 'sweet'
-                        ? 'bg-white/60 text-[#8B004B] hover:bg-[#FFB6C1]/50'
-                        : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200'
+                      'bg-th-secondary text-th-on-secondary hover:bg-th-card-hover'
                     }`}
                   >
                     {option.label}
@@ -249,22 +252,23 @@ export function ChatMenu({ theme, chatId, onClose, onViewProfile }: ChatMenuProp
 
       {/* 3. SEARCH MESSAGES MODAL */}
       {showSearch && (
-        <div className="fixed inset-0 z-[100] flex items-start justify-center p-4 pt-20">
+        <div className="fixed inset-0 z-[100] flex items-start justify-center p-4 pt-20" style={panelStyle}>
           <div 
             className={`fixed inset-0 bg-black/60 ${isLowPerfMode ? '' : 'backdrop-blur-sm'}`} 
             onClick={() => { setShowSearch(false); onClose(); }} 
           />
           
           <div className={`relative w-full max-w-lg rounded-2xl shadow-2xl p-4 border animate-in zoom-in-95 duration-200 ${
-            theme === 'sweet' ? 'bg-[#FFF0F5] border-[#FFB6C1]' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700'
+            'bg-th-card border-th-border text-th-ink'
           }`}>
             <div className="flex items-center justify-between mb-3">
-              <h3 className={`font-semibold ${theme === 'sweet' ? 'text-[#4B004B]' : 'text-gray-900 dark:text-white'}`}>
+              <h3 className="font-semibold text-th-ink">
                 Search Messages
               </h3>
               <button
                 onClick={() => { setShowSearch(false); onClose(); }}
-                className="p-1 hover:bg-black/5 rounded"
+                aria-label="Close search"
+                className="p-1 hover:bg-th-card-hover rounded"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -275,11 +279,7 @@ export function ChatMenu({ theme, chatId, onClose, onViewProfile }: ChatMenuProp
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search in conversation..."
               autoFocus
-              className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-500 transition-colors ${
-                theme === 'sweet' 
-                  ? 'bg-white border-[#FFB6C1] text-[#4B004B] placeholder:text-[#8B004B]/50' 
-                  : 'bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white'
-              }`}
+              className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-th-primary/50 transition-colors bg-th-input border-th-border text-th-ink placeholder:text-th-ink-faint"
             />
           </div>
         </div>

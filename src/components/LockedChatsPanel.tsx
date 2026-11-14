@@ -228,21 +228,21 @@ export function LockedChatsPanel({ theme, onClose, onSelectChat }: LockedChatsPa
 
       {/* Sliding Sidebar Body Panel */}
       <div className={`fixed top-0 left-0 bottom-0 z-50 w-full md:max-w-sm h-full flex flex-col shadow-2xl border-r animate-in slide-in-from-left duration-300 ${
-        theme === 'sweet' ? 'bg-[#FFF0F5] border-[#FFB6C1]' : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800'
+        'bg-th-panel text-th-ink border-th-border'
       }`}>
         {/* Header */}
         <div className={`p-4 border-b flex items-center gap-3 ${
-          theme === 'sweet' ? 'border-[#FFB6C1]' : 'border-gray-200 dark:border-gray-800'
+          'border-th-border'
         }`}>
-          <button onClick={onClose} className="p-1 rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
-            <ArrowLeft className={`w-5 h-5 ${theme === 'sweet' ? 'text-[#4B004B]' : 'text-gray-700 dark:text-gray-300'}`} />
+          <button onClick={onClose} aria-label="Back" className="p-1 rounded-full hover:bg-th-card-hover transition-colors">
+            <ArrowLeft className="w-5 h-5 text-th-ink" />
           </button>
           {/* flex-wrap: on narrow phones the badge drops below the long title
               instead of squeezing it. Not mobileOnly: on desktop this panel
               slides in from the left over ChatList, hiding ChatList's badge. */}
           <div className="flex items-center gap-x-2 gap-y-1 flex-wrap min-w-0">
-            <Lock className="w-4 h-4 text-pink-500" />
-            <h2 className={`font-bold text-lg ${theme === 'sweet' ? 'text-[#4B004B]' : 'text-gray-900 dark:text-white'}`}>
+            <Lock className="w-4 h-4 text-th-primary" />
+            <h2 className="font-bold text-lg text-th-ink">
               Locked Conversations
             </h2>
             <OfflineBadge theme={theme} />
@@ -253,32 +253,32 @@ export function LockedChatsPanel({ theme, onClose, onSelectChat }: LockedChatsPa
         <div className="flex-1 overflow-y-auto">
           {loading ? (
             <div className="flex items-center justify-center h-32">
-              <div className="w-6 h-6 border-2 border-pink-500 border-t-transparent rounded-full animate-spin" />
+              <div className="w-6 h-6 border-2 border-th-primary border-t-transparent rounded-full animate-spin" />
             </div>
           ) : lockedChats.length === 0 ? (
-            <div className={`flex flex-col items-center justify-center h-full text-center p-6 ${theme === 'sweet' ? 'text-[#8B004B]' : 'text-gray-400'}`}>
+            <div className={`flex flex-col items-center justify-center h-full text-center p-6 text-th-ink-soft`}>
               <Lock className="w-12 h-12 mb-2 stroke-[1.5]" />
               <p className="font-medium text-sm">Your vault is empty</p>
               <p className="text-xs max-w-[200px] mt-1">Use the chat options menu to add private threads here.</p>
             </div>
           ) : (
-            <div className={`divide-y ${theme === 'sweet' ? 'divide-[#FFD1DC]' : 'divide-gray-100 dark:divide-gray-800'}`}>
+            <div className="divide-y divide-th-border">
               {lockedChats.map((chat) => (
                 <button
                   key={chat.id}
                   onClick={() => setVerifyingChatId(chat.id)}
                   className={`w-full p-4 flex items-center gap-3 text-left transition-colors ${
-                    theme === 'sweet' ? 'hover:bg-[#FFC0CB]/20' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'
+                    'hover:bg-th-card-hover'
                   }`}
                 >
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${theme === 'sweet' ? 'bg-[#FFD1DC] text-[#FF1493]' : 'bg-pink-100 dark:bg-pink-900/30 text-pink-600'}`}>
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 bg-th-secondary text-th-link`}>
                     <MessageSquare className="w-5 h-5" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className={`font-semibold text-sm truncate ${theme === 'sweet' ? 'text-[#4B004B]' : 'text-gray-900 dark:text-white'}`}>
+                    <p className="font-semibold text-sm truncate text-th-ink">
                       {chat.type === 'direct' ? chat.otherUser?.display_name : chat.name}
                     </p>
-                    <p className={`text-xs ${theme === 'sweet' ? 'text-[#8B004B]/70' : 'text-gray-400'}`}>Protected Conversation</p>
+                    <p className="text-xs text-th-ink-soft">Protected Conversation</p>
                   </div>
                 </button>
               ))}

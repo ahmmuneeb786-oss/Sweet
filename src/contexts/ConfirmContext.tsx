@@ -1,5 +1,6 @@
-import { createContext, useContext, useState, useCallback, ReactNode } from 'react';
+import { createContext, useContext, useState, useCallback, ReactNode, type CSSProperties } from 'react';
 import { AlertTriangle } from 'lucide-react';
+import { usePanelThemeStyle } from '../theme/panelTheme';
 
 interface ConfirmOptions {
   title?: string;
@@ -7,6 +8,8 @@ interface ConfirmOptions {
   confirmLabel?: string;
   cancelLabel?: string;
   danger?: boolean;
+  /** Theme colours for the dialog (set by useConfirm when asked from inside a chat). */
+  themeStyle?: CSSProperties;
 }
 
 interface ConfirmContextType {
@@ -41,32 +44,33 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
       {state && (
         <div
           className="fixed inset-0 z-[10001] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
+          style={state.options.themeStyle}
           onClick={() => handleClose(false)}
         >
           <div
-            className="max-w-sm w-full rounded-2xl p-6 space-y-4 bg-white dark:bg-gray-900 shadow-2xl border border-pink-100 dark:border-gray-700 animate-in zoom-in-95 duration-200"
+            className="max-w-sm w-full rounded-2xl p-6 space-y-4 bg-th-card text-th-ink shadow-2xl border border-th-border animate-in zoom-in-95 duration-200"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-start gap-3">
-              <AlertTriangle className={`w-6 h-6 shrink-0 ${state.options.danger ? 'text-red-500' : 'text-pink-500'}`} />
+              <AlertTriangle className={`w-6 h-6 shrink-0 ${state.options.danger ? 'text-th-danger' : 'text-th-primary'}`} />
               <div>
                 {state.options.title && (
-                  <h3 className="font-bold text-gray-900 dark:text-white mb-1">{state.options.title}</h3>
+                  <h3 className="font-bold text-th-ink mb-1">{state.options.title}</h3>
                 )}
-                <p className="text-sm text-gray-600 dark:text-gray-300">{state.options.message}</p>
+                <p className="text-sm text-th-ink-soft">{state.options.message}</p>
               </div>
             </div>
             <div className="flex gap-2 justify-end">
               <button
                 onClick={() => handleClose(false)}
-                className="px-4 py-2 rounded-xl text-sm font-semibold text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+                className="px-4 py-2 rounded-xl text-sm font-semibold text-th-on-secondary bg-th-secondary hover:bg-th-card-hover transition-colors"
               >
                 {state.options.cancelLabel || 'Cancel'}
               </button>
               <button
                 onClick={() => handleClose(true)}
-                className={`px-4 py-2 rounded-xl text-sm font-bold text-white transition-colors ${
-                  state.options.danger ? 'bg-red-500 hover:bg-red-600' : 'bg-pink-500 hover:bg-pink-600'
+                className={`px-4 py-2 rounded-xl text-sm font-bold transition-colors ${
+                  state.options.danger ? 'bg-red-500 hover:bg-red-600 text-white' : 'bg-th-primary text-th-on-primary hover:opacity-90'
                 }`}
               >
                 {state.options.confirmLabel || 'Confirm'}
@@ -84,5 +88,13 @@ export function useConfirm() {
   if (!ctx) {
     throw new Error('useConfirm must be used within a ConfirmProvider');
   }
-  return ctx.confirm;
+  // Asked from inside a chat: use the colours that chat gives its panels
+  // (the chat's theme on a phone, see theme/panelTheme.tsx).
+  const themeStyle = usePanelThemeStyle();
+  const { confirm } = ctx;
+  return useCallback(
+    (options: ConfirmOptions | string) =>
+      confirm({ ...(typeof options === 'string' ? { message: options } : options), themeStyle }),
+    [confirm, themeStyle],
+  );
 }

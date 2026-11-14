@@ -120,7 +120,7 @@ const KeyboardMatrix = React.memo(({
           <button
             key={k}
             onPointerDown={(e) => onKeyClick(k, e)}
-            className="flex-1 h-11 bg-white/60 rounded-xl text-[#4B004B] font-bold shadow-sm active:bg-pink-200 select-none touch-none will-change-transform"
+            className="flex-1 h-11 bg-th-card/80 rounded-xl text-th-ink font-bold shadow-sm active:bg-th-secondary select-none touch-none will-change-transform"
           >
             {isUpper && !showSymbols ? k : k.toLowerCase()}
           </button>
@@ -131,7 +131,7 @@ const KeyboardMatrix = React.memo(({
           <button
             key={k}
             onPointerDown={(e) => onKeyClick(k, e)}
-            className="flex-1 h-11 bg-white/60 rounded-xl text-[#4B004B] font-bold shadow-sm active:bg-pink-200 select-none touch-none will-change-transform"
+            className="flex-1 h-11 bg-th-card/80 rounded-xl text-th-ink font-bold shadow-sm active:bg-th-secondary select-none touch-none will-change-transform"
           >
             {isUpper && !showSymbols ? k : k.toLowerCase()}
           </button>
@@ -140,16 +140,16 @@ const KeyboardMatrix = React.memo(({
       <div className="flex justify-center gap-1">
         <button
           onPointerDown={onShiftClick}
-          className={`w-[14%] h-11 rounded-xl flex items-center justify-center transition-all select-none touch-none will-change-transform ${shiftState !== 'off' ? 'bg-pink-500 text-white' : 'bg-white/40 text-[#4B004B]'}`}
+          className={`w-[14%] h-11 rounded-xl flex items-center justify-center transition-all select-none touch-none will-change-transform ${shiftState !== 'off' ? 'bg-th-primary text-th-on-primary' : 'bg-th-card/50 text-th-ink'}`}
         >
-          <ArrowUpCircle className={`w-5 h-5 ${shiftState === 'caps' ? 'fill-white text-pink-500' : ''}`} />
+          <ArrowUpCircle className={`w-5 h-5 ${shiftState === 'caps' ? 'fill-current' : ''}`} />
         </button>
 
         {rows[2].map(k => (
           <button
             key={k}
             onPointerDown={(e) => onKeyClick(k, e)}
-            className="flex-1 h-11 bg-white/60 rounded-xl text-[#4B004B] font-bold shadow-sm active:bg-pink-200 select-none touch-none will-change-transform"
+            className="flex-1 h-11 bg-th-card/80 rounded-xl text-th-ink font-bold shadow-sm active:bg-th-secondary select-none touch-none will-change-transform"
           >
             {isUpper && !showSymbols ? k : k.toLowerCase()}
           </button>
@@ -159,7 +159,7 @@ const KeyboardMatrix = React.memo(({
           onPointerDown={onDeleteStart}
           onPointerUp={onDeleteStop}
           onPointerLeave={onDeleteStop}
-          className="w-[14%] h-11 bg-white/40 rounded-xl flex items-center justify-center text-[#4B004B] active:bg-pink-200 select-none touch-none will-change-transform"
+          className="w-[14%] h-11 bg-th-card/50 rounded-xl flex items-center justify-center text-th-ink active:bg-th-secondary select-none touch-none will-change-transform"
         >
           <Delete className="w-5 h-5" />
         </button>
@@ -385,27 +385,27 @@ export const SweetKeyboard = ({ onInput, onDelete, onDocsClick, newMessage, onOp
   };
 
   return (
-    <div className={`relative w-full bg-[#FFE4E1]/90 ${isLowPerfMode ? '' : 'backdrop-blur-2xl'} border-t border-[#FFB6C1] p-2 pb-6 select-none transition-all duration-300`}>
+    <div className={`relative w-full bg-th-panel/90 ${isLowPerfMode ? '' : 'backdrop-blur-2xl'} border-t border-th-border p-2 pb-6 select-none transition-all duration-300`}>
       {showClipPanel && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setShowClipPanel(false)} />
-          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 z-50 w-72 max-w-[calc(100vw-2rem)] max-h-80 flex flex-col bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-[#FFB6C1] overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-200">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-pink-100 shrink-0">
+          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 z-50 w-72 max-w-[calc(100vw-2rem)] max-h-80 flex flex-col bg-th-card/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-th-border overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-200">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-th-border shrink-0">
               <div className="flex items-center gap-2">
-                <Clipboard className="w-4 h-4 text-pink-500" />
-                <span className="text-xs font-black text-[#4B004B] uppercase tracking-widest">Clipboard</span>
+                <Clipboard className="w-4 h-4 text-th-link" />
+                <span className="text-xs font-black text-th-ink uppercase tracking-widest">Clipboard</span>
               </div>
               <div className="flex items-center gap-1">
                 {clipHistory.length > 0 && (
                   <button
                     type="button"
                     onClick={handleClearClipHistory}
-                    className="text-[9px] font-black text-pink-400 uppercase px-2 py-1 rounded-full hover:bg-pink-50 active:scale-95 transition-all"
+                    className="text-[9px] font-black text-th-ink-soft uppercase px-2 py-1 rounded-full hover:bg-th-card-hover active:scale-95 transition-all"
                   >
                     Clear all
                   </button>
                 )}
-                <button type="button" onClick={() => setShowClipPanel(false)} className="p-1 rounded-full text-pink-400 hover:bg-pink-50">
+                <button type="button" onClick={() => setShowClipPanel(false)} className="p-1 rounded-full text-th-ink-soft hover:bg-th-card-hover">
                   <X className="w-4 h-4" />
                 </button>
               </div>
@@ -414,24 +414,24 @@ export const SweetKeyboard = ({ onInput, onDelete, onDocsClick, newMessage, onOp
             <div className="flex-1 overflow-y-auto scrollbar-hide px-2 py-2 space-y-1">
               {clipHistory.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-8 text-center px-4">
-                  <Clipboard className="w-8 h-8 text-pink-200 mb-2" />
-                  <p className="text-[10px] font-black text-[#8B004B]/50 uppercase">Nothing copied yet</p>
-                  <p className="text-[9px] text-pink-300 mt-1">Copy some text, then tap paste again</p>
+                  <Clipboard className="w-8 h-8 text-th-border mb-2" />
+                  <p className="text-[10px] font-black text-th-ink-faint uppercase">Nothing copied yet</p>
+                  <p className="text-[9px] text-th-ink-faint mt-1">Copy some text, then tap paste again</p>
                 </div>
               ) : (
                 clipHistory.map((item, i) => (
                   <div
                     key={`${item}-${i}`}
                     onClick={() => handlePickClip(item)}
-                    className="flex items-center gap-2 px-3 py-2.5 rounded-xl hover:bg-pink-50 active:bg-pink-100 cursor-pointer transition-colors"
+                    className="flex items-center gap-2 px-3 py-2.5 rounded-xl hover:bg-th-card-hover active:bg-th-secondary cursor-pointer transition-colors"
                   >
-                    <p className="flex-1 text-xs text-[#4B004B] font-medium line-clamp-2 break-words text-left">
+                    <p className="flex-1 text-xs text-th-ink font-medium line-clamp-2 break-words text-left">
                       {item}
                     </p>
                     <button
                       type="button"
                       onClick={(e) => handleDeleteClipItem(item, e)}
-                      className="p-1 rounded-full text-pink-300 hover:bg-pink-100 hover:text-pink-500 active:scale-90 transition-all shrink-0"
+                      className="p-1 rounded-full text-th-ink-faint hover:bg-th-card-hover hover:text-th-link active:scale-90 transition-all shrink-0"
                     >
                       <X className="w-3 h-3" />
                     </button>
@@ -451,42 +451,42 @@ export const SweetKeyboard = ({ onInput, onDelete, onDocsClick, newMessage, onOp
       {/* --- PREDICTION & MEDIA BAR --- */}
       <div className="h-14 mb-2">
         {mode === 'abc' ? (
-          <div className="h-full flex items-center justify-center px-4 bg-white/20 rounded-xl overflow-hidden relative">
+          <div className="h-full flex items-center justify-center px-4 bg-th-card/30 rounded-xl overflow-hidden relative">
             {showMediaBar ? (
               <div className="flex gap-7 items-center justify-center w-full">
                 <button type="button" onClick={() => fileInputRef.current?.click()} className="flex flex-col items-center gap-1 active:scale-90 group">
-                  <div className="p-2 bg-white/80 rounded-full text-pink-500"><ImageIcon className="w-4 h-4" /></div>
-                  <span className="text-[9px] font-black text-pink-600 uppercase">Gallery</span>
+                  <div className="p-2 bg-th-card/90 rounded-full text-th-link"><ImageIcon className="w-4 h-4" /></div>
+                  <span className="text-[9px] font-black text-th-link uppercase">Gallery</span>
                 </button>
                 <button type="button" onClick={() => onInput('VIDEO_START')} className="flex flex-col items-center gap-1 active:scale-90 group">
-                  <div className="p-2 bg-white/80 rounded-full text-pink-500"><Video className="w-4 h-4" /></div>
-                  <span className="text-[9px] font-black text-pink-600 uppercase">Video</span>
+                  <div className="p-2 bg-th-card/90 rounded-full text-th-link"><Video className="w-4 h-4" /></div>
+                  <span className="text-[9px] font-black text-th-link uppercase">Video</span>
                 </button>
                 <button type="button" onClick={handleOpenClipPanel} className="flex flex-col items-center gap-1 active:scale-90 transition-transform relative">
                   <div className={`p-2 rounded-full transition-all duration-300 ${
                     pasteStatus === 'success' ? 'bg-green-400 text-white scale-110' :
                     pasteStatus === 'denied' ? 'bg-rose-400 text-white scale-110' :
-                    showClipPanel ? 'bg-pink-500 text-white scale-110' : 'bg-white/80 text-pink-500'
+                    showClipPanel ? 'bg-th-primary text-th-on-primary scale-110' : 'bg-th-card/90 text-th-link'
                   }`}>
                     <Clipboard className="w-4 h-4" />
                   </div>
-                  <span className="text-[9px] font-black text-pink-600 uppercase">
+                  <span className="text-[9px] font-black text-th-link uppercase">
                     {pasteStatus === 'success' ? 'Synced!' : pasteStatus === 'denied' ? 'Blocked' : 'Paste'}
                   </span>
                 </button>
                 <button type="button" onClick={() => onInput('LOCATION_START')} className="flex flex-col items-center gap-1 active:scale-90 group">
-                  <div className="p-2 bg-white/80 rounded-full text-pink-500"><MapPin className="w-4 h-4" /></div>
-                  <span className="text-[9px] font-black text-pink-600 uppercase">Place</span>
+                  <div className="p-2 bg-th-card/90 rounded-full text-th-link"><MapPin className="w-4 h-4" /></div>
+                  <span className="text-[9px] font-black text-th-link uppercase">Place</span>
                 </button>
                 <button type="button" onClick={onDocsClick} className="flex flex-col items-center gap-1 active:scale-90 group">
-                  <div className="p-2 bg-white/80 rounded-full text-pink-500"><FileText className="w-4 h-4" /></div>
-                  <span className="text-[9px] font-black text-pink-600 uppercase">Docs</span>
+                  <div className="p-2 bg-th-card/90 rounded-full text-th-link"><FileText className="w-4 h-4" /></div>
+                  <span className="text-[9px] font-black text-th-link uppercase">Docs</span>
                 </button>
               </div>
             ) : (
               <div className="w-full h-full flex items-center justify-center">
                 {newMessage.length === 0 ? (
-                  <div className="flex gap-4 text-[#8B004B]/40 text-[10px] font-bold tracking-[0.2em]">
+                  <div className="flex gap-4 text-th-ink-faint text-[10px] font-bold tracking-[0.2em]">
                     <span>SWEET</span><Heart className="w-3 h-3 fill-current opacity-30" /><span>MESSAGES</span>
                   </div>
                 ) : (
@@ -495,7 +495,7 @@ export const SweetKeyboard = ({ onInput, onDelete, onDocsClick, newMessage, onOp
                       <button
                         key={index}
                         onPointerDown={(e) => { e.preventDefault(); onInput(`REPLACE_WORD:${word}`); }}
-                        className={`px-3 py-1 rounded-lg text-xs font-black transition-all ${index === 1 ? 'bg-pink-500 text-white scale-105' : 'text-[#8B004B]/50 active:bg-pink-100'}`}
+                        className={`px-3 py-1 rounded-lg text-xs font-black transition-all ${index === 1 ? 'bg-th-primary text-th-on-primary scale-105' : 'text-th-ink-faint active:bg-th-secondary'}`}
                       >
                         {word.toUpperCase()}
                       </button>
@@ -507,13 +507,13 @@ export const SweetKeyboard = ({ onInput, onDelete, onDocsClick, newMessage, onOp
           </div>
         ) : (
           <div className="flex gap-2 h-full">
-            <button onClick={() => setMode('abc')} className="w-12 h-full bg-white/40 rounded-xl flex items-center justify-center text-[#4B004B] active:bg-pink-200"><ArrowLeft className="w-5 h-5" /></button>
-            <div className="flex-1 bg-white/20 rounded-xl flex items-center px-1 gap-1">
+            <button onClick={() => setMode('abc')} className="w-12 h-full bg-th-card/50 rounded-xl flex items-center justify-center text-th-ink active:bg-th-secondary"><ArrowLeft className="w-5 h-5" /></button>
+            <div className="flex-1 bg-th-card/30 rounded-xl flex items-center px-1 gap-1">
               {mode === 'gif' ? (
                 <>
-                  <button onClick={() => setGifSubTab('library')} className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${gifSubTab === 'library' ? 'bg-pink-500 text-white shadow-md' : 'text-pink-400'}`}>Library</button>
-                  <button onClick={() => setGifSubTab('discover')} className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${gifSubTab === 'discover' ? 'bg-pink-500 text-white shadow-md' : 'text-pink-400'}`}>Discover</button>
-                  <button onClick={onOpenGifPanel} className="w-8 h-8 bg-white/40 rounded-lg flex items-center justify-center text-pink-500 active:scale-90 ml-1">
+                  <button onClick={() => setGifSubTab('library')} className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${gifSubTab === 'library' ? 'bg-th-primary text-th-on-primary shadow-md' : 'text-th-ink-soft'}`}>Library</button>
+                  <button onClick={() => setGifSubTab('discover')} className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${gifSubTab === 'discover' ? 'bg-th-primary text-th-on-primary shadow-md' : 'text-th-ink-soft'}`}>Discover</button>
+                  <button onClick={onOpenGifPanel} className="w-8 h-8 bg-th-card/50 rounded-lg flex items-center justify-center text-th-link active:scale-90 ml-1">
                     <Plus className="w-4 h-4" />
                   </button>
                 </>
@@ -525,7 +525,7 @@ export const SweetKeyboard = ({ onInput, onDelete, onDocsClick, newMessage, onOp
                       type="button"
                       onClick={() => setEmojiCategory(cat.key)}
                       className={`shrink-0 w-8 h-8 flex items-center justify-center rounded-lg text-base transition-all ${
-                        emojiCategory === cat.key ? 'bg-pink-500 shadow-md scale-105' : 'opacity-50'
+                        emojiCategory === cat.key ? 'bg-th-primary shadow-md scale-105' : 'opacity-50'
                       }`}
                     >
                       {cat.icon}
@@ -534,7 +534,7 @@ export const SweetKeyboard = ({ onInput, onDelete, onDocsClick, newMessage, onOp
                 </div>
               )}
             </div>
-            <button onClick={() => setMode(mode === 'emoji' ? 'gif' : 'abc')} className="w-14 h-full bg-gradient-to-tr from-pink-400 to-rose-500 rounded-xl flex items-center justify-center text-white shadow-lg active:scale-95">
+            <button onClick={() => setMode(mode === 'emoji' ? 'gif' : 'abc')} className="w-14 h-full bg-gradient-to-tr from-th-bubble-mine to-th-bubble-mine-to rounded-xl flex items-center justify-center text-th-on-bubble-mine shadow-lg active:scale-95">
               {mode === 'emoji' ? <span className="text-[10px] font-black uppercase">Gif</span> : <Keyboard className="w-5 h-5" />}
             </button>
           </div>
@@ -561,7 +561,7 @@ export const SweetKeyboard = ({ onInput, onDelete, onDocsClick, newMessage, onOp
                 key={`${emoji}-${i}`}
                 type="button"
                 onPointerDown={(e) => { e.preventDefault(); handleEmojiPick(emoji); }}
-                className="text-xl h-9 bg-white/40 rounded-lg flex items-center justify-center active:bg-pink-100"
+                className="text-xl h-9 bg-th-card/50 rounded-lg flex items-center justify-center active:bg-th-secondary"
               >
                 {emoji}
               </button>
@@ -573,13 +573,13 @@ export const SweetKeyboard = ({ onInput, onDelete, onDocsClick, newMessage, onOp
               <div className="space-y-6">
                 {myGifs.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-10 text-center">
-                    <p className="text-[10px] font-black text-[#8B004B]/60 uppercase mb-3">No Gifs added yet.</p>
-                    <button onClick={onOpenGifPanel} className="bg-pink-500 text-white px-5 py-2 rounded-2xl text-[9px] font-black uppercase shadow-lg">+ Add Pack</button>
+                    <p className="text-[10px] font-black text-th-ink-soft uppercase mb-3">No Gifs added yet.</p>
+                    <button onClick={onOpenGifPanel} className="bg-th-primary text-th-on-primary px-5 py-2 rounded-2xl text-[9px] font-black uppercase shadow-lg">+ Add Pack</button>
                   </div>
                 ) : (
                   Object.entries(groupedGifs).map(([packName, urls]) => (
                     <div key={packName}>
-                      <h4 className="text-[10px] font-black uppercase p-2 pt-4 text-pink-500 border-b border-pink-50 mb-2 tracking-widest">{packName}</h4>
+                      <h4 className="text-[10px] font-black uppercase p-2 pt-4 text-th-link border-b border-th-border mb-2 tracking-widest">{packName}</h4>
                       <div className="columns-2 gap-2">
                         {urls.map((url, i) => (
                           <div key={i} className="relative mb-2 group">
@@ -589,13 +589,13 @@ export const SweetKeyboard = ({ onInput, onDelete, onDocsClick, newMessage, onOp
                               onPointerLeave={cancelGifPress}
                               onTouchMove={cancelGifPress}
                               onClick={() => handleGifSend(url)}
-                              className={`w-full rounded-xl overflow-hidden border-2 transition-all ${longPressedUrl === url ? 'border-pink-500 scale-95' : 'border-white shadow-sm active:scale-95'}`}
+                              className={`w-full rounded-xl overflow-hidden border-2 transition-all ${longPressedUrl === url ? 'border-th-primary scale-95' : 'border-th-card shadow-sm active:scale-95'}`}
                             >
                               <img src={url} className="w-full h-auto block" loading="lazy" />
                               {longPressedUrl === url && (
-                                <div className={`absolute inset-0 bg-pink-500/40 ${isLowPerfMode ? '' : 'backdrop-blur-[2px]'} flex items-center justify-center animate-in zoom-in-50`}>
-                                  <button onClick={(e) => { e.stopPropagation(); handleRemoveGif(url); }} className="bg-white p-2 rounded-full text-pink-600 shadow-xl scale-110 active:scale-90"><Trash2 className="w-5 h-5" /></button>
-                                  <button onClick={(e) => { e.stopPropagation(); setLongPressedUrl(null); }} className="absolute top-1 right-1 bg-white/80 p-1 rounded-full text-gray-500"><X className="w-3 h-3" /></button>
+                                <div className={`absolute inset-0 bg-th-primary/40 ${isLowPerfMode ? '' : 'backdrop-blur-[2px]'} flex items-center justify-center animate-in zoom-in-50`}>
+                                  <button onClick={(e) => { e.stopPropagation(); handleRemoveGif(url); }} className="bg-th-card p-2 rounded-full text-th-link shadow-xl scale-110 active:scale-90"><Trash2 className="w-5 h-5" /></button>
+                                  <button onClick={(e) => { e.stopPropagation(); setLongPressedUrl(null); }} className="absolute top-1 right-1 bg-th-card/90 p-1 rounded-full text-th-ink-soft"><X className="w-3 h-3" /></button>
                                 </div>
                               )}
                             </button>
@@ -609,14 +609,14 @@ export const SweetKeyboard = ({ onInput, onDelete, onDocsClick, newMessage, onOp
             ) : (
               <div className="flex flex-col h-full">
                 <div className="relative mb-2">
-                  <input type="text" placeholder="Search Giphy..." value={gifSearch} onChange={(e) => setGifSearch(e.target.value)} className="w-full p-2.5 pr-10 rounded-xl bg-white/60 border-none outline-none text-[#4B004B] font-bold text-xs placeholder:text-pink-300" />
-                  <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-pink-300" />
+                  <input type="text" placeholder="Search Giphy..." value={gifSearch} onChange={(e) => setGifSearch(e.target.value)} className="w-full p-2.5 pr-10 rounded-xl bg-th-card/80 border-none outline-none text-th-ink font-bold text-xs placeholder:text-th-ink-faint" />
+                  <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-th-ink-faint" />
                 </div>
                 <div className="columns-2 gap-2">
                   {giphyGifs.map((gif) => (
                     <div key={gif.id} className="relative group mb-2">
-                      <button onClick={() => handleGifSend(gif.images.fixed_height.url)} className="w-full rounded-xl overflow-hidden border-2 border-transparent active:border-pink-300"><img src={gif.images.fixed_height.url} className="w-full h-auto block" loading="lazy" /></button>
-                      <button onClick={(e) => { e.stopPropagation(); setMyGifs(prev => [{ url: gif.images.fixed_height.url, packName: 'Recent' }, ...prev]); if (typeof window !== 'undefined' && navigator.vibrate) navigator.vibrate(10); }} className="absolute top-1 right-1 p-1.5 bg-white/90 rounded-full text-pink-500 shadow-sm opacity-0 group-hover:opacity-100 transition-opacity active:scale-90"><Heart className="w-3 h-3 fill-current" /></button>
+                      <button onClick={() => handleGifSend(gif.images.fixed_height.url)} className="w-full rounded-xl overflow-hidden border-2 border-transparent active:border-th-primary"><img src={gif.images.fixed_height.url} className="w-full h-auto block" loading="lazy" /></button>
+                      <button onClick={(e) => { e.stopPropagation(); setMyGifs(prev => [{ url: gif.images.fixed_height.url, packName: 'Recent' }, ...prev]); if (typeof window !== 'undefined' && navigator.vibrate) navigator.vibrate(10); }} className="absolute top-1 right-1 p-1.5 bg-th-card/90 rounded-full text-th-link shadow-sm opacity-0 group-hover:opacity-100 transition-opacity active:scale-90"><Heart className="w-3 h-3 fill-current" /></button>
                     </div>
                   ))}
                 </div>
@@ -629,10 +629,10 @@ export const SweetKeyboard = ({ onInput, onDelete, onDocsClick, newMessage, onOp
       {/* --- FOOTER UTILITIES --- */}
       {mode === 'abc' && (
         <div className="flex justify-center gap-2 mt-1 px-1">
-          <button onClick={() => setShowMediaBar(!showMediaBar)} className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${showMediaBar ? 'bg-pink-500 text-white rotate-[135deg]' : 'bg-white/40 text-[#4B004B]'}`}><Paperclip className="w-5 h-5" /></button>
-          <button onClick={() => setShowSymbols(!showSymbols)} className="w-12 h-12 bg-white/40 rounded-xl text-[#4B004B] font-black text-[10px]">{showSymbols ? 'ABC' : '123'}</button>
-          <button onPointerDown={(e) => { e.preventDefault(); onInput(' '); }} className="flex-1 h-12 bg-white/80 rounded-2xl text-[#4B004B]/40 font-bold text-xs uppercase tracking-widest active:bg-pink-50">Space</button>
-          <button onClick={() => setMode('emoji')} className="w-14 h-12 bg-gradient-to-tr from-pink-400 to-rose-500 rounded-2xl flex items-center justify-center text-white shadow-lg"><Smile className="w-6 h-6" /></button>
+          <button onClick={() => setShowMediaBar(!showMediaBar)} className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${showMediaBar ? 'bg-th-primary text-th-on-primary rotate-[135deg]' : 'bg-th-card/50 text-th-ink'}`}><Paperclip className="w-5 h-5" /></button>
+          <button onClick={() => setShowSymbols(!showSymbols)} className="w-12 h-12 bg-th-card/50 rounded-xl text-th-ink font-black text-[10px]">{showSymbols ? 'ABC' : '123'}</button>
+          <button onPointerDown={(e) => { e.preventDefault(); onInput(' '); }} className="flex-1 h-12 bg-th-card/90 rounded-2xl text-th-ink-faint font-bold text-xs uppercase tracking-widest active:bg-th-card-hover">Space</button>
+          <button onClick={() => setMode('emoji')} className="w-14 h-12 bg-gradient-to-tr from-th-bubble-mine to-th-bubble-mine-to rounded-2xl flex items-center justify-center text-th-on-bubble-mine shadow-lg"><Smile className="w-6 h-6" /></button>
         </div>
       )}
     </div>

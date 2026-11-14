@@ -5,6 +5,7 @@ import { ChatImage } from './ChatImage';
 import { openMediaInNewTab, resolveMediaUrl } from '../lib/signedMedia';
 import { isKeepsake, setKeepsake } from '../lib/mediaCache';
 import { useNotify } from '../contexts/NotificationContext';
+import { usePanelThemeStyle } from '../theme/panelTheme';
 
 interface ImageViewerModalProps {
   images: string[];
@@ -21,6 +22,8 @@ interface ImageViewerModalProps {
 export function ImageViewerModal({ images, initialIndex = 0, alt, onClose, onRemove, onSetMain, keepsake }: ImageViewerModalProps) {
   const [index, setIndex] = useState(initialIndex);
   const [showActions, setShowActions] = useState(false);
+  // Opened from a chat: the action menu takes that chat's colours on a phone.
+  const panelStyle = usePanelThemeStyle();
   const { showSuccess, showError } = useNotify();
   const currentUrl = images[index];
   const canKeep = !!keepsake && !!currentUrl && /^https?:/.test(currentUrl) && keepsake.urls.has(currentUrl);
@@ -104,6 +107,7 @@ export function ImageViewerModal({ images, initialIndex = 0, alt, onClose, onRem
   return createPortal(
     <div
       className="fixed inset-0 z-[10000] bg-black/90 flex items-center justify-center p-4"
+      style={panelStyle}
       onClick={onClose}
     >
       <button
@@ -122,7 +126,7 @@ export function ImageViewerModal({ images, initialIndex = 0, alt, onClose, onRem
           title={kept ? 'In your Keepsake Box' : 'Keep forever'}
           className="absolute top-4 right-16 p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors z-10"
         >
-          <Heart className={`w-6 h-6 transition-colors ${kept ? 'text-pink-400 fill-pink-400' : 'text-white'}`} />
+          <Heart className={`w-6 h-6 transition-colors ${kept ? 'text-th-primary fill-th-primary' : 'text-white'}`} />
         </button>
       )}
 
@@ -138,21 +142,21 @@ export function ImageViewerModal({ images, initialIndex = 0, alt, onClose, onRem
           {showActions && (
             <>
               <div className="fixed inset-0 z-10" onClick={() => setShowActions(false)} />
-              <div className="absolute top-full right-0 mt-2 w-44 bg-white rounded-2xl shadow-2xl overflow-hidden z-20 animate-in fade-in zoom-in-95 duration-150">
+              <div className="absolute top-full right-0 mt-2 w-44 bg-th-card border border-th-border rounded-2xl shadow-2xl overflow-hidden z-20 animate-in fade-in zoom-in-95 duration-150">
                 {onSetMain && index !== 0 && (
                   <button
                     onClick={() => { onSetMain(index); setShowActions(false); }}
-                    className="w-full px-4 py-3 flex items-center gap-2 text-sm font-medium text-gray-700 hover:bg-pink-50 transition-colors"
+                    className="w-full px-4 py-3 flex items-center gap-2 text-sm font-medium text-th-ink hover:bg-th-card-hover transition-colors"
                   >
-                    <Star className="w-4 h-4 text-pink-500" />
+                    <Star className="w-4 h-4 text-th-primary" />
                     Set as Main
                   </button>
                 )}
                 <button
                   onClick={handleDownload}
-                  className="w-full px-4 py-3 flex items-center gap-2 text-sm font-medium text-gray-700 hover:bg-pink-50 transition-colors"
+                  className="w-full px-4 py-3 flex items-center gap-2 text-sm font-medium text-th-ink hover:bg-th-card-hover transition-colors"
                 >
-                  <Download className="w-4 h-4 text-gray-500" />
+                  <Download className="w-4 h-4 text-th-ink-soft" />
                   Download
                 </button>
                 {onRemove && (

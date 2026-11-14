@@ -160,7 +160,7 @@ function PerformanceOverlay({ fps, deviceTier, perfLevel }: { fps: number; devic
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       onPointerCancel={handlePointerUp}
-      className={`fixed ${position ? '' : defaultPositionClass} z-[9000] select-none touch-none cursor-move flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-[10px] font-bold shadow-[0_4px_15px_rgba(255,20,147,0.35)] bg-[#FF1493]/95 text-white border border-white/30`}
+      className={`fixed ${position ? '' : defaultPositionClass} z-[9000] select-none touch-none cursor-move flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-[10px] font-bold shadow-[0_4px_15px_rgb(var(--th-primary)/0.35)] bg-th-primary/95 text-th-on-primary border border-white/30`}
     >
       <span className={fps < 40 ? 'text-red-200' : fps < 55 ? 'text-amber-200' : 'text-white'}>
         {fps} FPS

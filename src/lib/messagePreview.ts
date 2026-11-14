@@ -30,6 +30,9 @@ export function formatMessagePreview(msg: PreviewMessage | null | undefined): st
       return content ? `🎥 ${content}` : '🎥 Video';
     case 'voice':
       return '🎤 Voice message';
+    case 'theme_change':
+      // content is the new theme's label, e.g. "💖 Best Friend".
+      return `🎨 Theme changed to ${content || 'Default'}`;
     case 'file':
     case 'doc':
       return content ? `📎 ${content}` : '📎 File';

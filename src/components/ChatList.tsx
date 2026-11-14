@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { Search, MoreVertical, MessageSquarePlus, Users, User as UserIcon, Settings, Lock, LogOut, Heart, Bookmark } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
@@ -11,7 +11,12 @@ import { formatMessagePreview } from '../lib/messagePreview';
 import { loadHiddenMessageIds } from '../lib/hiddenMessages';
 import { onChatListRefresh } from '../hooks/chatListRefresh';
 import { OfflineBadge } from './OfflineBadge';
+import { useTheme } from '../theme/ThemeProvider';
+import { chatAccentFor } from '../theme/useChatTheme';
+import { prefetchSharedThemes, useSharedThemesVersion } from '../theme/sharedChatTheme';
 import { ensureSelfChat, isSelfChatId, SELF_CHAT_NAME } from '../lib/selfChat';
+import { FloatingHearts } from './FloatingHearts';
+import { useAppIsSweet } from '../theme/sweetHearts';
 
 // Account id whose Saved Messages chat was already ensured this session.
 let selfChatEnsuredFor: string | null = null;
@@ -53,8 +58,11 @@ export function ChatList({ selectedChatId, onSelectChat, onShowProfile, onShowFr
   const { user, profile, signOut } = useAuth();
   const { isOnline: isUserOnline } = usePresence(user?.id);
   const { isLowPerfMode } = usePerformance();
+  const appIsSweet = useAppIsSweet();
   const { showError } = useNotify();
+  const { library: themeLibrary } = useTheme();
   const [chats, setChats] = useState<Chat[]>([]);
+  const sharedThemesVersion = useSharedThemesVersion();
   const [searchQuery, setSearchQuery] = useState('');
   const [showMenu, setShowMenu] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -483,6 +491,28 @@ export function ChatList({ selectedChatId, onSelectChat, onShowProfile, onShowFr
     }
   }
 
+  // Shared ("Both of us") themes for every listed chat, in one request, so a
+  // chat the other person themed shows its stripe before it's opened here.
+  // Sorted: the list reorders on every new message, but only a change in
+  // WHICH chats are listed should refetch or recompute.
+  const chatIdsKey = chats.map((c) => c.id).sort().join(',');
+  useEffect(() => {
+    if (chatIdsKey) void prefetchSharedThemes(chatIdsKey.split(','));
+  }, [chatIdsKey]);
+
+  // Stripe colour per chat, worked out once per change, not per row per render
+  // (presence updates re-render this list often).
+  const stripeAccents = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const id of chatIdsKey ? chatIdsKey.split(',') : []) {
+      const accent = chatAccentFor(id, themeLibrary.overrides, themeLibrary.themes);
+      if (accent) map.set(id, accent);
+    }
+    return map;
+    // sharedThemesVersion: recompute when a cached shared theme changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chatIdsKey, themeLibrary.overrides, themeLibrary.themes, sharedThemesVersion]);
+
   const filteredChats = chats.filter(chat => {
     const chatName = getTitle(chat);
     return chatName.toLowerCase().includes(searchQuery.toLowerCase());
@@ -506,25 +536,29 @@ export function ChatList({ selectedChatId, onSelectChat, onShowProfile, onShowFr
     }
   }
 
-  function getThemeColor(theme: string) {
-    switch (theme) {
-      case 'love': return 'border-l-4 border-pink-500';
-      case 'best_friend': return 'border-l-4 border-[#FF1493]';
-      case 'friend': return 'border-l-4 border-[#FF8FAB]';
-      default: return 'border-l-4 border-transparent';
-    }
+  // A coloured stripe on chats that have their own theme (mine or the shared
+  // one), in that theme's colour. Chats on the app theme get none.
+  // Drawn as an inner shadow, not a thicker left border, so themed rows keep
+  // exactly the same size and padding as the rest (no 3px content shift).
+  function themeStripe(chatId: string, selected: boolean): React.CSSProperties | undefined {
+    const accent = stripeAccents.get(chatId);
+    if (!accent) return undefined;
+    // Inline box-shadow replaces Tailwind's, so keep the selected row's shadow-sm.
+    const stripe = `inset 4px 0 0 ${accent}`;
+    return { boxShadow: selected ? `${stripe}, 0 1px 2px 0 rgb(0 0 0 / 0.05)` : stripe };
   }
 
   return (
-    <div className={`w-full md:w-96 h-full p-4 border-b sticky top-0 z-10 flex flex-col ${isLowPerfMode ? '' : 'backdrop-blur-md'} flex-shrink-0 ${theme === 'sweet' ? 'bg-[#FFF0F5] border-[#FFB6C1]' : 'bg-white dark:bg-gray-900 border-gray-200'}`}>
-      <div className="md:hidden absolute inset-0 overflow-hidden pointer-events-none z-0">
-        {/* FloatingHearts intentionally NOT rendered here — Dashboard (this
-            component's parent, always mounted alongside it) already renders
-            one full-app instance. A second one here used to sit perfectly
-            on top of the first (both effectively full-viewport), silently
-            doubling the animation workload for zero visual difference. */}
-      </div>
-      <div className={`p-4 border-b ${theme === 'sweet' ? 'border-[#FFB6C1]' : 'border-gray-200 dark:border-gray-700'}`}>
+    <div className={`w-full md:w-96 h-full p-4 border-b sticky top-0 z-10 flex flex-col ${isLowPerfMode ? '' : 'backdrop-blur-md'} flex-shrink-0 bg-th-panel border-th-border text-th-ink`}>
+      {/* Mobile only: hearts behind the list. -z-10 inside this root (a
+          stacking context: sticky + z-10) paints them above the root's own
+          background but under every row and the header. */}
+      {appIsSweet && (
+        <div className="md:hidden absolute inset-0 overflow-hidden pointer-events-none -z-10">
+          <FloatingHearts />
+        </div>
+      )}
+      <div className="p-4 border-b border-th-border">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
             <div className="relative">
@@ -535,35 +569,30 @@ export function ChatList({ selectedChatId, onSelectChat, onShowProfile, onShowFr
                   className="w-12 h-12 rounded-full object-cover"
                 />
               ) : (
-                <div className={`w-12 h-12 rounded-full bg-gradient-to-br flex items-center justify-center text-white font-medium text-lg uppercase ${theme === 'sweet' ? 'from-[#FF69B4] to-[#FF1493]' : 'from-pink-400 to-purple-500'}`}>
+                <div className={`w-12 h-12 rounded-full bg-gradient-to-br flex items-center justify-center font-medium text-lg uppercase from-th-bubble-mine to-th-bubble-mine-to text-th-on-bubble-mine`}>
                   {profile?.display_name?.[0] || myProfile?.display_name?.[0] || profile?.username?.[0] || myProfile?.username?.[0] || 'U'}
                 </div>
               )}
             </div>
             <div className="flex-1">
               <div className="flex items-center gap-2">
-                <h1 className={`text-xl font-bold flex items-center gap-2 whitespace-nowrap ${theme === 'sweet' ? 'text-[#4B004B]' : 'text-gray-900 dark:text-white'}`}>
-                  <Heart className="w-5 h-5 text-pink-500 fill-pink-500 shrink-0" />
+                <h1 className={`text-xl font-bold flex items-center gap-2 whitespace-nowrap text-th-ink`}>
+                  <Heart className="w-5 h-5 text-th-primary fill-th-primary shrink-0" />
                   Sweet
                 </h1>
                 <OfflineBadge theme={theme} />
               </div>
-              <p className={`text-xs ${theme === 'sweet' ? 'text-[#8B004B]' : 'text-gray-500 dark:text-gray-400'}`}>@{profile?.username || myProfile?.username}</p>
+              <p className="text-xs text-th-ink-soft">@{profile?.username || myProfile?.username}</p>
             </div>
           </div>
 
           <div className="relative">
             <button
               onClick={() => setShowMenu(!showMenu)}
-              className={`p-2 rounded-full transition-colors outline-none ${
-                theme === 'dark'
-                  ? 'hover:bg-gray-800 text-white'
-                  : theme === 'sweet'
-                    ? 'hover:bg-[#FAD1D1] text-[#4B004B]'
-                    : 'hover:bg-gray-100 text-gray-700'
-              }`}
+              aria-label="Menu"
+              className="p-2 rounded-full transition-colors outline-none hover:bg-th-card-hover text-th-ink"
             >
-              <MoreVertical className={`w-5 h-5 ${theme === 'dark' ? 'text-gray-200' : theme === 'sweet' ? 'text-[#4B004B]' : 'text-gray-700'}`} />
+              <MoreVertical className="w-5 h-5" />
             </button>
 
             {showMenu && (
@@ -573,20 +602,14 @@ export function ChatList({ selectedChatId, onSelectChat, onShowProfile, onShowFr
                   onClick={() => setShowMenu(false)}
                 />
                 <div className={`absolute right-0 top-full mt-2 w-64 rounded-xl shadow-lg py-2 z-20 border ${
-                  theme === 'sweet'
-                    ? 'bg-[#FFE4E1] border-[#FFB6C1]'
-                    : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700'
+                  'bg-th-card border-th-border'
                 }`}>
                   <button
                     onClick={() => {
                       onShowProfile();
                       setShowMenu(false);
                     }}
-                    className={`w-full px-4 py-2 text-left flex items-center gap-3 transition-colors ${
-                      theme === 'sweet'
-                        ? 'text-[#8B004B] hover:bg-white'
-                        : 'text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800'
-                    }`}
+                    className="w-full px-4 py-2 text-left flex items-center gap-3 transition-colors text-th-ink hover:bg-th-card-hover"
                   >
                     <UserIcon className="w-5 h-5" />
                     <span>Profile</span>
@@ -596,11 +619,7 @@ export function ChatList({ selectedChatId, onSelectChat, onShowProfile, onShowFr
                       onShowSettings();
                       setShowMenu(false);
                     }}
-                    className={`w-full px-4 py-2 text-left flex items-center gap-3 transition-colors ${
-                      theme === 'sweet'
-                        ? 'text-[#8B004B] hover:bg-white'
-                        : 'text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800'
-                    }`}
+                    className="w-full px-4 py-2 text-left flex items-center gap-3 transition-colors text-th-ink hover:bg-th-card-hover"
                   >
                     <Settings className="w-5 h-5" />
                     <span>Settings</span>
@@ -610,25 +629,19 @@ export function ChatList({ selectedChatId, onSelectChat, onShowProfile, onShowFr
                       onShowLockedChats();
                       setShowMenu(false);
                     }}
-                    className={`w-full px-4 py-2 text-left flex items-center gap-3 transition-colors ${
-                      theme === 'sweet'
-                        ? 'text-[#8B004B] hover:bg-white'
-                        : 'text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800'
-                    }`}
+                    className="w-full px-4 py-2 text-left flex items-center gap-3 transition-colors text-th-ink hover:bg-th-card-hover"
                   >
                     <Lock className="w-5 h-5" />
                     <span>Locked Chats</span>
                   </button>
-                  <div className={`border-t my-2 ${theme === 'sweet' ? 'border-[#FFB6C1]' : 'border-gray-200 dark:border-gray-700'}`} />
+                  <div className="border-t my-2 border-th-border" />
                   <button
                     onClick={() => {
                       signOut();
                       setShowMenu(false);
                     }}
                     className={`w-full px-4 py-2 text-left flex items-center gap-3 transition-colors ${
-                      theme === 'sweet'
-                        ? 'text-rose-600 hover:bg-white'
-                        : 'text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30'
+                      'text-th-danger hover:bg-th-danger/10'
                     }`}
                   >
                     <LogOut className="w-5 h-5" />
@@ -641,35 +654,28 @@ export function ChatList({ selectedChatId, onSelectChat, onShowProfile, onShowFr
         </div>
 
         <div className="relative">
-          <Search className={`absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 ${theme === 'sweet' ? 'text-[#8B004B]' : 'text-gray-400'}`} />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-th-ink-faint" />
           <input
             type="text"
             placeholder="Search chats..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className={`w-full pl-10 pr-4 py-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-pink-500 transition-colors border ${
-              theme === 'sweet'
-                ? 'bg-white border-[#FFB6C1] text-[#8B004B] placeholder:text-[#8B004B]'
-                : 'bg-gray-100 dark:bg-gray-700 border-transparent text-gray-900 dark:text-white dark:placeholder-gray-400'
-            }`}
+            className={`w-full pl-10 pr-4 py-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-th-primary/50 transition-colors border bg-th-input border-th-border text-th-ink placeholder:text-th-ink-faint`}
           />
         </div>
 
         <div className="flex gap-2 mt-3">
           <button
             onClick={onShowFriends}
-            className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-gradient-to-r from-pink-500 to-rose-500 text-white rounded-xl hover:from-pink-600 hover:to-rose-600 transition-all"
+            className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-gradient-to-r from-th-bubble-mine to-th-bubble-mine-to text-th-on-bubble-mine rounded-xl hover:opacity-90 transition-all"
           >
             <Users className="w-4 h-4" />
             <span className="text-sm font-medium">Find Friends</span>
           </button>
           <button
             onClick={onShowCreateChat}
-            className={`flex items-center justify-center gap-2 px-3 py-2 rounded-xl transition-all border ${
-              theme === 'sweet'
-                ? 'bg-white border-[#FFB6C1] text-[#8B004B] hover:bg-[#FFE4E1]'
-                : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-transparent hover:bg-gray-200'
-            }`}
+            aria-label="New chat"
+            className="flex items-center justify-center gap-2 px-3 py-2 rounded-xl transition-all border bg-th-secondary border-th-border text-th-on-secondary hover:bg-th-card-hover"
           >
             <MessageSquarePlus className="w-4 h-4" />
           </button>
@@ -679,13 +685,13 @@ export function ChatList({ selectedChatId, onSelectChat, onShowProfile, onShowFr
       <div className="flex-1 min-h-0 overflow-y-auto">
         {loading ? (
           <div className="flex items-center justify-center h-32">
-            <div className="w-8 h-8 border-3 border-pink-500 border-t-transparent rounded-full animate-spin" />
+            <div className="w-8 h-8 border-3 border-th-primary border-t-transparent rounded-full animate-spin" />
           </div>
         ) : filteredChats.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-center px-4">
-            <MessageSquarePlus className={`w-16 h-16 mb-3 ${theme === 'sweet' ? 'text-[#FFB6C1]' : 'text-gray-300'}`} />
-            <p className={`font-medium ${theme === 'sweet' ? 'text-[#8B004B]' : 'text-gray-500'}`}>No chats yet</p>
-            <p className={`text-sm mt-1 ${theme === 'sweet' ? 'text-[#8B004B]/70' : 'text-gray-400'}`}>
+            <MessageSquarePlus className="w-16 h-16 mb-3 text-th-border" />
+            <p className="font-medium text-th-ink-soft">No chats yet</p>
+            <p className="text-sm mt-1 text-th-ink-faint">
               Start a conversation with your friends
             </p>
           </div>
@@ -699,17 +705,14 @@ export function ChatList({ selectedChatId, onSelectChat, onShowProfile, onShowFr
                   onClick={() => onSelectChat(chat.id)}
                   className={`w-full p-3 rounded-3xl border flex items-start gap-3 transition-all active:scale-[0.98] ${
                     selectedChatId === chat.id
-                      ? theme === 'sweet'
-                        ? 'bg-[#FFC0CB]/50 border-[#FF69B4] shadow-sm shadow-pink-200/50'
-                        : 'bg-pink-50 dark:bg-pink-900/30 border-pink-300 dark:border-pink-700'
-                      : theme === 'sweet'
-                        ? 'bg-white/60 border-[#FFD1DC] hover:bg-[#FFC0CB]/25 hover:border-[#FFB6C1]'
-                        : 'bg-white dark:bg-gray-800/40 border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50'
-                  } ${getThemeColor(chat.theme)}`}
+                      ? 'bg-th-primary/15 border-th-primary shadow-sm'
+                      : 'bg-th-card/70 border-th-border hover:bg-th-card-hover'
+                  }`}
+                  style={themeStripe(chat.id, selectedChatId === chat.id)}
                 >
                   <div className="relative flex-shrink-0">
                     {isSelfChat(chat) ? (
-                      <div className={`w-12 h-12 rounded-full bg-gradient-to-br flex items-center justify-center text-white ${theme === 'sweet' ? 'from-[#FF69B4] to-[#FF1493]' : 'from-pink-400 to-purple-500'}`}>
+                      <div className="w-12 h-12 rounded-full bg-gradient-to-br flex items-center justify-center from-th-bubble-mine to-th-bubble-mine-to text-th-on-bubble-mine">
                         <Bookmark className="w-6 h-6" />
                       </div>
                     ) : chat.type === 'direct' && chat.otherUser ? (
@@ -721,20 +724,20 @@ export function ChatList({ selectedChatId, onSelectChat, onShowProfile, onShowFr
                             className="w-12 h-12 rounded-full object-cover"
                           />
                         ) : (
-                          <div className={`w-12 h-12 rounded-full bg-gradient-to-br flex items-center justify-center text-white font-medium ${theme === 'sweet' ? 'from-[#FF69B4] to-[#FF1493]' : 'from-pink-400 to-purple-500'}`}>
+                          <div className="w-12 h-12 rounded-full bg-gradient-to-br flex items-center justify-center font-medium from-th-bubble-mine to-th-bubble-mine-to text-th-on-bubble-mine">
                             {chat.otherUser.display_name[0] || 'U'}
                           </div>
                         )}
                         <span
                           className={`absolute bottom-0 right-0 block h-3.5 w-3.5 rounded-full border-2 ${
-                            theme === 'sweet' ? 'border-[#FFF0F5]' : 'border-white dark:border-gray-900'
+                            'border-th-panel'
                           } ${
-                            isUserOnline(chat.otherUser.id) ? 'bg-green-500' : theme === 'sweet' ? 'bg-[#FFB6C1]' : 'bg-gray-400'
+                            isUserOnline(chat.otherUser.id) ? 'bg-th-online' : 'bg-th-toggle-off'
                           }`}
                         />
                       </>
                     ) : (
-                      <div className={`w-12 h-12 rounded-full bg-gradient-to-br flex items-center justify-center text-white ${theme === 'sweet' ? 'from-[#FF69B4] to-[#FF1493]' : 'from-blue-400 to-purple-500'}`}>
+                      <div className="w-12 h-12 rounded-full bg-gradient-to-br flex items-center justify-center from-th-bubble-mine to-th-bubble-mine-to text-th-on-bubble-mine">
                         <Users className="w-6 h-6" />
                       </div>
                     )}
@@ -743,28 +746,24 @@ export function ChatList({ selectedChatId, onSelectChat, onShowProfile, onShowFr
                   <div className="flex-1 min-w-0 text-left">
                     <div className="flex items-center justify-between gap-2 mb-1">
                       <h3 className={`truncate ${
-                        theme === 'sweet'
-                          ? (unread > 0 ? 'font-extrabold text-[#4B004B]' : 'font-semibold text-[#4B004B]')
-                          : (unread > 0 ? 'font-extrabold text-gray-900 dark:text-white' : 'font-semibold text-gray-900 dark:text-gray-100')
+                        unread > 0 ? 'font-extrabold text-th-ink' : 'font-semibold text-th-ink'
                       }`}>
                         {getTitle(chat)}
                       </h3>
                       {chat.lastMessage?.created_at && (
-                        <span className={`text-xs shrink-0 ${unread > 0 ? 'text-[#FF1493] font-bold' : theme === 'sweet' ? 'text-[#8B004B]' : 'text-gray-500'}`}>
+                        <span className={`text-xs shrink-0 ${unread > 0 ? 'text-th-link font-bold' : 'text-th-ink-soft'}`}>
                           {formatTime(chat.lastMessage.created_at)}
                         </span>
                       )}
                     </div>
                     <div className="flex items-center justify-between gap-2">
                       <p className={`text-sm truncate flex-1 ${
-                        theme === 'sweet'
-                          ? (unread > 0 ? 'text-[#4B004B] font-medium' : 'text-[#8B004B]')
-                          : (unread > 0 ? 'text-gray-800 dark:text-gray-200 font-medium' : 'text-gray-600 dark:text-gray-400')
+                        unread > 0 ? 'text-th-ink font-medium' : 'text-th-ink-soft'
                       }`}>
                         {formatMessagePreview(chat.lastMessage)}
                       </p>
                       {unread > 0 && (
-                        <span className="shrink-0 min-w-[20px] h-5 px-1.5 rounded-full bg-gradient-to-br from-[#FF69B4] to-[#FF1493] text-white text-[11px] font-black flex items-center justify-center shadow-sm shadow-pink-300/60">
+                        <span className="shrink-0 min-w-[20px] h-5 px-1.5 rounded-full bg-th-badge text-th-on-primary text-[11px] font-black flex items-center justify-center shadow-sm">
                           {unread > 99 ? '99+' : unread}
                         </span>
                       )}

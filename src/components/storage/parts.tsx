@@ -35,7 +35,7 @@ export function TabBody({ t, children }: { t: Tokens; children: React.ReactNode 
 export function Loading({ t, text }: { t: Tokens; text: string }) {
   return (
     <div className="flex items-center gap-2 py-6 justify-center">
-      <div className="w-5 h-5 border-2 border-pink-500 border-t-transparent rounded-full animate-spin" />
+      <div className="w-5 h-5 border-2 border-th-primary border-t-transparent rounded-full animate-spin" />
       <span className={`text-xs font-bold ${t.sub}`}>{text}</span>
     </div>
   );

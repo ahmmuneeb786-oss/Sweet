@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { User, CheckCircle, AlertCircle, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { FloatingHearts } from '../components/FloatingHearts';
+import { useAppIsSweet } from '../theme/sweetHearts';
 import { supabase } from '../lib/supabase';
 import { useNotify } from '../contexts/NotificationContext';
 import { usePerformance } from '../contexts/PerformanceContext';
@@ -10,6 +11,7 @@ import { usePerformance } from '../contexts/PerformanceContext';
 // signup always sets one, so normally this never shows. Blocks entry until
 // the user picks one; never assigns one automatically.
 export function UsernameSetup({ theme = 'light' }: { theme?: 'light' | 'dark' | 'sweet' }) {
+  const appIsSweet = useAppIsSweet();
   const { updateProfile } = useAuth();
   const { showError, showSuccess } = useNotify();
   const { isLowPerfMode } = usePerformance();
@@ -111,39 +113,41 @@ export function UsernameSetup({ theme = 'light' }: { theme?: 'light' | 'dark' | 
     }
   }
 
-  const isSweet = theme === 'sweet';
+  // Colours come from the theme this device last used (th-* CSS variables),
+  // so sign-in already looks like the user's app.
 
   return (
     <div className={`min-h-screen flex items-center justify-center relative bg-gradient-to-br ${
-      isSweet ? 'from-[#FFF0F5] via-[#FFE4E1] to-[#FFD1DC]' : 'from-pink-50 via-purple-50 to-blue-50'
+      'from-th-bg via-th-panel to-th-secondary'
     }`}>
       <div className="fixed inset-0 z-0 pointer-events-none">
-        <FloatingHearts theme={theme} />
+        {/* Hearts are Sweet-only. */}
+        {appIsSweet && <FloatingHearts theme={theme} />}
       </div>
 
       <div className="w-full max-w-md relative z-10 px-4 py-8 sm:px-6">
         <div className={`rounded-3xl shadow-2xl p-6 sm:p-8 space-y-6 ${isLowPerfMode ? '' : 'backdrop-blur-sm'} ${
-          isSweet ? 'bg-[#FFF0F5]/90 border border-[#FFB6C1]' : 'bg-white/90'
+          'bg-th-card/90 text-th-ink border border-th-border'
         }`}>
           <div className="flex flex-col items-center text-center gap-3 pb-2">
-            <div className={`p-3 rounded-full ${isSweet ? 'bg-[#FFE4E1]' : 'bg-pink-50'}`}>
-              <ShieldCheck className={`w-6 h-6 ${isSweet ? 'text-[#FF69B4]' : 'text-pink-500'}`} />
+            <div className={`p-3 rounded-full ${'bg-th-secondary'}`}>
+              <ShieldCheck className={`w-6 h-6 ${'text-th-primary'}`} />
             </div>
-            <h1 className={`text-2xl font-bold ${isSweet ? 'text-[#4B004B]' : 'text-gray-900'}`}>
+            <h1 className={`text-2xl font-bold ${'text-th-ink'}`}>
               Choose your username
             </h1>
-            <p className={`text-sm ${isSweet ? 'text-[#8B004B]' : 'text-gray-600'}`}>
+            <p className={`text-sm ${'text-th-ink-soft'}`}>
               Your account doesn't have a username yet. You'll need to set one to continue — it's how friends find and add you in Sweet.
             </p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className={`block text-sm font-medium mb-2 ${isSweet ? 'text-[#8B004B]' : 'text-gray-700'}`}>
+              <label className={`block text-sm font-medium mb-2 ${'text-th-ink-soft'}`}>
                 Username
               </label>
               <div className="relative">
-                <User className={`absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 ${isSweet ? 'text-[#FF69B4]/60' : 'text-gray-400'}`} />
+                <User className={`absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 ${'text-th-ink-faint'}`} />
                 <input
                   type="text"
                   value={username}
@@ -151,13 +155,13 @@ export function UsernameSetup({ theme = 'light' }: { theme?: 'light' | 'dark' | 
                   placeholder="sweet_alex"
                   autoFocus
                   className={`w-full pl-10 pr-10 py-3 border rounded-xl focus:ring-2 focus:border-transparent outline-none transition-all ${
-                    usernameError ? 'border-red-500' : username && usernameAvailable ? 'border-green-500' : isSweet ? 'border-[#FFB6C1]' : 'border-gray-300'
-                  } ${isSweet ? 'text-[#4B004B] focus:ring-[#FF69B4] bg-white' : 'focus:ring-pink-500'}`}
+                    usernameError ? 'border-red-500' : username && usernameAvailable ? 'border-green-500' : 'border-th-border'
+                  } ${'text-th-ink placeholder:text-th-ink-faint focus:ring-th-primary/50 bg-th-input'}`}
                   required
                 />
                 {checkingUsername && (
                   <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                    <div className="w-5 h-5 border-2 border-pink-500 border-t-transparent rounded-full animate-spin" />
+                    <div className="w-5 h-5 border-2 border-th-primary border-t-transparent rounded-full animate-spin" />
                   </div>
                 )}
                 {!checkingUsername && username && usernameAvailable && (
@@ -178,8 +182,8 @@ export function UsernameSetup({ theme = 'light' }: { theme?: 'light' | 'dark' | 
             <button
               type="submit"
               disabled={submitting || !username || !usernameAvailable || !!usernameError || checkingUsername}
-              className={`w-full py-3 px-4 text-white font-medium rounded-xl focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all transform hover:scale-[1.02] active:scale-[0.98] bg-gradient-to-r ${
-                isSweet ? 'from-[#FF69B4] to-[#FF1493] hover:from-[#FF1493] hover:to-[#FF69B4] focus:ring-[#FF69B4]' : 'from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 focus:ring-pink-500'
+              className={`w-full py-3 px-4 font-medium rounded-xl focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all transform hover:scale-[1.02] active:scale-[0.98] bg-gradient-to-r ${
+                'from-th-bubble-mine to-th-bubble-mine-to text-th-on-bubble-mine hover:opacity-90 focus:ring-th-primary'
               }`}
             >
               {submitting ? (

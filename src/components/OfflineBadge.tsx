@@ -6,11 +6,7 @@ interface OfflineBadgeProps {
   theme: 'light' | 'dark' | 'sweet';
   /** Only render on the mobile layout (desktop keeps a single badge, in ChatList). */
   mobileOnly?: boolean;
-  /**
-   * Sweet theme only: the pink of the header the badge sits on. Same rule as
-   * Settings — a light-pink surface gets a dark-pink pill and vice versa, so
-   * the pill always stands out from what's behind it.
-   */
+  /** No longer used — kept so existing callers still type-check. */
   surface?: 'light' | 'dark';
 }
 
@@ -24,7 +20,9 @@ const SCREEN_MARGIN = 16;
  * what offline mode means. The panel text mirrors what useOfflineSync really
  * does: queued messages and profile edits are flushed when the connection returns.
  */
-export function OfflineBadge({ theme, mobileOnly = false, surface = 'light' }: OfflineBadgeProps) {
+// `theme` and `surface` are still accepted from callers but no longer pick
+// colours: those come from the active theme (th-* CSS variables).
+export function OfflineBadge({ mobileOnly = false }: OfflineBadgeProps) {
   const isMobile = useIsMobile();
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
   const [open, setOpen] = useState(false);
@@ -94,13 +92,9 @@ export function OfflineBadge({ theme, mobileOnly = false, surface = 'light' }: O
         aria-expanded={open}
         aria-label="Offline mode, show details"
         className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider whitespace-nowrap cursor-help transition-colors ${
-          theme !== 'sweet'
-            ? 'bg-pink-100 text-pink-700'
-            : open
-            ? 'border border-[#FF1493] bg-white text-[#FF1493]' // selected, like the active Theme option
-            : surface === 'light'
-            ? 'border border-[#FFB6C1] bg-[#FFE4E1] text-pink-700 hover:bg-white'
-            : 'border border-[#FFB6C1] bg-[#FFF0F5] text-pink-700 hover:bg-white'
+          open
+            ? 'border border-th-primary bg-th-card text-th-link' // selected
+            : 'border border-th-border bg-th-secondary text-th-on-secondary hover:bg-th-card'
         }`}
       >
         <CloudOff className="w-3 h-3" />
@@ -112,17 +106,13 @@ export function OfflineBadge({ theme, mobileOnly = false, surface = 'light' }: O
           role="tooltip"
           style={{ left: panelOffset, width: `min(${PANEL_WIDTH}px, calc(100vw - ${SCREEN_MARGIN * 2}px))` }}
           className={`absolute top-full mt-2 p-3 rounded-xl shadow-xl z-50 text-xs font-normal normal-case tracking-normal text-left ${
-            theme === 'dark'
-              ? 'border bg-gray-800 border-gray-700 text-gray-200'
-              : theme === 'sweet'
-              ? 'border-2 border-[#FFD1DC] bg-[#FFF0F5] text-[#4B004B]'
-              : 'border bg-white border-gray-200 text-gray-700'
+            'border-2 border-th-border bg-th-card text-th-ink'
           }`}
         >
-          <div className="flex items-center gap-1.5 mb-1.5 font-bold text-pink-600">
-            {/* Sweet: the icon sits inside the light-pink card, so it gets a
-                dark-pink box — same nesting rule as Settings. */}
-            <span className={theme === 'sweet' ? 'p-1 rounded-lg border border-[#FFB6C1] bg-[#FFE4E1]' : ''}>
+          <div className="flex items-center gap-1.5 mb-1.5 font-bold text-th-link">
+            {/* The icon sits inside the card, so it gets the softer inner
+                level — same nesting rule as Settings. */}
+            <span className="p-1 rounded-lg border border-th-border bg-th-secondary">
               <CloudOff className="w-4 h-4" />
             </span>
             You're offline

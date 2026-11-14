@@ -291,17 +291,17 @@ const stopCamera = () => {
 };
 
   return (
-    <div className="fixed inset-0 z-[9999] bg-[#FFF0F3] flex flex-col items-center justify-center p-8">
+    <div className="fixed inset-0 z-[9999] bg-th-bg flex flex-col items-center justify-center p-8">
       {/* Visual Header for Mode */}
-      <div className="absolute top-10 flex items-center gap-2 bg-white/50 px-4 py-2 rounded-full backdrop-blur-md border border-white">
+      <div className="absolute top-10 flex items-center gap-2 bg-th-card/60 px-4 py-2 rounded-full backdrop-blur-md border border-th-border">
         {mode === 'register' ? (
-          <><UserPlus className="w-4 h-4 text-pink-500" /> <span className="text-pink-600 text-xs font-bold uppercase tracking-widest">Face Registration</span></>
+          <><UserPlus className="w-4 h-4 text-th-primary" /> <span className="text-th-link text-xs font-bold uppercase tracking-widest">Face Registration</span></>
         ) : (
-          <><Lock className="w-4 h-4 text-pink-500" /> <span className="text-pink-600 text-xs font-bold uppercase tracking-widest">Secure Entry</span></>
+          <><Lock className="w-4 h-4 text-th-primary" /> <span className="text-th-link text-xs font-bold uppercase tracking-widest">Secure Entry</span></>
         )}
       </div>
 
-      <div className={`relative w-64 h-64 md:w-80 md:h-80 rounded-full overflow-hidden border-[10px] border-white shadow-[0_20px_50px_rgba(255,105,180,0.3)] transition-all duration-500 ${isPulsing ? 'scale-105 shadow-pink-400' : ''}`}>
+      <div className={`relative w-64 h-64 md:w-80 md:h-80 rounded-full overflow-hidden border-[10px] border-th-card shadow-[0_20px_50px_rgb(var(--th-primary)/0.3)] transition-all duration-500 ${isPulsing ? 'scale-105 shadow-th-primary' : ''}`}>
         <video
           ref={videoRef}
           autoPlay
@@ -309,11 +309,11 @@ const stopCamera = () => {
           onPlay={handleDetection}
           className="absolute inset-0 w-full h-full object-cover scale-x-[-1]"
         />
-        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-pink-400/20 to-transparent h-20 w-full animate-[scan_2s_linear_infinite]" />
+        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-th-primary/20 to-transparent h-20 w-full animate-[scan_2s_linear_infinite]" />
       </div>
 
       <div className="mt-12 text-center max-w-xs w-full">
-        <div className="bg-white/80 backdrop-blur-sm p-6 rounded-[32px] shadow-xl border border-white">
+        <div className="bg-th-card/95 text-th-ink backdrop-blur-sm p-6 rounded-[32px] shadow-xl border border-th-border">
           <div className="flex justify-center mb-4 gap-3">
             {errorState ? (
               <AlertCircle className="w-10 h-10 text-red-500 animate-pulse" />
@@ -321,12 +321,12 @@ const stopCamera = () => {
               <ShieldCheck className="w-10 h-10 text-green-500 animate-bounce" />
             ) : (
               <>
-                <Smile className="w-8 h-8 text-pink-400 animate-pulse" />
+                <Smile className="w-8 h-8 text-th-ink-soft animate-pulse" />
               </>
             )}
           </div>
-          <h2 className="text-pink-600 font-black text-xl mb-2 min-h-[1.5em]">{feedback}</h2>
-          <p className="text-pink-400/60 text-[10px] uppercase font-bold tracking-[0.2em]">
+          <h2 className="text-th-link font-black text-xl mb-2 min-h-[1.5em]">{feedback}</h2>
+          <p className="text-th-ink-faint text-[10px] uppercase font-bold tracking-[0.2em]">
             {mode === 'register' ? 'Setting up biometric key' : 'Biometric Expression Lock'}
           </p>
         </div>
@@ -341,7 +341,7 @@ const stopCamera = () => {
               stopCamera();
               (onCancel ?? onUnlock)();
             }}
-            className="mt-6 text-pink-400 text-sm font-medium hover:text-pink-600 transition-colors"
+            className="mt-6 text-th-ink-soft text-sm font-medium hover:text-th-link transition-colors"
           >
             Cancel Registration
           </button>
@@ -358,7 +358,7 @@ const stopCamera = () => {
               stopCamera();
               onSignOut();
             }}
-            className="mt-6 text-pink-300 text-xs font-medium hover:text-pink-500 transition-colors"
+            className="mt-6 text-th-ink-faint text-xs font-medium hover:text-th-link transition-colors"
           >
             Not you? Sign out instead
           </button>
@@ -370,7 +370,7 @@ const stopCamera = () => {
               stopCamera();
               onCancel();
             }}
-            className="mt-6 text-pink-300 text-xs font-medium hover:text-pink-500 transition-colors"
+            className="mt-6 text-th-ink-faint text-xs font-medium hover:text-th-link transition-colors"
           >
             Cancel
           </button>

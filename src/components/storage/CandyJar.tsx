@@ -140,8 +140,8 @@ export function CandyJar({ layers, capacity, t, cleaning, burst, motion, activeK
             );
           })}
           <pattern id={`${uid}-lid`} width="12" height="22" patternUnits="userSpaceOnUse" patternTransform="rotate(35)">
-            <rect width="12" height="22" fill={t.lid[0]} />
-            <rect width="5" height="22" fill={t.lid[1]} />
+            <rect width="12" height="22" style={{ fill: t.lid[0] }} />
+            <rect width="5" height="22" style={{ fill: t.lid[1] }} />
           </pattern>
           <linearGradient id={`${uid}-shine`} x1="0" x2="1">
             <stop offset="0" stopColor="#fff" stopOpacity="0.55" />
@@ -150,7 +150,7 @@ export function CandyJar({ layers, capacity, t, cleaning, burst, motion, activeK
         </defs>
 
         {/* glass */}
-        <path d={BODY} fill={t.jarGlass} />
+        <path d={BODY} style={{ fill: t.jarGlass }} />
 
         {/* candy */}
         <g clipPath={`url(#${uid}-clip)`}>
@@ -190,15 +190,15 @@ export function CandyJar({ layers, capacity, t, cleaning, burst, motion, activeK
         </g>
 
         {/* glass outline + shine */}
-        <path d={BODY} fill="none" stroke={t.jarStroke} strokeWidth="3.5" strokeLinejoin="round" />
+        <path d={BODY} fill="none" style={{ stroke: t.jarStroke }} strokeWidth="3.5" strokeLinejoin="round" />
         <rect x="42" y="98" width="9" height="118" rx="4.5" fill={`url(#${uid}-shine)`} pointerEvents="none" />
         <rect x="56" y="104" width="4" height="34" rx="2" fill="#fff" opacity="0.4" pointerEvents="none" />
 
         {/* neck + lid */}
-        <rect x="66" y="40" width="88" height="14" rx="5" fill={t.jarGlass} stroke={t.jarStroke} strokeWidth="3" />
+        <rect x="66" y="40" width="88" height="14" rx="5" style={{ fill: t.jarGlass, stroke: t.jarStroke }} strokeWidth="3" />
         <g className={`jar-lid ${cleaning ? 'jar-lid-open' : ''}`}>
-          <rect x="56" y="16" width="108" height="26" rx="10" fill={`url(#${uid}-lid)`} stroke={t.jarStroke} strokeWidth="3" />
-          <rect x="98" y="6" width="24" height="12" rx="6" fill={t.lid[0]} stroke={t.jarStroke} strokeWidth="2.5" />
+          <rect x="56" y="16" width="108" height="26" rx="10" fill={`url(#${uid}-lid)`} style={{ stroke: t.jarStroke }} strokeWidth="3" />
+          <rect x="98" y="6" width="24" height="12" rx="6" style={{ fill: t.lid[0], stroke: t.jarStroke }} strokeWidth="2.5" />
         </g>
       </svg>
 
@@ -231,14 +231,14 @@ export function MiniJar({ ratio, k, t, locked }: { ratio: number; k: CandyKey; t
           <path d="M10 8 Q10 11 6 12 Q3 13 3 17 L3 34 Q3 37 6 37 L26 37 Q29 37 29 34 L29 17 Q29 13 26 12 Q22 11 22 8 Z" />
         </clipPath>
       </defs>
-      <path d="M10 8 Q10 11 6 12 Q3 13 3 17 L3 34 Q3 37 6 37 L26 37 Q29 37 29 34 L29 17 Q29 13 26 12 Q22 11 22 8 Z" fill={t.jarGlass} />
+      <path d="M10 8 Q10 11 6 12 Q3 13 3 17 L3 34 Q3 37 6 37 L26 37 Q29 37 29 34 L29 17 Q29 13 26 12 Q22 11 22 8 Z" style={{ fill: t.jarGlass }} />
       <g clipPath={`url(#${uid}-c)`}>
         <rect x="0" y={37 - h} width="32" height={h} fill={CANDY[k].base} />
         <circle cx="10" cy={37 - h + 4} r="2.4" fill={CANDY[k].light} />
         <circle cx="21" cy={37 - h + 6} r="2" fill={CANDY[k].light} />
       </g>
-      <path d="M10 8 Q10 11 6 12 Q3 13 3 17 L3 34 Q3 37 6 37 L26 37 Q29 37 29 34 L29 17 Q29 13 26 12 Q22 11 22 8 Z" fill="none" stroke={t.jarStroke} strokeWidth="1.8" />
-      <rect x="8" y="3" width="16" height="6" rx="2.5" fill={t.lid[0]} stroke={t.jarStroke} strokeWidth="1.2" />
+      <path d="M10 8 Q10 11 6 12 Q3 13 3 17 L3 34 Q3 37 6 37 L26 37 Q29 37 29 34 L29 17 Q29 13 26 12 Q22 11 22 8 Z" fill="none" style={{ stroke: t.jarStroke }} strokeWidth="1.8" />
+      <rect x="8" y="3" width="16" height="6" rx="2.5" style={{ fill: t.lid[0], stroke: t.jarStroke }} strokeWidth="1.2" />
       {locked && <text x="16" y="29" fontSize="11" textAnchor="middle">🔒</text>}
     </svg>
   );

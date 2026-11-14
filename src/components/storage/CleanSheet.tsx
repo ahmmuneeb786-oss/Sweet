@@ -134,7 +134,7 @@ export function CleanSheet({ request, t, dark, onCancel, onConfirm }: CleanSheet
         <div className={`rounded-2xl p-4 ${t.intro}`}>
           {!preview ? (
             <div className="flex items-center gap-2">
-              <div className="w-4 h-4 border-2 border-pink-500 border-t-transparent rounded-full animate-spin" />
+              <div className="w-4 h-4 border-2 border-th-primary border-t-transparent rounded-full animate-spin" />
               <p className={`text-xs font-bold ${t.sub}`}>Counting candies…</p>
             </div>
           ) : preview.count === 0 ? (

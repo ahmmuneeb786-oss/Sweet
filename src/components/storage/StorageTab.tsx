@@ -261,7 +261,7 @@ export function StorageTab({ theme, userId, onBack }: StorageTabProps) {
               onLayerClick={highlight}
             />
             <div className="min-w-0">
-              <p className="text-3xl font-black tracking-tight text-[#FF1493]">{s ? formatBytes(used) : '…'}</p>
+              <p className="text-3xl font-black tracking-tight text-th-link">{s ? formatBytes(used) : '…'}</p>
               <p className={`text-[10px] font-bold ${t.faint}`}>
                 {free !== null ? `${formatBytes(free)} more fits on this device` : 'stored on this device'}
               </p>

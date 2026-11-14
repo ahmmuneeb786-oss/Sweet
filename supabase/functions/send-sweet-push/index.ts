@@ -105,9 +105,11 @@ serve(async (req) => {
 
     const senderName = sender?.display_name || "Someone special"
     const lockedFor = new Set(recipients.filter((p) => p.is_locked).map((p) => p.user_id))
-    const preview = message.type && message.type !== "text"
-      ? PREVIEW_BY_TYPE[message.type] ?? "Sent you something 💕"
-      : (message.content || "").slice(0, 200)
+    const preview = message.type === "theme_change"
+      ? `🎨 Changed your chat theme to ${(message.content || "Default").slice(0, 40)}`
+      : message.type && message.type !== "text"
+        ? PREVIEW_BY_TYPE[message.type] ?? "Sent you something 💕"
+        : (message.content || "").slice(0, 200)
 
     let sent = 0
     await Promise.all(subs.map(async (s) => {

@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { FloatingHearts } from './FloatingHearts';
 import { ChatList } from './ChatList';
 import { ChatWindow } from './ChatWindow';
 import { ProfileSidebar } from './ProfileSidebar';
@@ -44,11 +43,8 @@ export function MobileDashboard({ theme, setTheme, onOpenGifPanel, myGifs, setMy
   useBackableState(showCreateChat, () => setShowCreateChat(false));
   useBackableState(showLockedPanel, () => setShowLockedPanel(false));
 
-  // Helper for background colors based on theme
-  const bgClass = 
-    theme === 'dark' ? 'bg-gray-900 text-white' : 
-    theme === 'sweet' ? 'bg-[#FFE4E1] text-[#4B004B]' : 
-    'bg-gray-50 text-gray-900';
+  // Colours come from the active theme (th-* CSS variables).
+  const bgClass = 'bg-th-bg text-th-ink';
 
   useEffect(() => {
     // iOS Safari/WKWebView has no window.Notification at all — referencing
@@ -66,7 +62,9 @@ export function MobileDashboard({ theme, setTheme, onOpenGifPanel, myGifs, setMy
 
   return (
     <div className={`min-h-screen h-[100dvh] w-full max-w-full overflow-x-hidden overflow-y-hidden flex flex-col relative ${bgClass}`}>
-      {theme === 'sweet' && <FloatingHearts />}
+      {/* Floating hearts are drawn by ChatList and ChatWindow themselves,
+          behind their content, so they never float over the header or the
+          message box. */}
       {(showProfile || showFriends || showSettings || showCreateChat) && (
         <div className="fixed inset-0 z-[100] w-full h-full">
           {showProfile && <ProfileSidebar onClose={() => setShowProfile(false)} theme={theme} user={user}/>}

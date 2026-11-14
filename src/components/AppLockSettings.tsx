@@ -53,7 +53,7 @@ export function AppLockSettings({ theme, userId, displayName, onBack }: AppLockS
   if (!vault || cameraAvailable === null || fingerprintSupported === null) {
     return (
       <div className="flex items-center justify-center h-40">
-        <div className="w-6 h-6 border-2 border-pink-500 border-t-transparent rounded-full animate-spin" />
+        <div className="w-6 h-6 border-2 border-th-primary border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
@@ -215,7 +215,7 @@ export function AppLockSettings({ theme, userId, displayName, onBack }: AppLockS
         <button
           disabled={busy}
           onClick={enableFingerprint}
-          className="w-full p-4 rounded-2xl flex items-center gap-3 text-left bg-gradient-to-r from-[#FF1493] to-[#FF69B4] text-white shadow-lg shadow-pink-200 active:scale-[0.99] transition-transform disabled:opacity-60"
+          className="w-full p-4 rounded-2xl flex items-center gap-3 text-left bg-gradient-to-r from-th-bubble-mine to-th-bubble-mine-to text-th-on-bubble-mine shadow-lg shadow-th-primary/20 active:scale-[0.99] transition-transform disabled:opacity-60"
         >
           <Fingerprint className="w-8 h-8 shrink-0" />
           <div className="flex-1">
@@ -338,7 +338,7 @@ export function AppLockSettings({ theme, userId, displayName, onBack }: AppLockS
       {wizard === 'fingerprint' && (
         <PitchSheet
           s={s}
-          icon={<Fingerprint className="w-12 h-12 text-[#FF1493] mx-auto" />}
+          icon={<Fingerprint className="w-12 h-12 text-th-primary mx-auto" />}
           title={fingerprintHere ? "We'll use your saved fingerprint ☝️" : 'Add your fingerprint ☝️'}
           body={fingerprintHere
             ? 'You already saved a fingerprint on this device for Locked Chats. One touch and App Lock will use it too.'

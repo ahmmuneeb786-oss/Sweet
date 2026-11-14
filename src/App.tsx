@@ -1,9 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, type Dispatch, type SetStateAction } from 'react';
 import { useAuth, AuthProvider } from './contexts/AuthContext';
 import { NotificationProvider, useNotify } from './contexts/NotificationContext';
 import { ConfirmProvider } from './contexts/ConfirmContext';
 import { PerformanceProvider } from './contexts/PerformanceContext';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { ForcePresetTheme, ThemeProvider, ThemeAccountSync, useTheme } from './theme/ThemeProvider';
+import type { LegacyTheme } from './theme/tokens';
 import { Auth } from './pages/Auth';
 import { UsernameSetup } from './pages/UsernameSetup';
 import { Dashboard } from './pages/Dashboard';
@@ -85,40 +87,40 @@ function SplashScreen({ message, overlay = false, showReloadHint = false }: { me
   return (
     <div className={
       overlay
-        ? "fixed inset-0 z-[200] flex flex-col items-center justify-center bg-[#FFF0F3] overflow-hidden"
-        : "min-h-screen flex flex-col items-center justify-center bg-[#FFF0F3] overflow-hidden"
+        ? "fixed inset-0 z-[200] flex flex-col items-center justify-center bg-th-bg overflow-hidden"
+        : "min-h-screen flex flex-col items-center justify-center bg-th-bg overflow-hidden"
     }>
       <div className="relative flex items-center justify-center">
         {/* Central Logo */}
-        <div className="relative z-10 w-32 h-32 bg-white rounded-[40px] shadow-2xl shadow-pink-200/50 flex items-center justify-center mb-8 border border-white transition-transform duration-500 hover:scale-105">
+        <div className="relative z-10 w-32 h-32 bg-th-card rounded-[40px] shadow-2xl shadow-th-primary/20 flex items-center justify-center mb-8 border border-th-border transition-transform duration-500 hover:scale-105">
           <div className="relative">
             <Heart
-              className="w-16 h-16 text-pink-200 fill-pink-100 absolute -top-1 -right-1 opacity-60 animate-[bounce_1.8s_infinite_ease-in-out]"
+              className="w-16 h-16 text-th-primary/30 fill-th-primary/15 absolute -top-1 -right-1 opacity-60 animate-[bounce_1.8s_infinite_ease-in-out]"
               style={{ animationDelay: '0.15s' }}
             />
-            <Heart className="relative z-10 w-16 h-16 text-[#FF69B4] fill-[#FF69B4] drop-shadow-xl animate-[bounce_1.8s_infinite_ease-in-out]" />
+            <Heart className="relative z-10 w-16 h-16 text-th-primary fill-th-primary drop-shadow-xl animate-[bounce_1.8s_infinite_ease-in-out]" />
           </div>
         </div>
 
         {/* Orbiting small hearts */}
-        <Heart className="absolute -top-10 -right-10 w-6 h-6 text-pink-300 animate-bounce delay-75" />
-        <Heart className="absolute top-20 -left-12 w-4 h-4 text-rose-300 animate-pulse delay-300" />
-        <Heart className="absolute -bottom-8 right-12 w-5 h-5 text-pink-200 animate-bounce delay-500" />
+        <Heart className="absolute -top-10 -right-10 w-6 h-6 text-th-primary/40 animate-bounce delay-75" />
+        <Heart className="absolute top-20 -left-12 w-4 h-4 text-th-primary/40 animate-pulse delay-300" />
+        <Heart className="absolute -bottom-8 right-12 w-5 h-5 text-th-primary/30 animate-bounce delay-500" />
       </div>
 
       <div className="mt-12 space-y-3 text-center flex flex-col items-center">
-        <p className="text-[#FF1493] font-bold text-lg tracking-[0.4em] animate-pulse">
+        <p className="text-th-link font-bold text-lg tracking-[0.4em] animate-pulse">
           SWEET CHAT
         </p>
 
         <div className="space-y-3">
-          <p className="text-pink-400/60 text-xs font-medium italic">
+          <p className="text-th-ink-soft text-xs font-medium italic">
             {message}
           </p>
 
           {/* Enhanced Progress Bar */}
-          <div className="w-24 h-[3px] bg-pink-100/50 rounded-full overflow-hidden mx-auto">
-            <div className="h-full bg-gradient-to-r from-pink-400 to-rose-400 w-1/2 rounded-full animate-[loading_1.5s_infinite_ease-in-out]"></div>
+          <div className="w-24 h-[3px] bg-th-primary/15 rounded-full overflow-hidden mx-auto">
+            <div className="h-full bg-gradient-to-r from-th-bubble-mine to-th-bubble-mine-to w-1/2 rounded-full animate-[loading_1.5s_infinite_ease-in-out]"></div>
           </div>
         </div>
 
@@ -127,12 +129,12 @@ function SplashScreen({ message, overlay = false, showReloadHint = false }: { me
             always cleared by a simple reload. */}
         {showReloadHint && (
           <div className="mt-6 flex flex-col items-center gap-3 animate-in fade-in duration-500">
-            <p className="text-pink-400/70 text-[11px] font-medium max-w-[220px] text-center leading-relaxed">
+            <p className="text-th-ink-soft text-[11px] font-medium max-w-[220px] text-center leading-relaxed">
               This is taking longer than usual. If it doesn't clear, try reloading the app.
             </p>
             <button
               onClick={() => window.location.reload()}
-              className="px-5 py-2 rounded-full bg-pink-500 hover:bg-pink-600 text-white text-xs font-bold uppercase tracking-widest transition-colors active:scale-95"
+              className="px-5 py-2 rounded-full bg-th-primary hover:opacity-90 text-th-on-primary text-xs font-bold uppercase tracking-widest transition-colors active:scale-95"
             >
               Reload App
             </button>
@@ -177,7 +179,13 @@ function AppContent() {
   const [showGifPanel, setShowGifPanel] = useState(false);
   const [gifSearch, setGifSearch] = useState('');
   const { logEvent } = useVisitTracking();
-  const [theme, setTheme] = useState<'light' | 'dark' | 'sweet'>('sweet');
+  // Theme lives in ThemeProvider now. Components not yet on theme tokens
+  // still get the closest 'light' | 'dark' | 'sweet' and the old setter.
+  const { legacy: theme, setLegacyTheme } = useTheme();
+  const setTheme = useCallback<Dispatch<SetStateAction<LegacyTheme>>>(
+    (v) => setLegacyTheme(typeof v === 'function' ? v(theme) : v),
+    [theme, setLegacyTheme],
+  );
   const [previewGifs, setPreviewGifs] = useState<any[]>([]);
   const [lastSearchQuery, setLastSearchQuery] = useState('');
   const [faceLockEnabled, setFaceLockEnabled] = useState(false);
@@ -396,18 +404,12 @@ function AppContent() {
   // --- INITIALIZATION ---
   useEffect(() => {
     initializeDictionary();
-    const savedTheme = localStorage.getItem('theme') as 'light' | 'dark' | 'sweet';
-    if (savedTheme) setTheme(savedTheme);
   }, []);
 
   // Persistence
   useEffect(() => {
     localStorage.setItem('sweet_user_gifs', JSON.stringify(myGifs));
   }, [myGifs]);
-
-  useEffect(() => {
-    localStorage.setItem('theme', theme);
-  }, [theme]);
 
   const updateFaceDescriptor = async (userId: string, descriptor: number[]) => {
   // saveVault also writes the device copy immediately — not just the
@@ -480,10 +482,10 @@ if (loading || profileSyncLoading) {
 
   if (!user) {
     return (
-      <div className={theme === 'dark' ? 'dark' : ''}>
-        <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
-          <Auth theme={theme} />
-        </div>
+      <div className="min-h-screen bg-th-bg transition-colors duration-300">
+        {/* Sign-in is always Sweet: first open, after sign-out, any device. */}
+        <ForcePresetTheme id="sweet" />
+        <Auth theme="sweet" />
       </div>
     );
   }
@@ -494,16 +496,14 @@ if (loading || profileSyncLoading) {
   // Telegram login).
   if (profile && !profile.username) {
     return (
-      <div className={theme === 'dark' ? 'dark' : ''}>
-        <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
-          <UsernameSetup theme={theme} />
-        </div>
+      <div className="min-h-screen bg-th-bg transition-colors duration-300">
+        <UsernameSetup theme={theme} />
       </div>
     );
   }
 
   return (
-    <div className={theme === 'dark' ? 'dark' : theme === 'sweet' ? 'sweet-theme' : ''}>
+    <div>
       {/* Lock screen always wins over the chats-loading splash — showing
           "Loading your chats..." on top of (or racing against) a lock
           screen was the original flash bug. Overlay, not a blocking early
@@ -526,7 +526,7 @@ if (loading || profileSyncLoading) {
       )}
 
       <div className={`min-h-screen transition-colors duration-300 ${
-        theme === 'dark' ? 'bg-gray-900 text-white' : theme === 'sweet' ? 'bg-[#FFF0F5] text-[#FF69B4]' : 'bg-gray-50 text-gray-900'
+        'bg-th-bg text-th-ink'
       }`}>
 
         {isRegistering && (
@@ -562,21 +562,21 @@ if (loading || profileSyncLoading) {
         {/* --- GIF STUDIO MODAL --- */}
         {showGifPanel && (
           <div className="fixed inset-0 z-[100] flex items-end md:items-center justify-center p-0 md:p-4 animate-in fade-in duration-300">
-            <div className="absolute inset-0 bg-pink-900/20 backdrop-blur-md" onClick={() => setShowGifPanel(false)} />
+            <div className="absolute inset-0 bg-black/30 backdrop-blur-md" onClick={() => setShowGifPanel(false)} />
 
-            <div className="relative w-full max-w-lg h-[80vh] bg-white/95 backdrop-blur-2xl rounded-t-[32px] md:rounded-[32px] shadow-2xl border border-white/50 flex flex-col overflow-hidden animate-in slide-in-from-bottom-10 duration-500">
+            <div className="relative w-full max-w-lg h-[80vh] bg-th-card/95 text-th-ink backdrop-blur-2xl rounded-t-[32px] md:rounded-[32px] shadow-2xl border border-th-border flex flex-col overflow-hidden animate-in slide-in-from-bottom-10 duration-500">
               
-              <div className="p-4 border-b border-pink-100 flex justify-between items-center bg-white/50">
+              <div className="p-4 border-b border-th-border flex justify-between items-center bg-th-panel/50">
                 <div className="flex flex-col">
-                  <h3 className="text-pink-600 font-black text-xs tracking-widest uppercase">GIF Studio</h3>
-                  <span className="text-[10px] text-pink-400 font-bold">Search or add your pack</span>
+                  <h3 className="text-th-link font-black text-xs tracking-widest uppercase">GIF Studio</h3>
+                  <span className="text-[10px] text-th-ink-soft font-bold">Search or add your pack</span>
                 </div>
                 
                 <div className="flex items-center gap-2">
                   {previewGifs.length > 0 && (
                     <button 
                       onClick={handleAddFullPack}
-                      className="px-3 py-1.5 bg-pink-500 text-white text-[10px] font-black uppercase rounded-full hover:bg-pink-600 shadow-sm transition-all flex items-center gap-1"
+                      className="px-3 py-1.5 bg-th-primary text-th-on-primary text-[10px] font-black uppercase rounded-full hover:opacity-90 shadow-sm transition-all flex items-center gap-1"
                     >
                       <Heart className="w-3 h-3 fill-current" />
                       Save Pack
@@ -585,7 +585,8 @@ if (loading || profileSyncLoading) {
 
                   <button 
                     onClick={() => setShowGifPanel(false)}
-                    className="w-8 h-8 flex items-center justify-center bg-pink-50 text-pink-500 rounded-full hover:bg-pink-500 hover:text-white transition-all"
+                    aria-label="Close GIF Studio"
+                    className="w-8 h-8 flex items-center justify-center bg-th-secondary text-th-on-secondary rounded-full hover:bg-th-primary hover:text-th-on-primary transition-all"
                   >
                     <X className="w-4 h-4" />
                   </button>
@@ -599,11 +600,11 @@ if (loading || profileSyncLoading) {
                       type="text"
                       placeholder="Search Giphy Packs or Paste Link..."
                       value={gifSearch}
-                      className="w-full p-4 pr-12 rounded-2xl bg-pink-50 border-none outline-none text-pink-900 placeholder:text-pink-300 font-bold text-sm shadow-inner"
+                      className="w-full p-4 pr-12 rounded-2xl bg-th-input border-none outline-none text-th-ink placeholder:text-th-ink-faint font-bold text-sm shadow-inner"
                       onChange={(e) => setGifSearch(e.target.value)}
                       onKeyDown={(e) => e.key === 'Enter' && handleGifAction(gifSearch)}
                     />
-                    <button onClick={() => handleGifAction(gifSearch)} className="absolute right-4 top-1/2 -translate-y-1/2 text-pink-400 hover:text-pink-600 active:scale-90 transition-transform">
+                    <button onClick={() => handleGifAction(gifSearch)} className="absolute right-4 top-1/2 -translate-y-1/2 text-th-link hover:opacity-80 active:scale-90 transition-transform">
                       {gifSearch.startsWith('http') ? <Paperclip className="w-5 h-5" /> : <Search className="w-5 h-5" />}
                     </button>
                   </div>
@@ -612,17 +613,17 @@ if (loading || profileSyncLoading) {
                 <div className="flex-1 overflow-y-auto px-4 pb-6 scrollbar-hide">
                   {previewGifs.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-20 opacity-30">
-                      <div className="w-20 h-20 bg-pink-100 rounded-full flex items-center justify-center mb-4">
-                        <Heart className="w-10 h-10 text-pink-500 fill-current" />
+                      <div className="w-20 h-20 bg-th-secondary rounded-full flex items-center justify-center mb-4">
+                        <Heart className="w-10 h-10 text-th-primary fill-current" />
                       </div>
-                      <p className="font-black text-xs text-pink-900 uppercase tracking-tighter">Search to preview a pack</p>
+                      <p className="font-black text-xs text-th-ink uppercase tracking-tighter">Search to preview a pack</p>
                     </div>
                   ) : (
                     <div className="columns-2 gap-3 space-y-3 pt-2">
                        {previewGifs.map((gif, index) => {
                          const gifUrl = gif.images?.fixed_height?.url || gif;
                          return (
-                           <div key={gif.id || index} className="relative group overflow-hidden rounded-xl border-2 border-white shadow-sm">
+                           <div key={gif.id || index} className="relative group overflow-hidden rounded-xl border-2 border-th-card shadow-sm">
                              <img src={gifUrl} className="w-full h-auto block" alt="Gif" />
                              <button 
                                onClick={() => {
@@ -632,7 +633,7 @@ if (loading || profileSyncLoading) {
                                  });
                                  showSuccess("Added to Library!");
                                }}
-                               className="absolute inset-0 bg-pink-500/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+                               className="absolute inset-0 bg-th-primary/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
                              >
                                <Heart className="text-white fill-current w-6 h-6" />
                              </button>
@@ -651,19 +652,28 @@ if (loading || profileSyncLoading) {
   );
 }
 
+// Saves the theme to the signed-in account and syncs it between devices.
+function ThemeAuthBridge() {
+  const { user } = useAuth();
+  return <ThemeAccountSync userId={user?.id ?? null} />;
+}
+
 export default function App() {
   return (
     <ErrorBoundary>
       <PerformanceProvider>
-        <NotificationProvider>
-          <ConfirmProvider>
-            <AuthProvider>
-              <VisitTrackingProvider>
-                <AppContent />
-              </VisitTrackingProvider>
-            </AuthProvider>
-          </ConfirmProvider>
-        </NotificationProvider>
+        <ThemeProvider>
+          <NotificationProvider>
+            <ConfirmProvider>
+              <AuthProvider>
+                <ThemeAuthBridge />
+                <VisitTrackingProvider>
+                  <AppContent />
+                </VisitTrackingProvider>
+              </AuthProvider>
+            </ConfirmProvider>
+          </NotificationProvider>
+        </ThemeProvider>
       </PerformanceProvider>
     </ErrorBoundary>
   );

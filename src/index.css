@@ -2,8 +2,36 @@
 @tailwind components;
 @tailwind utilities;
 
-.sweet-theme .bg-white { background-color: #FFF0F5 !important; }
-.sweet-theme .text-gray-900 { color: #4B004B !important; }
+/* Theme tokens. ThemeProvider (and the inline script in index.html, before
+   React loads) overwrite these with the active theme; these defaults are the
+   Sweet preset so nothing is ever unstyled. */
+:root {
+  --th-bg: 255 240 245; --th-panel: 255 240 245; --th-card: 255 255 255;
+  --th-card-hover: 255 226 232; --th-input: 255 240 245; --th-border: 255 182 193;
+  --th-ink: 75 0 75; --th-ink-soft: 139 0 75; --th-ink-faint: 197 120 160; --th-link: 255 20 147;
+  --th-primary: 255 20 147; --th-on-primary: 255 255 255; --th-secondary: 255 228 225;
+  --th-on-secondary: 139 0 75; --th-danger: 220 38 38;
+  --th-bubble-mine: 255 105 180; --th-bubble-mine-to: 255 20 147; --th-on-bubble-mine: 255 255 255;
+  --th-bubble-theirs: 255 242 240; --th-on-bubble-theirs: 139 0 75;
+  --th-chat-header: 255 105 180; --th-chat-header-to: 255 192 203; --th-on-chat-header: 255 255 255;
+  --th-wallpaper: 255 228 225;
+  --th-toggle-on: 255 20 147; --th-toggle-off: 255 209 220; --th-badge: 255 20 147; --th-online: 34 197 94;
+}
+
+body { background-color: rgb(var(--th-bg)); }
+
+/* Chat header buttons: a hover tint in the header's own text colour, so it
+   shows on any header — white text (Sweet) gives exactly the old white/20,
+   dark text on a light header gives a dark tint instead of nothing. */
+.hdr-hover:hover { background-color: color-mix(in srgb, currentColor 20%, transparent); }
+.hdr-hover-soft:hover { background-color: color-mix(in srgb, currentColor 10%, transparent); }
+
+/* Colour wheel in the theme editor (react-colorful): full width, rounded. */
+.theme-color-picker .react-colorful { width: 100%; height: 190px; }
+.theme-color-picker .react-colorful__saturation { border-radius: 16px 16px 0 0; }
+.theme-color-picker .react-colorful__last-control { border-radius: 0 0 16px 16px; height: 22px; }
+.theme-color-picker .react-colorful__pointer { width: 26px; height: 26px; }
+
 
 @keyframes heartbeat {
   0% { transform: scale(1); }

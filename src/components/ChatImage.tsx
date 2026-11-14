@@ -79,7 +79,7 @@ function ChatImageInner({ src, alt, className, placeholderClassName = 'h-48 w-fu
 
   if (failed) {
     return (
-      <div onClick={onClick} className={`${placeholderClassName} flex flex-col items-center justify-center gap-1 bg-pink-200/30 text-pink-400`}>
+      <div onClick={onClick} className={`${placeholderClassName} flex flex-col items-center justify-center gap-1 bg-th-primary/10 text-th-ink-faint`}>
         <ImageOff className="w-6 h-6" />
         <span className="text-[10px] font-bold">{navigator.onLine ? 'Image unavailable' : 'Not saved for offline'}</span>
       </div>
@@ -87,7 +87,7 @@ function ChatImageInner({ src, alt, className, placeholderClassName = 'h-48 w-fu
   }
 
   if (!url) {
-    return <div ref={holderRef} onClick={onClick} role="img" aria-label={alt} className={`${placeholderClassName} bg-pink-200/30`} />;
+    return <div ref={holderRef} onClick={onClick} role="img" aria-label={alt} className={`${placeholderClassName} bg-th-primary/10`} />;
   }
 
   return (

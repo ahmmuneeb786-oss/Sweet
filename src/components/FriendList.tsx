@@ -47,33 +47,31 @@ function EmptyState({
   accent,
   title,
   subtitle,
-  theme,
 }: {
   icon: typeof UserPlus;
   accent: React.ReactNode;
   title: string;
   subtitle: string;
-  theme: 'light' | 'dark' | 'sweet';
+  /** Unused — colours come from the theme (th-* CSS variables). */
+  theme?: 'light' | 'dark' | 'sweet';
 }) {
   return (
     <div className="flex-1 flex flex-col items-center justify-center min-h-[16rem] text-center px-6 animate-in fade-in duration-300">
       <div className="relative mb-4">
         <div className={`w-20 h-20 rounded-[28px] flex items-center justify-center rotate-3 ${
-          theme === 'sweet'
-            ? 'bg-gradient-to-br from-[#FFD1DC] to-[#FF9EC0] shadow-lg shadow-pink-200/60'
-            : 'bg-gradient-to-br from-pink-400 to-rose-500 shadow-lg'
+          'bg-gradient-to-br from-th-bubble-mine to-th-bubble-mine-to shadow-lg'
         }`}>
-          <Icon className="w-9 h-9 text-white" strokeWidth={1.75} />
+          <Icon className="w-9 h-9 text-th-on-bubble-mine" strokeWidth={1.75} />
         </div>
         {/* Little floating accent for extra sweetness */}
-        <div className="absolute -top-1.5 -right-1.5 w-7 h-7 rounded-full bg-white shadow-md flex items-center justify-center">
+        <div className="absolute -top-1.5 -right-1.5 w-7 h-7 rounded-full bg-th-card shadow-md flex items-center justify-center">
           {accent}
         </div>
       </div>
-      <h3 className={`font-bold text-base ${theme === 'sweet' ? 'text-[#4B004B]' : 'text-gray-800 dark:text-white'}`}>
+      <h3 className="font-bold text-base text-th-ink">
         {title}
       </h3>
-      <p className={`text-sm mt-1 max-w-[230px] leading-relaxed ${theme === 'sweet' ? 'text-[#8B004B]/70' : 'text-gray-400'}`}>
+      <p className={`text-sm mt-1 max-w-[230px] leading-relaxed text-th-ink-soft`}>
         {subtitle}
       </p>
     </div>
@@ -394,31 +392,30 @@ function handleOpenSavedMessages() {
         onClick={onClose}
       />
       <div className={`fixed right-0 top-0 h-full w-full md:w-96 shadow-2xl z-50 flex flex-col transition-colors duration-300 ${
-        theme === 'sweet'
-          ? 'bg-[#FFF0F5] md:bg-[#FFE4E1] border-l border-[#FFB6C1]'
-          : 'bg-white dark:bg-gray-900'
+        'bg-th-panel text-th-ink border-l border-th-border'
       }`}>
-        <div className={`p-6 border-b ${theme === 'sweet' ? 'border-[#FFB6C1]' : 'border-gray-200'}`}>
+        <div className="p-6 border-b border-th-border">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
-              <h2 className={`text-xl font-bold ${theme === 'sweet' ? 'text-[#4B004B]' : 'text-gray-900 dark:text-white'}`}>Friends</h2>
+              <h2 className="text-xl font-bold text-th-ink">Friends</h2>
               <OfflineBadge theme={theme} mobileOnly />
             </div>
             <button
               onClick={onClose}
-              className={`p-2 rounded-full transition-colors ${theme === 'sweet' ? 'hover:bg-[#FFC0CB]/40' : 'hover:bg-gray-100'}`}
+              aria-label="Close"
+              className="p-2 rounded-full transition-colors hover:bg-th-card-hover"
             >
-              <X className={`w-5 h-5 ${theme === 'sweet' ? 'text-[#8B004B]' : 'text-gray-600'}`} />
+              <X className="w-5 h-5 text-th-ink-soft" />
             </button>
           </div>
 
-          <div className={`flex gap-2 p-1 rounded-xl ${theme === 'sweet' ? 'bg-[#FFC0CB]/40' : 'bg-gray-100 dark:bg-gray-800'}`}>
+          <div className="flex gap-2 p-1 rounded-xl bg-th-secondary">
             <button
               onClick={() => setActiveTab('search')}
               className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-all ${
                 activeTab === 'search'
-                  ? (theme === 'sweet' ? 'bg-[#FFF0F5] text-[#8B004B] shadow-sm' : 'bg-white text-pink-600 shadow-sm')
-                  : (theme === 'sweet' ? 'text-[#8B004B]/60 hover:text-[#8B004B]' : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white')
+                  ? 'bg-th-card text-th-ink shadow-sm'
+                  : 'text-th-on-secondary/70 hover:text-th-on-secondary'
               }`}
             >
               Search
@@ -427,13 +424,13 @@ function handleOpenSavedMessages() {
               onClick={() => setActiveTab('requests')}
               className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-all relative ${
                 activeTab === 'requests'
-                  ? (theme === 'sweet' ? 'bg-[#FFF0F5] text-[#8B004B] shadow-sm' : 'bg-white text-pink-600 shadow-sm')
-                  : (theme === 'sweet' ? 'text-[#8B004B]/60 hover:text-[#8B004B]' : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white')
+                  ? 'bg-th-card text-th-ink shadow-sm'
+                  : 'text-th-on-secondary/70 hover:text-th-on-secondary'
               }`}
             >
               Requests
               {friendRequests.length > 0 && (
-                <span className="absolute -top-1 -right-1 w-5 h-5 bg-pink-500 text-white text-xs rounded-full flex items-center justify-center">
+                <span className="absolute -top-1 -right-1 w-5 h-5 bg-th-badge text-th-on-primary text-xs rounded-full flex items-center justify-center">
                   {friendRequests.length}
                 </span>
               )}
@@ -442,8 +439,8 @@ function handleOpenSavedMessages() {
               onClick={() => setActiveTab('friends')}
               className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-all ${
                 activeTab === 'friends'
-                  ? (theme === 'sweet' ? 'bg-[#FFF0F5] text-[#8B004B] shadow-sm' : 'bg-white text-pink-600 shadow-sm')
-                  : (theme === 'sweet' ? 'text-[#8B004B]/60 hover:text-[#8B004B]' : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white')
+                  ? 'bg-th-card text-th-ink shadow-sm'
+                  : 'text-th-on-secondary/70 hover:text-th-on-secondary'
               }`}
             >
               Friends ({friends.length})
@@ -452,15 +449,13 @@ function handleOpenSavedMessages() {
 
           {activeTab === 'search' && (
             <div className="mt-4 relative">
-              <Search className={`absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 ${theme === 'sweet' ? 'text-[#8B004B]/50' : 'text-gray-400'}`} />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-th-ink-faint" />
               <input
                 type="text"
                 placeholder="Search by username..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className={`w-full pl-10 pr-4 py-2 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-transparent outline-none transition-all border ${
-                  theme === 'sweet' ? 'bg-[#FFF0F5] border-[#FFB6C1] text-[#4B004B]' : 'bg-white border-gray-300'
-                }`}
+                className={`w-full pl-10 pr-4 py-2 rounded-xl focus:ring-2 focus:ring-th-primary/50 focus:border-transparent outline-none transition-all border bg-th-input border-th-border text-th-ink placeholder:text-th-ink-faint`}
               />
             </div>
           )}
@@ -472,9 +467,7 @@ function handleOpenSavedMessages() {
               {user && (
                 <div
                   className={`p-4 border-b cursor-pointer transition-colors flex items-center gap-3 ${
-                    theme === 'sweet'
-                      ? 'border-[#FFB6C1]/20 hover:bg-[#FFC0CB]/20'
-                      : 'border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50'
+                    'border-th-border/60 hover:bg-th-card-hover'
                   }`}
                   onClick={handleOpenSavedMessages}
                 >
@@ -482,26 +475,26 @@ function handleOpenSavedMessages() {
                     {user.user_metadata?.avatar_url ? (
                       <img
                         src={user.user_metadata.avatar_url}
-                        className={`w-12 h-12 rounded-full object-cover border-2 ${theme === 'sweet' ? 'border-[#FF69B4]' : 'border-blue-400'}`}
+                        className={`w-12 h-12 rounded-full object-cover border-2 border-th-primary`}
                         alt="You"
                       />
                     ) : (
-                      <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-medium ${theme === 'sweet' ? 'bg-[#FF69B4]' : 'bg-blue-500'}`}>
+                      <div className={`w-12 h-12 rounded-full flex items-center justify-center font-medium bg-th-primary text-th-on-primary`}>
                         You
                       </div>
                     )}
-                    <div className={`absolute bottom-0 right-0 w-3 h-3 border-2 border-white dark:border-gray-900 rounded-full ${theme === 'sweet' ? 'bg-[#FF69B4]' : 'bg-blue-500'}`} />
+                    <div className={`absolute bottom-0 right-0 w-3 h-3 border-2 border-th-panel rounded-full bg-th-primary`} />
                   </div>
                   <div className="flex-1">
                     <div className="flex justify-between items-center">
-                      <h3 className={`font-bold ${theme === 'sweet' ? 'text-[#4B004B]' : 'text-gray-900 dark:text-white'}`}>
+                      <h3 className="font-bold text-th-ink">
                         Saved Messages
                       </h3>
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded uppercase font-bold ${theme === 'sweet' ? 'bg-[#FFD1DC] text-[#8B004B]' : 'bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400'}`}>
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded uppercase font-bold bg-th-secondary text-th-on-secondary`}>
                         You
                       </span>
                     </div>
-                    <p className={`text-xs ${theme === 'sweet' ? 'text-[#8B004B]/70' : 'text-gray-500'}`}>Note to self</p>
+                    <p className="text-xs text-th-ink-soft">Note to self</p>
                   </div>
                 </div>
               )}
@@ -509,7 +502,7 @@ function handleOpenSavedMessages() {
               {friends.length === 0 ? (
                 <EmptyState
                   icon={Users}
-                  accent={<Heart className="w-3.5 h-3.5 text-pink-500 fill-pink-500" />}
+                  accent={<Heart className="w-3.5 h-3.5 text-th-primary fill-th-primary" />}
                   title="Your circle is empty"
                   subtitle="Add friends to start sharing sweet moments together."
                   theme={theme}
@@ -520,9 +513,7 @@ function handleOpenSavedMessages() {
                     <div
                       key={friend.id}
                       className={`p-4 border-b transition-colors ${
-                        theme === 'sweet'
-                          ? 'border-[#FFB6C1]/20 hover:bg-[#FFC0CB]/20'
-                          : 'border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50'
+                        'border-th-border/60 hover:bg-th-card-hover'
                       }`}
                     >
                       <div className="flex items-center gap-3">
@@ -530,17 +521,17 @@ function handleOpenSavedMessages() {
                           {friend.avatar_url ? (
                             <img src={friend.avatar_url} alt={friend.display_name} className="w-12 h-12 rounded-full object-cover" />
                           ) : (
-                            <div className={`w-12 h-12 rounded-full bg-gradient-to-br flex items-center justify-center text-white font-medium ${theme === 'sweet' ? 'from-[#FF69B4] to-[#FF1493]' : 'from-pink-400 to-purple-500'}`}>
+                            <div className="w-12 h-12 rounded-full bg-gradient-to-br flex items-center justify-center font-medium from-th-bubble-mine to-th-bubble-mine-to text-th-on-bubble-mine">
                               {friend.display_name[0]}
                             </div>
                           )}
                         </div>
 
                         <div className="flex-1 min-w-0">
-                          <h3 className={`font-semibold truncate ${theme === 'sweet' ? 'text-[#4B004B]' : 'text-gray-900 dark:text-white'}`}>
+                          <h3 className="font-semibold truncate text-th-ink">
                             {friend.display_name}
                           </h3>
-                          <p className={`text-sm truncate ${theme === 'sweet' ? 'text-[#8B004B]/70' : 'text-gray-500'}`}>@{friend.username}</p>
+                          <p className="text-sm truncate text-th-ink-soft">@{friend.username}</p>
                         </div>
 
                         <div className="flex gap-2">
@@ -550,9 +541,7 @@ function handleOpenSavedMessages() {
                               onClose();
                             }}
                             className={`p-2 rounded-full transition-colors ${
-                              theme === 'sweet'
-                                ? 'bg-[#FFB6C1] text-white hover:bg-[#FF69B4]'
-                                : 'bg-pink-100 text-pink-600 hover:bg-pink-200'
+                              'bg-th-primary text-th-on-primary hover:opacity-90'
                             }`}
                           >
                             <MessageCircle className="w-4 h-4" />
@@ -587,7 +576,7 @@ function handleOpenSavedMessages() {
                 friendRequests.map((request) => (
                   <div
                     key={request.id}
-                    className={`p-4 border-b ${theme === 'sweet' ? 'border-[#FFB6C1]/20' : 'border-gray-100'}`}
+                    className="p-4 border-b border-th-border/60"
                   >
                     <div className="flex items-center gap-3">
                       <div>
@@ -598,17 +587,17 @@ function handleOpenSavedMessages() {
                             className="w-12 h-12 rounded-full object-cover"
                           />
                         ) : (
-                          <div className={`w-12 h-12 rounded-full bg-gradient-to-br flex items-center justify-center text-white font-medium ${theme === 'sweet' ? 'from-[#FF69B4] to-[#FF1493]' : 'from-pink-400 to-purple-500'}`}>
+                          <div className="w-12 h-12 rounded-full bg-gradient-to-br flex items-center justify-center font-medium from-th-bubble-mine to-th-bubble-mine-to text-th-on-bubble-mine">
                             {request.profiles.display_name[0]}
                           </div>
                         )}
                       </div>
 
                       <div className="flex-1 min-w-0">
-                        <h3 className={`font-semibold truncate ${theme === 'sweet' ? 'text-[#4B004B]' : 'text-gray-900 dark:text-white'}`}>
+                        <h3 className="font-semibold truncate text-th-ink">
                           {request.profiles.display_name}
                         </h3>
-                        <p className={`text-sm truncate ${theme === 'sweet' ? 'text-[#8B004B]/70' : 'text-gray-500'}`}>
+                        <p className="text-sm truncate text-th-ink-soft">
                           @{request.profiles.username}
                         </p>
                       </div>
@@ -638,7 +627,7 @@ function handleOpenSavedMessages() {
             <div className="min-h-full flex flex-col">
               {loading ? (
                 <div className="flex items-center justify-center h-32">
-                  <div className="w-8 h-8 border-3 border-pink-500 border-t-transparent rounded-full animate-spin" />
+                  <div className="w-8 h-8 border-3 border-th-primary border-t-transparent rounded-full animate-spin" />
                 </div>
               ) : searchResults.length === 0 && searchQuery ? (
                 <EmptyState
@@ -651,7 +640,7 @@ function handleOpenSavedMessages() {
               ) : searchResults.length === 0 ? (
                 <EmptyState
                   icon={UserPlus}
-                  accent={<Search className="w-3.5 h-3.5 text-pink-500" />}
+                  accent={<Search className="w-3.5 h-3.5 text-th-primary" />}
                   title="Find your connections"
                   subtitle="Search any user in the app by their username to add them as a friend."
                   theme={theme}
@@ -661,7 +650,7 @@ function handleOpenSavedMessages() {
                   return (
                     <div
                       key={result.id}
-                      className={`p-4 border-b ${theme === 'sweet' ? 'border-[#FFB6C1]/20' : 'border-gray-100'}`}
+                      className="p-4 border-b border-th-border/60"
                     >
                       <div className="flex items-center gap-3">
                         <div className="relative">
@@ -672,33 +661,34 @@ function handleOpenSavedMessages() {
                               className="w-12 h-12 rounded-full object-cover"
                             />
                           ) : (
-                            <div className={`w-12 h-12 rounded-full bg-gradient-to-br flex items-center justify-center text-white font-medium ${theme === 'sweet' ? 'from-[#FF69B4] to-[#FF1493]' : 'from-pink-400 to-purple-500'}`}>
+                            <div className="w-12 h-12 rounded-full bg-gradient-to-br flex items-center justify-center font-medium from-th-bubble-mine to-th-bubble-mine-to text-th-on-bubble-mine">
                               {result.display_name[0]}
                             </div>
                           )}
                         </div>
 
                         <div className="flex-1 min-w-0">
-                          <h3 className={`font-semibold truncate ${theme === 'sweet' ? 'text-[#4B004B]' : 'text-gray-900 dark:text-white'}`}>
+                          <h3 className="font-semibold truncate text-th-ink">
                             {result.display_name}
                           </h3>
-                          <p className={`text-sm truncate ${theme === 'sweet' ? 'text-[#8B004B]/70' : 'text-gray-500'}`}>
+                          <p className="text-sm truncate text-th-ink-soft">
                             @{result.username}
                           </p>
                         </div>
 
                         {isFriend(result.id) ? (
-                          <span className={`text-sm px-3 py-1 rounded-full ${theme === 'sweet' ? 'bg-[#FFD1DC] text-[#8B004B]' : 'bg-gray-100 text-gray-600'}`}>
+                          <span className="text-sm px-3 py-1 rounded-full bg-th-secondary text-th-on-secondary">
                             Friend
                           </span>
                         ) : isRequestSent(result.id) ? (
-                          <span className={`text-sm px-3 py-1 rounded-full ${theme === 'sweet' ? 'bg-[#FFD1DC] text-[#8B004B]' : 'bg-gray-100 text-gray-600'}`}>
+                          <span className="text-sm px-3 py-1 rounded-full bg-th-secondary text-th-on-secondary">
                             Pending
                           </span>
                         ) : (
                           <button
                             onClick={() => sendFriendRequest(result.id)}
-                            className="p-2 bg-pink-100 text-pink-600 rounded-full hover:bg-pink-200 transition-colors"
+                            aria-label="Send friend request"
+                            className="p-2 bg-th-primary text-th-on-primary rounded-full hover:opacity-90 transition-colors"
                           >
                             <UserPlus className="w-4 h-4" />
                           </button>

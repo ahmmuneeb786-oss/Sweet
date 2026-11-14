@@ -108,13 +108,13 @@ export function AppLockGate({ userId, onUnlock, purpose, onCancel, onSignOut }: 
       {vault?.app_password_hash && (
         <button
           onClick={() => setForgot(isFreshLogin(user) ? 'reset' : 'explain')}
-          className="text-xs font-semibold text-pink-500 hover:text-pink-700"
+          className="text-xs font-semibold text-th-link hover:opacity-80"
         >
           Forgot app password?
         </button>
       )}
       {onSignOut && (
-        <button onClick={onSignOut} className="text-xs font-semibold text-pink-300 hover:text-pink-500">
+        <button onClick={onSignOut} className="text-xs font-semibold text-th-ink-faint hover:text-th-link">
           Not you? Sign out
         </button>
       )}
@@ -141,7 +141,7 @@ export function AppLockGate({ userId, onUnlock, purpose, onCancel, onSignOut }: 
   if (forgot === 'reset') {
     // Opaque cover: the app is already mounted underneath at launch.
     return (
-      <div className="fixed inset-0 z-[9997] bg-[#FFF0F3]">
+      <div className="fixed inset-0 z-[9997] bg-th-bg">
         <PasswordSetupSheet
           s={styles('sweet')}
           busy={savingReset}
@@ -168,7 +168,7 @@ export function AppLockGate({ userId, onUnlock, purpose, onCancel, onSignOut }: 
           closeLabel="Sign out"
         />
         <LockFooter options={[]} onPick={() => {}}>
-          <button onClick={() => setForgot(null)} className="text-xs font-semibold text-pink-500 hover:text-pink-700">
+          <button onClick={() => setForgot(null)} className="text-xs font-semibold text-th-link hover:opacity-80">
             Back
           </button>
         </LockFooter>

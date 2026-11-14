@@ -17,7 +17,6 @@ export type CandyKey = keyof typeof CANDY;
 
 export function tokens(theme: AppTheme) {
   const s = styles(theme);
-  const sweet = theme === 'sweet';
   const dark = theme === 'dark';
   return {
     ...s,
@@ -26,11 +25,13 @@ export function tokens(theme: AppTheme) {
     /** Small selectable pill (filters, options). */
     pill: s.secondary,
     pillOn: s.primary,
-    divider: sweet ? 'border-[#FFD1DC]' : dark ? 'border-gray-800' : 'border-gray-200',
-    track: sweet ? 'bg-[#FFD1DC]' : dark ? 'bg-gray-800' : 'bg-gray-200',
-    jarStroke: sweet ? '#FF69B4' : dark ? '#F472B6' : '#F9A8D4',
-    jarGlass: sweet ? 'rgba(255,255,255,0.75)' : dark ? 'rgba(255,255,255,0.04)' : 'rgba(253,242,248,0.9)',
-    lid: (sweet ? ['#FF1493', '#FFFFFF'] : dark ? ['#DB2777', '#FBCFE8'] : ['#EC4899', '#FFFFFF']) as [string, string],
+    divider: 'border-th-border',
+    track: 'bg-th-toggle-off',
+    // Theme colours as CSS colour strings — CandyJar puts them in `style`
+    // (SVG attributes don't reliably take CSS variables).
+    jarStroke: 'rgb(var(--th-primary))',
+    jarGlass: dark ? 'rgb(var(--th-card) / 0.35)' : 'rgb(var(--th-card) / 0.8)',
+    lid: ['rgb(var(--th-primary))', 'rgb(var(--th-card))'] as [string, string],
   };
 }
 

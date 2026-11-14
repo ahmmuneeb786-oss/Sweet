@@ -48,6 +48,10 @@ export type Database = {
           created_by: string | null;
           theme: 'love' | 'best_friend' | 'friend' | 'default';
           wallpaper: string | null;
+          /** "Both of us" chat theme — see src/theme/store.ts ChatTheme. */
+          shared_theme: unknown | null;
+          shared_theme_by: string | null;
+          shared_theme_at: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -58,7 +62,7 @@ export type Database = {
           chat_id: string;
           sender_id: string;
           content: string | null;
-          type: 'text' | 'image' | 'video' | 'voice' | 'video_note' | 'file' | 'gif';
+          type: 'text' | 'image' | 'video' | 'voice' | 'video_note' | 'file' | 'gif' | 'theme_change';
           media_url: string | null;
           media_thumbnail: string | null;
           file_name: string | null;

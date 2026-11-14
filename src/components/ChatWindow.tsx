@@ -4,6 +4,16 @@ import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { Message, type Reaction, type MessageReactionState } from './Message';
 import { ChatMenu } from './ChatMenu';
+import { useChatTheme } from '../theme/useChatTheme';
+import { useTheme } from '../theme/ThemeProvider';
+import { applyPageChrome, tokensToVars } from '../theme/apply';
+import { isDarkColor } from '../theme/color';
+import { PanelThemeScope } from '../theme/panelTheme';
+import { chatShowsHearts, useAppIsSweet } from '../theme/sweetHearts';
+import { useIsMobile } from '../hooks/useIsMobile';
+import { FloatingHearts } from './FloatingHearts';
+import { ChatThemeSheet } from './theme/ChatThemeSheet';
+import { ThemeChangeNote } from './theme/ThemeChangeNote';
 import { UserProfileView } from './UserProfileView';
 import { SweetKeyboard } from './SweetKeyboard';
 import { learnFromMessage } from '../predictionService';
@@ -116,6 +126,9 @@ interface MessageListProps {
   highlightedMessageId: string | null;
   unreadDividerId: string | null;
   userId: string | undefined;
+  chatId: string;
+  /** The chat currently has a shared "Both of us" theme. */
+  hasSharedTheme: boolean;
   theme: 'light' | 'dark' | 'sweet';
   onDelete: (messageId: string) => void;
   onHide: (messageId: string) => void;
@@ -131,12 +144,18 @@ interface MessageListProps {
 // All the handlers passed in are stable useCallbacks, so in practice this
 // only re-renders when the messages, reactions or highlight change.
 const MessageList = memo(function MessageList({
-  messages, replyParents, messageReactions, highlightedMessageId, unreadDividerId, userId, theme,
+  messages, replyParents, messageReactions, highlightedMessageId, unreadDividerId, userId, chatId, hasSharedTheme, theme,
   onDelete, onHide, onEdit, onReply, onJumpToReplied, onViewMedia, onRetry,
 }: MessageListProps) {
   // Reply parents are looked up once per message below — a Map keeps that
   // O(1) instead of scanning every loaded message for each reply.
   const messagesById = useMemo(() => new Map(messages.map((m) => [m.id, m])), [messages]);
+  // Only the newest theme note can offer "Use it" — older ones describe
+  // themes that have since been replaced.
+  const latestThemeNoteId = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--) if (messages[i].type === 'theme_change') return messages[i].id;
+    return null;
+  }, [messages]);
 
   return (
     <>
@@ -156,12 +175,27 @@ const MessageList = memo(function MessageList({
           ? (messagesById.get(message.reply_to_id) || replyParents[message.reply_to_id])
           : undefined;
 
+        // "X changed the chat theme to …" — a centred note, not a bubble.
+        if (message.type === 'theme_change') {
+          return (
+            <div key={message.id} id={`msg-${message.id}`}>
+              <ThemeChangeNote
+                chatId={chatId}
+                label={message.content ?? ''}
+                isOwn={isOwn}
+                senderName={message.profiles?.display_name || 'They'}
+                canAdopt={hasSharedTheme && message.id === latestThemeNoteId}
+              />
+            </div>
+          );
+        }
+
         return (
           <div
             key={message.id}
             id={`msg-${message.id}`}
             className={`group rounded-2xl transition-colors duration-500 ${
-              highlightedMessageId === message.id ? 'bg-pink-300/30' : ''
+              highlightedMessageId === message.id ? 'bg-th-primary/20' : ''
             }`}
           >
             <Message
@@ -187,21 +221,21 @@ const MessageList = memo(function MessageList({
             {isOwn && (
               <div className="flex flex-col items-end gap-1 mt-1 px-4">
                 {isSending && (
-                  <div className={`flex items-center gap-1 text-[10px] ${theme === 'sweet' ? 'text-[#8B004B]' : 'text-gray-500'}`}>
-                    <div className={`w-2.5 h-2.5 border-2 border-t-transparent rounded-full animate-spin ${theme === 'sweet' ? 'border-[#FF69B4]' : 'border-gray-400'}`} />
+                  <div className="flex items-center gap-1 text-[10px] text-th-ink-soft">
+                    <div className={`w-2.5 h-2.5 border-2 border-t-transparent rounded-full animate-spin border-th-primary`} />
                     <span>Sending...</span>
                   </div>
                 )}
                 {isPending && (
-                  <div className={`flex items-center gap-1 text-[10px] ${theme === 'sweet' ? 'text-[#8B004B]' : 'text-gray-500'}`}>
-                    <span className={`w-1.5 h-1.5 rounded-full ${theme === 'sweet' ? 'bg-[#FF69B4]' : 'bg-gray-400'}`} />
+                  <div className="flex items-center gap-1 text-[10px] text-th-ink-soft">
+                    <span className={`w-1.5 h-1.5 rounded-full bg-th-primary`} />
                     <span>Waiting to reconnect...</span>
                   </div>
                 )}
                 {isFailed && (
                   <button
                     onClick={() => onRetry(message.id)}
-                    className="flex items-center gap-1 text-[10px] text-red-600 font-bold"
+                    className="flex items-center gap-1 text-[10px] text-th-danger font-bold"
                   >
                     <AlertCircle className="w-3 h-3" />
                     <span>Failed - Tap to retry</span>
@@ -209,12 +243,12 @@ const MessageList = memo(function MessageList({
                 )}
                 {!isSending && !isPending && !isFailed && (
                   <div className={`flex items-center gap-1 text-xs transition-colors ${
-                    theme === 'sweet' ? 'text-[#8B004B]' : 'text-gray-500 dark:text-gray-400'
+                    'text-th-ink-soft'
                   }`}>
                     {message.delivery_status === 'read' ? (
                       <div className="flex items-center">
-                        <Check className={`w-3 h-3 ${theme === 'sweet' ? 'text-[#FF1493]' : 'text-blue-500'}`} />
-                        <Check className={`w-3 h-3 -ml-1.5 ${theme === 'sweet' ? 'text-[#FF1493]' : 'text-blue-500'}`} />
+                        <Check className={`w-3 h-3 text-th-link`} />
+                        <Check className={`w-3 h-3 -ml-1.5 text-th-link`} />
                       </div>
                     ) : (
                       message.delivery_status === 'sent' && <Check className="w-3 h-3 opacity-60" />
@@ -230,7 +264,9 @@ const MessageList = memo(function MessageList({
   );
 });
 
-export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setMyGifs }: ChatWindowProps) {
+// `theme` (the app's) is no longer read here: inside the chat everything
+// follows the chat's own theme — see useChatTheme below.
+export function ChatWindow({ chatId, onBack, onOpenGifPanel, myGifs, setMyGifs }: ChatWindowProps) {
   const { user } = useAuth();
   const { isOnline: isUserOnline } = usePresence(user?.id);
   const { showError } = useNotify();
@@ -1667,15 +1703,34 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
     return () => { cancelled = true; };
   }, [messages, replyParents]);
 
-  function getThemeGradient() {
-    if (!chatInfo) return 'from-[#FF69B4] to-[#FFC0CB]';
-    switch (chatInfo.theme) {
-      case 'love': return 'from-[#FF69B4] to-[#FFC0CB]';
-      case 'best_friend': return 'from-[#FF1493] to-[#FF69B4]';
-      case 'friend': return 'from-[#FF8FAB] to-[#FFC0CB]';
-      default: return 'from-[#FF69B4] to-[#FFC0CB]';
-    }
-  }
+  // This chat's theme for me: my "Just me" theme, else the chat's shared
+  // "Both of us" theme, else my app theme. Its colours are put on the
+  // chat's root element, so every th-* class inside uses them. `theme` (the
+  // closest light/dark/sweet) is for children not on theme tokens yet.
+  const chatTheme = useChatTheme(chatInfo?.id);
+  const theme = chatTheme.legacy;
+  const [showThemeSheet, setShowThemeSheet] = useState(false);
+  const { tokens: appTokens } = useTheme();
+  const isMobile = useIsMobile();
+  const showHearts = chatShowsHearts(useAppIsSweet(), chatTheme);
+
+  // Panels opened from this chat: on a phone the chat fills the screen, so
+  // they take the chat's theme; on desktop the chat is only the right pane,
+  // so they keep the app theme. See theme/panelTheme.tsx.
+  const appVars = useMemo(
+    () => ({ ...tokensToVars(appTokens), colorScheme: isDarkColor(appTokens.bg) ? 'dark' : 'light' }) as React.CSSProperties,
+    [appTokens],
+  );
+  const panelStyle = isMobile ? chatTheme.style : chatTheme.style ? appVars : undefined;
+
+  // On a phone, a chat with its own theme also owns the status bar colour
+  // and native controls (keyboard, scrollbars, audio player). Put the app's
+  // back when leaving the chat.
+  useEffect(() => {
+    if (!isMobile || !chatTheme.style) return;
+    applyPageChrome(chatTheme.tokens);
+    return () => applyPageChrome(appTokens);
+  }, [isMobile, chatTheme.style, chatTheme.tokens, appTokens]);
 
   const handleMicClick = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -1808,21 +1863,19 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
   if (loading || !chatInfo || vaultChecking) {
     return (
       <div className="flex-1 flex items-center justify-center">
-        <div className="w-8 h-8 border-3 border-pink-500 border-t-transparent rounded-full animate-spin" />
+        <div className="w-8 h-8 border-3 border-th-primary border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
 
   if (vaultLocked && user) {
     return (
-      <div className={`flex-1 flex flex-col items-center justify-center gap-3 p-6 text-center ${
-        theme === 'sweet' ? 'text-[#8B004B]' : theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
-      }`}>
-        <Lock className="w-12 h-12 text-pink-500 stroke-[1.5]" />
+      <div className="flex-1 flex flex-col items-center justify-center gap-3 p-6 text-center text-th-ink-soft">
+        <Lock className="w-12 h-12 text-th-primary stroke-[1.5]" />
         <p className="font-medium text-sm">This chat is locked</p>
         <button
           onClick={() => setShowVaultGate(true)}
-          className="px-5 py-2 rounded-xl bg-pink-500 text-white text-sm font-bold hover:bg-pink-600 transition-colors"
+          className="px-5 py-2 rounded-xl bg-th-primary text-th-on-primary text-sm font-bold hover:opacity-90 transition-colors"
         >
           Unlock
         </button>
@@ -1847,18 +1900,16 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
   }
 
   return (
-    <div className={`flex-1 flex flex-col h-full overflow-hidden ${
-      theme === 'dark'
-        ? 'bg-gray-900 text-white'
-        : theme === 'sweet'
-          ? 'bg-[#FFE4E1] text-[#4B004B]'
-          : 'bg-white text-gray-900'
-    }`}>
+    <PanelThemeScope style={panelStyle}>
+    {/* data-hearts: lets bubbles turn on their glass blur only when hearts float behind them. */}
+    <div className="group/chat flex-1 flex flex-col h-full overflow-hidden bg-th-wallpaper text-th-ink" style={chatTheme.style} data-hearts={showHearts ? 'true' : undefined}>
 
       {showLocationPicker && (
+        // `contents`: no box of its own, it only carries the panel colours.
+        <div className="contents" style={panelStyle}>
         <Suspense fallback={
           <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60">
-            <div className="w-8 h-8 border-3 border-pink-500 border-t-transparent rounded-full animate-spin" />
+            <div className="w-8 h-8 border-3 border-th-primary border-t-transparent rounded-full animate-spin" />
           </div>
         }>
           <LocationPicker
@@ -1866,10 +1917,11 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
             onSelect={handleConfirmLocation}
           />
         </Suspense>
+        </div>
       )}
 
       {isRecordingVideoNote && (
-        <div className="fixed inset-0 z-[9999] bg-black/95 backdrop-blur-md flex flex-col items-center justify-center animate-in fade-in duration-300">
+        <div style={panelStyle} className="fixed inset-0 z-[9999] bg-black/95 backdrop-blur-md flex flex-col items-center justify-center animate-in fade-in duration-300">
           <div className="relative flex flex-col items-center justify-center w-full max-w-lg">
             <div className="relative w-80 h-80 md:w-[500px] md:h-[500px] flex items-center justify-center overflow-hidden">
               <video
@@ -1884,7 +1936,7 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
                 }}
               />
               <div
-                className="absolute inset-0 pointer-events-none bg-gradient-to-t from-pink-500/20 to-transparent"
+                className="absolute inset-0 pointer-events-none bg-gradient-to-t from-th-primary/20 to-transparent"
                 style={{
                   clipPath: 'path("M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z")',
                   transform: 'scale(20.2)',
@@ -1901,7 +1953,7 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
               </button>
               <button
                 type="button"
-                className="p-8 bg-pink-500 hover:bg-pink-600 rounded-full text-white shadow-[0_0_30px_rgba(236,72,153,0.5)] animate-pulse"
+                className="p-8 bg-th-primary hover:opacity-90 rounded-full text-th-on-primary shadow-[0_0_30px_rgb(var(--th-primary)/0.5)] animate-pulse"
                 onClick={() => {
                   if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
                     mediaRecorderRef.current.stop();
@@ -1912,37 +1964,38 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
                 <Check className="w-10 h-10" />
               </button>
             </div>
-            <p className="text-pink-400 font-bold mt-8 tracking-widest text-xs uppercase">
+            <p className="text-th-primary font-bold mt-8 tracking-widest text-xs uppercase">
               Recording your heart...
             </p>
           </div>
         </div>
       )}
 
-      <div className={`px-4 md:px-6 py-3 md:py-4 border-b ${theme === 'sweet' ? 'border-[#FFB6C1]' : 'border-gray-200'} bg-gradient-to-r ${getThemeGradient()} shadow-sm z-10`}>
+      <div className="px-4 md:px-6 py-3 md:py-4 border-b border-th-border bg-gradient-to-r from-th-chat-header to-th-chat-header-to shadow-sm z-10" style={{ color: chatTheme.headerInk }}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 md:gap-3">
             <button
               onClick={onBack}
-              className="md:hidden p-2 -ml-2 hover:bg-white/20 rounded-full text-white transition-colors active:scale-90"
+              aria-label="Back"
+              className="md:hidden p-2 -ml-2 hdr-hover rounded-full transition-colors active:scale-90"
             >
               <ArrowLeft className="w-6 h-6" />
             </button>
 
             {isSelfChatId(chatInfo.id) ? (
               <div className="flex items-center gap-2 md:gap-3 min-w-0">
-                <div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center text-white border-2 border-white/50">
+                <div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center border-2 border-white/50">
                   <Bookmark className="w-5 h-5" />
                 </div>
                 <div className="min-w-0">
-                  <h2 className="text-base md:text-lg font-bold text-white truncate">{SELF_CHAT_NAME}</h2>
-                  <p className="text-[10px] text-white/80 uppercase tracking-widest font-bold mt-0.5">Notes to self</p>
+                  <h2 className="text-base md:text-lg font-bold truncate">{SELF_CHAT_NAME}</h2>
+                  <p className="text-[10px] opacity-80 uppercase tracking-widest font-bold mt-0.5">Notes to self</p>
                 </div>
               </div>
             ) : chatInfo.type === 'direct' && chatInfo.otherUser ? (
               <button
                 onClick={() => setShowProfileView(true)}
-                className="flex items-center gap-2 md:gap-3 min-w-0 text-left rounded-xl hover:bg-white/10 transition-colors px-1 -mx-1 py-1"
+                className="flex items-center gap-2 md:gap-3 min-w-0 text-left rounded-xl hdr-hover-soft transition-colors px-1 -mx-1 py-1"
               >
                 <div className="relative">
                   {chatInfo.otherUser.avatar_url ? (
@@ -1952,19 +2005,19 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
                       className="w-10 h-10 md:w-12 md:h-12 rounded-full object-cover border-2 border-white/50"
                     />
                   ) : (
-                    <div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center text-white font-medium border-2 border-white/50">
+                    <div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center font-medium border-2 border-white/50">
                       {chatInfo.otherUser.display_name[0]}
                     </div>
                   )}
                 </div>
                 <div className="min-w-0">
-                  <h2 className="text-base md:text-lg font-bold text-white truncate max-w-[150px] md:max-w-none">
+                  <h2 className="text-base md:text-lg font-bold truncate max-w-[150px] md:max-w-none">
                     {chatInfo.otherUser.display_name}
                   </h2>
-                  <p className="text-[10px] text-white/80 font-bold uppercase tracking-widest mt-0.5">
+                  <p className="text-[10px] opacity-80 font-bold uppercase tracking-widest mt-0.5">
                     {isUserOnline(chatInfo.otherUser.id) ? (
-                      <span className="flex items-center gap-1 normal-case font-bold text-green-300">
-                        <span className="w-1.5 h-1.5 bg-green-300 rounded-full animate-pulse" />
+                      <span className="flex items-center gap-1 normal-case font-bold">
+                        <span className="w-1.5 h-1.5 bg-th-online rounded-full animate-pulse ring-1 ring-white/60" />
                         online
                       </span>
                     ) : (
@@ -1975,12 +2028,12 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
               </button>
             ) : (
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center text-white border-2 border-white">
+                <div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center border-2 border-white/60">
                   👥
                 </div>
                 <div>
-                  <h2 className="text-base md:text-lg font-bold text-white">{chatInfo.name}</h2>
-                  <p className="text-[10px] text-white/80 uppercase tracking-widest font-bold">Group chat</p>
+                  <h2 className="text-base md:text-lg font-bold">{chatInfo.name}</h2>
+                  <p className="text-[10px] opacity-80 uppercase tracking-widest font-bold">Group chat</p>
                 </div>
               </div>
             )}
@@ -1991,13 +2044,13 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
               <>
                 <button
                   onClick={() => handleInitiateCall('audio')}
-                  className="flex p-2 hover:bg-white/20 backdrop-blur-sm rounded-full transition-colors">
-                  <Phone className="w-5 h-5 text-white" />
+                  className="flex p-2 hdr-hover backdrop-blur-sm rounded-full transition-colors">
+                  <Phone className="w-5 h-5" />
                 </button>
                 <button
                   onClick={() => handleInitiateCall('video')}
-                  className="flex p-2 hover:bg-white/20 backdrop-blur-sm rounded-full transition-colors">
-                  <Video className="w-5 h-5 text-white" />
+                  className="flex p-2 hdr-hover backdrop-blur-sm rounded-full transition-colors">
+                  <Video className="w-5 h-5" />
                 </button>
               </>
             )}
@@ -2006,6 +2059,7 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
               onClose={() => { }}
               theme={theme}
               onViewProfile={chatInfo.otherUser ? () => setShowProfileView(true) : undefined}
+              onOpenTheme={() => setShowThemeSheet(true)}
             />
           </div>
         </div>
@@ -2021,6 +2075,11 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
         </div>
       </div>
 
+      {/* Messages + the hearts behind them. The hearts layer lives in this
+          wrapper, not in the scrolling list, so they don't scroll with the
+          messages, and the header and message box above/below cover them. */}
+      <div className="relative flex-1 min-h-0 flex flex-col overflow-hidden">
+      {showHearts && <FloatingHearts />}
       <div
         ref={messagesContainerRef}
         onScroll={handleMessagesScroll}
@@ -2035,15 +2094,15 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
           else if (stickToBottomRef.current) pinToBottom();
         }}
         onClick={() => setShowSweetKeyboard(false)}
-        className={`relative flex-1 overflow-y-auto p-4 md:p-6 space-y-4 transition-colors duration-300 overscroll-behavior-y-contain ${
-          theme === 'dark' ? 'bg-gray-900' : theme === 'sweet' ? 'bg-[#FFE4E1]/30' : 'bg-gray-50'
-        }`}
+        // Transparent: the chat root paints the wallpaper, and the hearts
+        // (positioned earlier in this wrapper) show through behind messages.
+        className={`relative flex-1 overflow-y-auto p-4 md:p-6 space-y-4 transition-colors duration-300 overscroll-behavior-y-contain`}
       >
         {/* Absolute so it never changes scrollHeight — otherwise showing/hiding
             it would shift the anchored scroll position when a page loads. */}
         {loadingOlder && (
-          <div className="absolute top-2 left-1/2 -translate-x-1/2 z-20 bg-white/80 dark:bg-gray-800/80 rounded-full p-1.5 shadow-sm">
-            <div className="w-5 h-5 border-2 border-pink-400 border-t-transparent rounded-full animate-spin" />
+          <div className="absolute top-2 left-1/2 -translate-x-1/2 z-20 bg-th-card/80 rounded-full p-1.5 shadow-sm">
+            <div className="w-5 h-5 border-2 border-th-primary border-t-transparent rounded-full animate-spin" />
           </div>
         )}
 
@@ -2054,6 +2113,8 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
           highlightedMessageId={highlightedMessageId}
           unreadDividerId={unreadDividerId}
           userId={user?.id}
+          chatId={chatInfo.id}
+          hasSharedTheme={!!chatTheme.shared}
           theme={theme}
           onDelete={handleDeleteMessage}
           onHide={handleHideMessage}
@@ -2066,7 +2127,7 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
 
         {isOtherTyping && (
           <div className={`flex items-center gap-2 p-2 ml-4 mb-2 animate-in fade-in slide-in-from-left-2 duration-300 ${
-            theme === 'sweet' ? 'text-[#8B004B]' : 'text-gray-500 dark:text-gray-400'
+            'text-th-ink-soft'
           }`}>
             <div className="flex gap-1">
               <span className="perf-keep w-1.5 h-1.5 bg-current opacity-40 rounded-full animate-bounce" />
@@ -2078,20 +2139,20 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
         )}
         <div ref={messagesEndRef} className="h-2" />
       </div>
+      </div>
 
-      <div className={`p-3 md:p-4 border-t transition-colors duration-300 ${
-        theme === 'dark' ? 'bg-gray-800 border-gray-700' : theme === 'sweet' ? 'bg-[#FFF0F5] border-[#FFB6C1]' : 'bg-white border-gray-200'
-      }`}>
+      <div className="p-3 md:p-4 border-t transition-colors duration-300 bg-th-panel border-th-border">
         {selectedDoc && (
-          <div className="p-2 mb-2 bg-white/40 backdrop-blur-md rounded-2xl flex items-center gap-3 border border-pink-200 animate-in fade-in slide-in-from-bottom-2">
-            <div className="p-3 bg-pink-500 rounded-xl text-white">
+          <div className="p-2 mb-2 bg-th-card/70 backdrop-blur-md rounded-2xl flex items-center gap-3 border border-th-border animate-in fade-in slide-in-from-bottom-2">
+            <div className="p-3 bg-th-primary rounded-xl text-th-on-primary">
               <FileText className="w-5 h-5" />
             </div>
             <div className="flex-1 overflow-hidden">
-              <p className="text-[11px] font-bold text-pink-700 truncate">{selectedDoc.name}</p>
-              <p className="text-[9px] text-pink-400">{(selectedDoc.size / 1024).toFixed(1)} KB • Ready to send</p>
+              <p className="text-[11px] font-bold text-th-ink truncate">{selectedDoc.name}</p>
+              <p className="text-[9px] text-th-ink-soft">{(selectedDoc.size / 1024).toFixed(1)} KB • Ready to send</p>
             </div>
-            <button onClick={() => setSelectedDoc(null)} className="p-1 hover:bg-pink-100 rounded-full text-pink-400">
+            <button onClick={() => setSelectedDoc(null)} aria-label="Remove document"
+              className="p-1 hover:bg-th-card-hover rounded-full text-th-ink-soft">
               <X className="w-4 h-4" />
             </button>
           </div>
@@ -2099,7 +2160,7 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
 
         {selectedGif && (
           <div className="relative inline-block mb-3 animate-in zoom-in-95 duration-200">
-            <div className="relative rounded-2xl overflow-hidden border-2 border-pink-400 shadow-lg bg-black/5">
+            <div className="relative rounded-2xl overflow-hidden border-2 border-th-primary shadow-lg bg-black/5">
               <img src={selectedGif} alt="GIF preview" className="max-h-32 w-auto object-cover" />
               <span className="absolute bottom-1 left-1 px-1.5 py-0.5 bg-black/60 rounded-md text-white text-[9px] font-black uppercase tracking-widest">
                 Gif
@@ -2117,7 +2178,7 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
 
         {imagePreview && (
           <div className="relative inline-block mb-3 animate-in zoom-in-95 duration-200">
-            <div className="relative rounded-2xl overflow-hidden border-2 border-pink-400 shadow-lg">
+            <div className="relative rounded-2xl overflow-hidden border-2 border-th-primary shadow-lg">
               <img src={imagePreview} alt="Preview" className="max-h-32 w-auto object-cover" />
               <button
                 onClick={() => { setImagePreview(null); setSelectedFile(null); }}
@@ -2131,7 +2192,7 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
 
         {videoPreview && (
           <div className="relative inline-block mb-3 animate-in zoom-in-95 group">
-            <div className="relative rounded-2xl overflow-hidden border-2 border-pink-400 shadow-lg w-32 h-32 bg-black">
+            <div className="relative rounded-2xl overflow-hidden border-2 border-th-primary shadow-lg w-32 h-32 bg-black">
               <video src={videoPreview} className="w-full h-full object-cover" autoPlay loop muted />
               <button
                 type="button"
@@ -2145,16 +2206,16 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
         )}
 
         {editingMessage && (
-          <div className="flex items-center gap-2 mb-2 px-3 py-2 rounded-2xl bg-pink-50 border border-pink-200 animate-in fade-in slide-in-from-bottom-2">
-            <Pencil className="w-4 h-4 text-pink-500 flex-shrink-0" />
+          <div className="flex items-center gap-2 mb-2 px-3 py-2 rounded-2xl bg-th-secondary border border-th-border animate-in fade-in slide-in-from-bottom-2">
+            <Pencil className="w-4 h-4 text-th-link flex-shrink-0" />
             <div className="flex-1 min-w-0">
-              <p className="text-[11px] font-black text-pink-600 uppercase tracking-widest">Editing message</p>
-              <p className="text-[11px] text-pink-400 truncate">Make your changes and send</p>
+              <p className="text-[11px] font-black text-th-link uppercase tracking-widest">Editing message</p>
+              <p className="text-[11px] text-th-ink-soft truncate">Make your changes and send</p>
             </div>
             <button
               type="button"
               onClick={cancelEditing}
-              className="p-1.5 rounded-full text-pink-400 hover:bg-pink-100 hover:text-pink-600 transition-colors flex-shrink-0"
+              className="p-1.5 rounded-full text-th-ink-soft hover:bg-th-card-hover hover:text-th-ink transition-colors flex-shrink-0"
             >
               <X className="w-4 h-4" />
             </button>
@@ -2162,20 +2223,20 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
         )}
 
         {replyingTo && !editingMessage && (
-          <div className="flex items-center gap-2 mb-2 px-3 py-2 rounded-2xl bg-pink-50 border-l-4 border border-pink-200 border-l-pink-400 animate-in fade-in slide-in-from-bottom-2">
-            <Reply className="w-4 h-4 text-pink-500 flex-shrink-0" />
+          <div className="flex items-center gap-2 mb-2 px-3 py-2 rounded-2xl bg-th-secondary border-l-4 border border-th-border border-l-th-primary animate-in fade-in slide-in-from-bottom-2">
+            <Reply className="w-4 h-4 text-th-link flex-shrink-0" />
             <div className="flex-1 min-w-0">
-              <p className="text-[11px] font-black text-pink-600 uppercase tracking-widest truncate">
+              <p className="text-[11px] font-black text-th-link uppercase tracking-widest truncate">
                 Replying to {replyingTo.sender_id === user?.id ? 'yourself' : (replyingTo.profiles?.display_name || 'them')}
               </p>
-              <p className="text-[11px] text-pink-400 truncate">
+              <p className="text-[11px] text-th-ink-soft truncate">
                 {formatMessagePreview({ content: replyingTo.content, type: replyingTo.type, is_deleted: replyingTo.is_deleted })}
               </p>
             </div>
             <button
               type="button"
               onClick={() => setReplyingTo(null)}
-              className="p-1.5 rounded-full text-pink-400 hover:bg-pink-100 hover:text-pink-600 transition-colors flex-shrink-0"
+              className="p-1.5 rounded-full text-th-ink-soft hover:bg-th-card-hover hover:text-th-ink transition-colors flex-shrink-0"
             >
               <X className="w-4 h-4" />
             </button>
@@ -2200,7 +2261,7 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
 
           <div className="flex-1 min-w-0 relative flex items-end">
             {isRecording ? (
-              <div className="flex-1 flex items-center justify-between px-4 h-12 rounded-2xl relative bg-gradient-to-r from-[#FFE4E1] to-[#FFC0CB] border border-[#FFB6C1] shadow-inner overflow-hidden animate-in fade-in zoom-in-95 duration-300">
+              <div className="flex-1 flex items-center justify-between px-4 h-12 rounded-2xl relative bg-gradient-to-r from-th-secondary to-th-card border border-th-border shadow-inner overflow-hidden animate-in fade-in zoom-in-95 duration-300">
                 <div className="flex items-center gap-3 z-10">
                   <div className="relative flex items-center justify-center">
                     <span className="text-2xl animate-heartbeat inline-block drop-shadow-sm">❤️</span>
@@ -2209,21 +2270,21 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
                     <span className="absolute top-2 -right-6 animate-sparkle text-[8px] text-pink-400" style={{ animationDelay: '1.2s' }}>✨</span>
                   </div>
                   <div className="flex flex-col leading-tight">
-                    <span className="text-xs font-bold text-[#4B004B] animate-pulse">Listening to your heart...</span>
-                    <span className="text-[10px] text-[#8B004B] italic opacity-80">recording a sweet note</span>
+                    <span className="text-xs font-bold text-th-ink animate-pulse">Listening to your heart...</span>
+                    <span className="text-[10px] text-th-ink-soft italic opacity-80">recording a sweet note</span>
                   </div>
                 </div>
-                <div className="font-mono text-sm font-bold text-[#8B004B] z-10 bg-white/70 px-3 py-1 rounded-full shadow-sm border border-white/50">
+                <div className="font-mono text-sm font-bold text-th-ink-soft z-10 bg-th-card/80 px-3 py-1 rounded-full shadow-sm border border-white/50">
                   {formatDuration(recordingDuration)}
                 </div>
               </div>
             ) : recordedAudioUrl ? (
-              <div className="flex-1 flex items-center gap-2 px-2 h-12 rounded-2xl border-2 overflow-hidden animate-in slide-in-from-left-2 duration-300"
-                style={{ backgroundColor: '#FFE4E1', borderColor: '#FFB6C1' }}>
+              <div className="flex-1 flex items-center gap-2 px-2 h-12 rounded-2xl border-2 overflow-hidden animate-in slide-in-from-left-2 duration-300 bg-th-secondary border-th-border">
                 <button
                   type="button"
                   onClick={() => { setRecordedAudioUrl(null); setAudioBlob(null); }}
-                  className="p-1.5 hover:bg-white/50 rounded-full transition-all hover:rotate-90 text-[#FF4500]"
+                  aria-label="Discard voice note"
+                  className="p-1.5 hover:bg-th-card-hover rounded-full transition-all hover:rotate-90 text-th-danger"
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -2250,18 +2311,15 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
                   rows={1}
                   className={`w-full pl-4 py-2.5 border rounded-2xl focus:outline-none focus:ring-2 resize-none transition-all
                     ${isTextareaOverflowing ? 'pr-5 overflow-y-auto' : 'pr-4 overflow-y-hidden scrollbar-hide'}
-                    ${theme === 'sweet' ? 'bg-white border-[#FFB6C1] text-[#4B004B] caret-[#FF69B4] focus:ring-[#FF69B4]' : 'bg-gray-50 border-gray-300 caret-current focus:ring-pink-400'}`}
+                    bg-th-input border-th-border text-th-ink placeholder:text-th-ink-faint caret-th-primary focus:ring-th-primary/50`}
                   style={{ maxHeight: `${TEXTAREA_MAX_HEIGHT}px`, minHeight: '44px', lineHeight: '1.5', fontSize: '16px' }}
                 />
                 {newMessage.length > 0 && (
                   <button
                     type="button"
                     onClick={() => setNewMessage('')}
-                    className={`absolute -top-2 -right-2 z-10 w-6 h-6 flex items-center justify-center rounded-full bg-white shadow-sm transition-colors ${
-                      theme === 'sweet'
-                        ? 'border-2 border-[#FF69B4] text-[#FF69B4] hover:bg-pink-50'
-                        : 'border-2 border-pink-400 text-pink-400 hover:bg-pink-50'
-                    }`}
+                    className={`absolute -top-2 -right-2 z-10 w-6 h-6 flex items-center justify-center rounded-full bg-th-card shadow-sm transition-colors border-2 border-th-primary text-th-link hover:bg-th-card-hover`}
+                    aria-label="Clear message"
                   >
                     <X className="w-3.5 h-3.5" />
                   </button>
@@ -2281,9 +2339,7 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
                 className={`p-3 rounded-full transition-all flex-shrink-0 relative ${
                   isRecording
                     ? 'bg-red-500 text-white scale-110 shadow-[0_0_15px_rgba(239,68,68,0.5)]'
-                    : theme === 'sweet'
-                      ? 'text-[#FF69B4] hover:text-[#FF1493] bg-[#FFE4E1]'
-                      : 'text-gray-400 hover:text-pink-500 bg-gray-100'
+                    : 'text-th-link bg-th-secondary hover:bg-th-card-hover'
                 }`}
               >
                 {isRecording ? (
@@ -2302,8 +2358,8 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
               disabled={(!newMessage.trim() && !selectedFile && !audioBlob && !selectedDoc && !selectedVideo && !selectedGif) || isRecording}
               className={`p-3 rounded-full transition-all active:scale-95 flex-shrink-0 ${
                 (newMessage.trim() || selectedFile || audioBlob || selectedDoc || selectedVideo || selectedGif)
-                  ? `bg-gradient-to-r from-[#FF69B4] to-[#FF1493] text-white shadow-md`
-                  : theme === 'sweet' ? 'bg-[#FFE4E1] text-[#FF69B4]/60' : 'bg-gray-200 text-gray-400'
+                  ? 'bg-gradient-to-r from-th-bubble-mine to-th-bubble-mine-to text-th-on-bubble-mine shadow-md'
+                  : 'bg-th-secondary text-th-ink-faint'
               }`}
             >
               <Send className="w-5 h-5" />
@@ -2363,6 +2419,16 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
         />
       )}
 
+      {showThemeSheet && (
+        <ChatThemeSheet
+          chatId={chatInfo.id}
+          partnerName={chatInfo.otherUser?.display_name || chatInfo.name || 'them'}
+          isSelfChat={isSelfChatId(chatInfo.id)}
+          current={chatTheme}
+          onClose={() => setShowThemeSheet(false)}
+        />
+      )}
+
       {mediaViewer && (
         <ImageViewerModal
           images={mediaViewer.urls}
@@ -2372,5 +2438,6 @@ export function ChatWindow({ chatId, theme, onBack, onOpenGifPanel, myGifs, setM
         />
       )}
     </div>
+    </PanelThemeScope>
   );
 }

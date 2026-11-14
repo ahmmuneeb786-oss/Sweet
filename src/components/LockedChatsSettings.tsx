@@ -56,33 +56,36 @@ function joinNames(methods: VaultMethod[]): string {
   return names.length <= 1 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
 }
 
-// Shared with AppLockSettings so both lock tabs look like one family.
+// Shared with AppLockSettings and the Storage tab so every settings tab looks
+// like one family. Colours come from the active theme (th-* = CSS variables,
+// see src/theme), so this follows presets and custom themes alike. `theme`
+// (the closest old light/dark/sweet) only picks the shade of the green
+// status chip, which stays green in every theme.
 export function styles(theme: Theme) {
-  const sweet = theme === 'sweet';
   const dark = theme === 'dark';
   return {
-    title: sweet ? 'text-[#4B004B]' : dark ? 'text-gray-100' : 'text-gray-900',
-    sub: sweet ? 'text-[#8B004B]' : dark ? 'text-gray-400' : 'text-gray-500',
-    faint: sweet ? 'text-[#8B004B]/70' : dark ? 'text-gray-500' : 'text-gray-400',
-    section: sweet ? 'text-[#FF69B4]' : dark ? 'text-gray-500' : 'text-gray-400',
-    card: sweet ? 'border-2 border-[#FFD1DC] bg-[#FFF0F5] hover:border-[#FFB6C1] hover:bg-white' : dark ? 'border border-gray-800 bg-gray-900/50 hover:border-gray-700' : 'border border-gray-200 bg-white hover:border-gray-300',
-    cardSelected: sweet ? 'border-2 border-[#FF1493] bg-white shadow-md shadow-pink-100' : dark ? 'border border-pink-500/60 bg-gray-800' : 'border border-pink-400 bg-pink-50/40',
-    iconBox: sweet ? 'border border-[#FFB6C1] bg-[#FFE4E1]' : dark ? 'bg-gray-800' : 'bg-gray-100',
-    intro: sweet ? 'border-2 border-[#FFD1DC] bg-gradient-to-br from-[#FFF0F5] to-white' : dark ? 'border border-gray-800 bg-gray-800/30' : 'border border-gray-200 bg-gray-50',
-    chipSaved: sweet ? 'bg-emerald-50 text-emerald-600 border border-emerald-200' : dark ? 'bg-emerald-500/10 text-emerald-400' : 'bg-emerald-50 text-emerald-600',
-    chipMissing: sweet ? 'bg-white text-[#8B004B]/70 border border-[#FFD1DC]' : dark ? 'bg-gray-800 text-gray-500' : 'bg-gray-100 text-gray-500',
-    chipMain: 'bg-[#FF1493] text-white',
-    action: sweet ? 'text-[#FF1493] hover:text-[#C71585]' : dark ? 'text-pink-400 hover:text-pink-300' : 'text-pink-600 hover:text-pink-700',
-    danger: 'text-red-400 hover:text-red-600',
-    radioOn: 'border-[#FF1493] bg-[#FF1493]',
-    radioOff: sweet ? 'border-[#FFB6C1] bg-white' : dark ? 'border-gray-600 bg-gray-900' : 'border-gray-300 bg-white',
-    sheet: sweet ? 'bg-[#FFF0F5] border-2 border-[#FFD1DC]' : dark ? 'bg-gray-900 border border-gray-800' : 'bg-white border border-gray-200',
-    input: sweet ? 'bg-white border border-[#FFB6C1] focus:ring-2 focus:ring-[#FF69B4] text-[#4B004B]' : dark ? 'bg-gray-800 border border-gray-700 focus:ring-2 focus:ring-pink-500/50 text-gray-100' : 'bg-gray-50 border border-gray-200 focus:ring-2 focus:ring-pink-300 focus:bg-white text-gray-800',
-    key: sweet ? 'bg-white border border-[#FFB6C1] text-[#4B004B] hover:border-[#FF69B4]' : dark ? 'bg-gray-800 border border-gray-700 text-gray-200 hover:border-gray-500' : 'bg-gray-50 border border-gray-200 text-gray-700 hover:border-gray-400',
-    primary: 'bg-[#FF1493] hover:bg-[#FF69B4] text-white',
-    secondary: sweet ? 'bg-white border border-[#FFB6C1] text-[#4B004B] hover:bg-[#FFE4E1]' : dark ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200',
-    trackOn: 'bg-[#FF1493]',
-    trackOff: sweet ? 'bg-[#FFD1DC]' : dark ? 'bg-gray-700' : 'bg-gray-300',
+    title: 'text-th-ink',
+    sub: 'text-th-ink-soft',
+    faint: 'text-th-ink-faint',
+    section: 'text-th-ink-soft',
+    card: 'border-2 border-th-border bg-th-card hover:bg-th-card-hover',
+    cardSelected: 'border-2 border-th-primary bg-th-card shadow-md',
+    iconBox: 'border border-th-border bg-th-secondary',
+    intro: 'border-2 border-th-border bg-gradient-to-br from-th-card to-th-panel',
+    chipSaved: dark ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-emerald-50 text-emerald-700 border border-emerald-200',
+    chipMissing: 'bg-th-secondary text-th-on-secondary border border-th-border',
+    chipMain: 'bg-th-primary text-th-on-primary',
+    action: 'text-th-link hover:opacity-80',
+    danger: 'text-th-danger hover:opacity-80',
+    radioOn: 'border-th-primary bg-th-primary',
+    radioOff: 'border-th-border bg-th-card',
+    sheet: 'bg-th-card border-2 border-th-border',
+    input: 'bg-th-input border border-th-border focus:ring-2 focus:ring-th-primary/50 text-th-ink placeholder:text-th-ink-faint',
+    key: 'bg-th-card border border-th-border text-th-ink hover:border-th-primary',
+    primary: 'bg-th-primary hover:opacity-90 text-th-on-primary',
+    secondary: 'bg-th-secondary border border-th-border text-th-on-secondary hover:bg-th-card-hover',
+    trackOn: 'bg-th-toggle-on',
+    trackOff: 'bg-th-toggle-off',
   };
 }
 
@@ -121,7 +124,7 @@ export function LockedChatsSettings({ theme, userId, displayName, onBack }: Lock
       </div>
     ) : (
       <div className="flex items-center justify-center h-40">
-        <div className="w-6 h-6 border-2 border-pink-500 border-t-transparent rounded-full animate-spin" />
+        <div className="w-6 h-6 border-2 border-th-primary border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
@@ -583,7 +586,7 @@ function PinSetupSheet({ s, busy, onDone, onCancel }: {
           <div
             key={i}
             className={`w-3.5 h-3.5 rounded-full border-2 transition-all ${
-              value.length > i ? 'bg-[#FF1493] border-[#FF1493] scale-110' : 'border-[#FFB6C1] bg-transparent'
+              value.length > i ? 'bg-th-primary border-th-primary scale-110' : 'border-th-border bg-transparent'
             }`}
           />
         ))}
