@@ -88,7 +88,10 @@ async function tellClients(message: unknown) {
 self.addEventListener('push', (event) => {
   const p = readPayload(event);
   const url = p.url || p.data?.url || '/';
-  const title = p.title || 'Sweet 🍬';
+  // Dev copies of Sweet (npm run dev) share the same backend, so tag their
+  // notifications — otherwise they look identical to the live app's.
+  const isDev = ['localhost', '127.0.0.1'].includes(self.location.hostname);
+  const title = (p.title || 'Sweet 🍬') + (isDev ? ' · localhost' : '');
   const options: NotificationOptions & { vibrate?: number[]; renotify?: boolean } = {
     body: p.body || 'Something sweet arrived',
     icon: '/icon-192.png',

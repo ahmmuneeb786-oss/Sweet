@@ -57,6 +57,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         loadProfile(session.user.id);
       } else {
         setLoading(false);
+        // Nobody signed in here — make sure no account's notifications still
+        // arrive (covers sign-outs that couldn't clean up: old app version,
+        // offline, expired session).
+        void PermissionManager.releaseThisDevice();
       }
     });
 
@@ -74,6 +78,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!session?.user) {
         setProfile(null);
         setLoading(false);
+        // Session ended (sign-out, or it expired and couldn't refresh).
+        if (event === 'SIGNED_OUT') void PermissionManager.releaseThisDevice();
         return;
       }
 

@@ -128,6 +128,29 @@ class PermissionManagerService {
     }
   }
 
+  private releasing: Promise<void> | null = null;
+
+  /**
+   * Nobody is signed in on this device: drop its push address on the server
+   * so no account's notifications keep arriving here. Works without a session
+   * (see release_push_device). The browser subscription is kept, so the next
+   * sign-in re-registers instantly with no permission prompt.
+   */
+  public releaseThisDevice(): Promise<void> {
+    if (this.releasing) return this.releasing;
+    this.releasing = (async () => {
+      try {
+        if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+        const registration = await navigator.serviceWorker.getRegistration();
+        const subscription = await registration?.pushManager.getSubscription();
+        if (subscription) await supabase.rpc('release_push_device', { p_endpoint: subscription.endpoint });
+      } catch {
+        // offline — tried again the next time the app opens signed out
+      }
+    })().finally(() => { this.releasing = null; });
+    return this.releasing;
+  }
+
   /** The user turned background notifications off on THIS device. */
   public isPushOptedOut(): boolean {
     return readStorage(PUSH_OFF_KEY) === '1';
@@ -180,6 +203,9 @@ class PermissionManagerService {
    */
   public async setupPushSubscription(_userId: string, opts: { userAction?: boolean } = {}): Promise<boolean> {
     if (!opts.userAction && this.isPushOptedOut()) return false;
+    // Signing in right after the app opened signed out: let that release
+    // finish first, or it could delete the registration we're about to make.
+    if (this.releasing) await this.releasing;
     try {
       const registration = await this.readyRegistration();
       if (!registration) return false;
