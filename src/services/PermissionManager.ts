@@ -228,6 +228,16 @@ class PermissionManagerService {
     await subscription.unsubscribe();
   }
 
+  /**
+   * Forgets one push address on the server (best-effort). Used whenever an
+   * address is replaced — otherwise the old one stays listed as a "ghost"
+   * device until a push to it happens to fail.
+   */
+  public async forgetEndpoint(endpoint: string): Promise<void> {
+    const { error } = await supabase.rpc('unregister_push_device', { p_endpoint: endpoint });
+    if (error) console.error('Failed to forget an old push address:', error);
+  }
+
   /** "Chrome on Android" — shown in the device list, never used for logic. */
   private deviceLabel(): string {
     const ua = navigator.userAgent;

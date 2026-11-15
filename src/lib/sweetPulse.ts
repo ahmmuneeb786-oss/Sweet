@@ -141,6 +141,8 @@ export async function runSweetPulse(userId: string, report: Report, vibrate?: nu
   if (!reply.ok && (reply.reason === 'not_registered' || reply.reason === 'expired')) {
     // The server lost this device, or the browser's push address died:
     // start a fresh subscription and try once more.
+    // Remove the old address on the server too, or it lingers as a ghost device.
+    await PermissionManager.forgetEndpoint(sub.endpoint);
     try { await sub.unsubscribe(); } catch { /* already gone */ }
     if (await PermissionManager.setupPushSubscription(userId, { userAction: true })) {
       sub = await PermissionManager.currentSubscription();

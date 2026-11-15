@@ -136,10 +136,18 @@ export function NotificationsTab({ theme, userId, onBack }: { theme: AppTheme; u
       setPeople(list);
       if (list[0]) setSampleName(list[0].name.split(' ')[0]);
     });
-    // Coming back from the browser's site settings (after unblocking).
+    // Keep "this device / N other devices" current: when you come back to the
+    // tab or window (e.g. after unblocking, or after signing out elsewhere),
+    // and every 30 s while it is on screen — one tiny query, skipped when hidden.
     const onVisible = () => { if (document.visibilityState === 'visible') refreshStatus().catch(() => {}); };
     document.addEventListener('visibilitychange', onVisible);
-    return () => document.removeEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', onVisible);
+    const timer = window.setInterval(onVisible, 30000);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', onVisible);
+      window.clearInterval(timer);
+    };
   }, [userId, refreshStatus, refreshMuted, refreshJars]);
 
   /** Optimistic save: show it now, put it back if the server says no. */

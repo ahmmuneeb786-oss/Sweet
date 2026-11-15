@@ -138,5 +138,8 @@ self.addEventListener('notificationclick', (event) => {
 // site data). Ask an open app to re-register it; Sweet Pulse also repairs
 // this the next time the app starts.
 self.addEventListener('pushsubscriptionchange', (event) => {
-  (event as ExtendableEvent).waitUntil(tellClients({ type: 'sweet:resubscribe' }));
+  // The old address goes along so the app can remove it from the server
+  // (otherwise it stays listed as a second, dead device).
+  const old = (event as Event & { oldSubscription?: PushSubscription | null }).oldSubscription;
+  (event as ExtendableEvent).waitUntil(tellClients({ type: 'sweet:resubscribe', oldEndpoint: old?.endpoint ?? null }));
 });

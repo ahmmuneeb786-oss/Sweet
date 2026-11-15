@@ -99,12 +99,15 @@ export function useNotificationRouting({ userId, openChat, openFriendRequests }:
     if (!('serviceWorker' in navigator)) return () => { cancelled = true; };
 
     const onMessage = (event: MessageEvent) => {
-      const msg = event.data as { type?: string; chatId?: string } | null;
+      const msg = event.data as { type?: string; chatId?: string; oldEndpoint?: string | null } | null;
       if (!msg || typeof msg !== 'object') return;
       if (msg.type === 'sweet:open-chat' && typeof msg.chatId === 'string') void goToChat(msg.chatId);
       if (msg.type === 'sweet:open-friends') ref.current.openFriendRequests();
       if (msg.type === 'sweet:resubscribe' && 'Notification' in window && Notification.permission === 'granted') {
-        void PermissionManager.setupPushSubscription(userId);
+        void (async () => {
+          if (typeof msg.oldEndpoint === 'string') await PermissionManager.forgetEndpoint(msg.oldEndpoint);
+          await PermissionManager.setupPushSubscription(userId);
+        })();
       }
     };
     navigator.serviceWorker.addEventListener('message', onMessage);
