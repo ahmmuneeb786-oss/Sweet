@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 import { resetChatsReady, markChatsReady } from '../hooks/useChatsReady';
 import { localDB } from '../db';
 import { ensureSelfChat } from '../lib/selfChat';
+import { PermissionManager } from '../services/PermissionManager';
 
 interface Profile {
   id: string;
@@ -291,6 +292,9 @@ if (vaultError) throw vaultError;
   async function signOut() {
     if (user) {
       await updateOnlineStatus(false);
+      // While still signed in (the RPC needs the session): stop this device
+      // getting this account's notifications after sign-out.
+      await PermissionManager.forgetDeviceOnServer();
     }
     resetChatsReady();
     await supabase.auth.signOut();

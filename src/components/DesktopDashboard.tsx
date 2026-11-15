@@ -11,6 +11,7 @@ import { StrictLock } from './StrictLock';
 import { PermissionManager } from '../services/PermissionManager';
 import { LockedChatsPanel } from './LockedChatsPanel';
 import { useBackableState } from '../hooks/useBackableState';
+import { useNotificationRouting } from '../hooks/useNotificationRouting';
 import { useAppIsSweet } from '../theme/sweetHearts';
 
 
@@ -33,6 +34,10 @@ export function DesktopDashboard({ theme, setTheme, onOpenGifPanel, myGifs, setM
   const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
   const [showProfile, setShowProfile] = useState(false);
   const [showFriends, setShowFriends] = useState(false);
+  const [friendsTab, setFriendsTab] = useState<'search' | 'requests'>('search');
+  // Bumped by a friend-request notification: remounts FriendList so it lands
+  // on Requests even if the panel was already open on another tab.
+  const [friendsNonce, setFriendsNonce] = useState(0);
   const [showSettings, setShowSettings] = useState(false);
   const [showCreateChat, setShowCreateChat] = useState(false);
   const [showLockedPanel, setShowLockedPanel] = useState(false);
@@ -47,17 +52,32 @@ export function DesktopDashboard({ theme, setTheme, onOpenGifPanel, myGifs, setM
   useBackableState(showCreateChat, () => setShowCreateChat(false));
   useBackableState(showLockedPanel, () => setShowLockedPanel(false));
 
+  // Tapped notifications: open the chat (or friend requests) on top of
+  // whatever panel is showing.
+  useNotificationRouting({
+    userId: user?.id,
+    openChat: (chatId) => {
+      setShowProfile(false); setShowFriends(false); setShowSettings(false);
+      setShowCreateChat(false); setShowLockedPanel(false);
+      setSelectedChatId(chatId);
+    },
+    openFriendRequests: () => {
+      setShowProfile(false); setShowSettings(false); setShowCreateChat(false); setShowLockedPanel(false);
+      setFriendsTab('requests');
+    setFriendsNonce((n) => n + 1);
+      setShowFriends(true);
+    },
+  });
+
   useEffect(() => {
       // iOS Safari/WKWebView has no window.Notification at all — referencing
       // the bare identifier there throws "Can't find variable: Notification"
       // and crashes the whole tree, so this has to be feature-detected first.
       if (user?.id && 'Notification' in window) {
-        // If the browser already has permission, this silently registers/syncs the worker to Supabase
-        Notification.requestPermission().then((permission) => {
-          if (permission === 'granted') {
-            PermissionManager.setupPushSubscription(user.id);
-          }
-        });
+        // Never prompt here — browsers punish prompts without a tap (Chrome's
+        // quiet UI, Safari rejects them). Only re-sync when already allowed;
+        // the prompt lives behind the switch in Settings > Notifications.
+        if (Notification.permission === 'granted') PermissionManager.setupPushSubscription(user.id);
       }
   }, [user?.id]);
 
@@ -149,9 +169,10 @@ export function DesktopDashboard({ theme, setTheme, onOpenGifPanel, myGifs, setM
       {showFriends && (
         <FriendList 
           theme={theme} 
-          onClose={() => setShowFriends(false)} 
+          onClose={() => { setShowFriends(false); setFriendsTab('search'); }} 
           setActiveChatId={setSelectedChatId}
-          initialTab="search"
+          key={friendsNonce}
+          initialTab={friendsTab}
         />
       )}
       {showSettings && (

@@ -10,6 +10,7 @@ import { StrictLock } from './StrictLock';
 import { PermissionManager } from '../services/PermissionManager';
 import { LockedChatsPanel } from './LockedChatsPanel';
 import { useBackableState } from '../hooks/useBackableState';
+import { useNotificationRouting } from '../hooks/useNotificationRouting';
 
 interface MobileDashboardProps {
   onOpenGifPanel: () => void;
@@ -29,6 +30,10 @@ interface MobileDashboardProps {
 export function MobileDashboard({ theme, setTheme, onOpenGifPanel, myGifs, setMyGifs, user, onSaveFace, savedDescriptor, isFaceRegistered, profile }: MobileDashboardProps) {
   const [showProfile, setShowProfile] = useState(false);
   const [showFriends, setShowFriends] = useState(false);
+  const [friendsTab, setFriendsTab] = useState<'search' | 'requests'>('search');
+  // Bumped by a friend-request notification: remounts FriendList so it lands
+  // on Requests even if the panel was already open on another tab.
+  const [friendsNonce, setFriendsNonce] = useState(0);
   const [showSettings, setShowSettings] = useState(false);
   const [isRegistering, setIsRegistering] = useState(false);
   const [showCreateChat, setShowCreateChat] = useState(false);
@@ -43,6 +48,23 @@ export function MobileDashboard({ theme, setTheme, onOpenGifPanel, myGifs, setMy
   useBackableState(showCreateChat, () => setShowCreateChat(false));
   useBackableState(showLockedPanel, () => setShowLockedPanel(false));
 
+  // Tapped notifications: open the chat (or friend requests) on top of
+  // whatever panel is showing.
+  useNotificationRouting({
+    userId: user?.id,
+    openChat: (chatId) => {
+      setShowProfile(false); setShowFriends(false); setShowSettings(false);
+      setShowCreateChat(false); setShowLockedPanel(false);
+      setSelectedChatId(chatId);
+    },
+    openFriendRequests: () => {
+      setShowProfile(false); setShowSettings(false); setShowCreateChat(false); setShowLockedPanel(false);
+      setFriendsTab('requests');
+    setFriendsNonce((n) => n + 1);
+      setShowFriends(true);
+    },
+  });
+
   // Colours come from the active theme (th-* CSS variables).
   const bgClass = 'bg-th-bg text-th-ink';
 
@@ -51,12 +73,10 @@ export function MobileDashboard({ theme, setTheme, onOpenGifPanel, myGifs, setMy
     // the bare identifier there throws "Can't find variable: Notification"
     // and crashes the whole tree, so this has to be feature-detected first.
     if (user?.id && 'Notification' in window) {
-      // If the browser already has permission, this silently registers/syncs the worker to Supabase
-      Notification.requestPermission().then((permission) => {
-        if (permission === 'granted') {
-          PermissionManager.setupPushSubscription(user.id);
-        }
-      });
+      // Never prompt here — browsers punish prompts without a tap (Chrome's
+      // quiet UI, Safari rejects them). Only re-sync when already allowed;
+      // the prompt lives behind the switch in Settings > Notifications.
+      if (Notification.permission === 'granted') PermissionManager.setupPushSubscription(user.id);
     }
   }, [user?.id]);
 
@@ -71,9 +91,10 @@ export function MobileDashboard({ theme, setTheme, onOpenGifPanel, myGifs, setMy
           {showFriends && (
             <FriendList
               theme={theme}
-              onClose={() => setShowFriends(false)}
+              onClose={() => { setShowFriends(false); setFriendsTab('search'); }}
               setActiveChatId={setSelectedChatId}
-              initialTab="search"
+              key={friendsNonce}
+              initialTab={friendsTab}
             />
           )}
           {showSettings && 

@@ -4,6 +4,8 @@ import App from './App.tsx';
 import './index.css';
 import { registerSW } from 'virtual:pwa-register';
 
+// The only service worker registration (src/sw/sw.ts, built by
+// vite-plugin-pwa). A second register('/sw.js') used to race this one.
 registerSW({ immediate: true });
 
 createRoot(document.getElementById('root')!).render(
@@ -11,12 +13,3 @@ createRoot(document.getElementById('root')!).render(
     <App />
   </StrictMode>
 );
-
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    // Note: The '/' before sw.js is crucial because the file is in the public folder
-    navigator.serviceWorker.register('/sw.js')
-      .then(reg => console.log('Sweet PWA Registered!', reg))
-      .catch(err => console.log('PWA Registration failed', err));
-  });
-}

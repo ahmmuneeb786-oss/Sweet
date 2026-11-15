@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { ChevronRight, X, Bell, Lock, Palette, HardDrive, LogOut, User, Shield, ShieldCheck, CheckCircle, AlertCircle, ChevronLeft, Zap } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
-import { PermissionManager } from '../services/PermissionManager';
 import { VaultGate } from '../components/VaultGate';
 import { LockedChatsSettings } from '../components/LockedChatsSettings';
 import { AppLockGate } from '../components/AppLockGate';
@@ -13,6 +12,7 @@ import { useNotify } from '../contexts/NotificationContext';
 import { usePerformance, useFps } from '../contexts/PerformanceContext';
 import { StorageTab } from '../components/storage/StorageTab';
 import { ThemeTab } from '../components/theme/ThemeTab';
+import { NotificationsTab } from '../components/notifications/NotificationsTab';
 
 // Kept as its own component so only this number re-renders every second,
 // not the whole Settings page.
@@ -58,7 +58,7 @@ interface SecureProfile {
 export function Settings({ onClose, theme, user, onCloseLockedPanel }: SettingsProps) {
   // 3. Destructure and apply the typecast ('as SecureProfile')
   const { profile: rawProfile, updateProfile, signOut } = useAuth();
-  const { showSuccess, showInfo } = useNotify();
+  const { showSuccess } = useNotify();
   const { deviceTier, perfLevel, override, setOverride, showOverlay, setShowOverlay } = usePerformance();
   const profile = rawProfile as SecureProfile; // ✨ This instantly cleans up all profile red marks!
 
@@ -72,7 +72,6 @@ export function Settings({ onClose, theme, user, onCloseLockedPanel }: SettingsP
   const [usernameError, setUsernameError] = useState('');
   const [usernameAvailable, setUsernameAvailable] = useState(false);
   const [checkingUsername, setCheckingUsername] = useState(false);
-  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [loading, setLoading] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
 
@@ -80,13 +79,6 @@ export function Settings({ onClose, theme, user, onCloseLockedPanel }: SettingsP
     lastSeenVisibility: 'everyone',
     profilePhotoVisibility: 'everyone',
     whoCanAdd: 'everyone'
-  });
-
-  const [notificationSettings, setNotificationSettings] = useState({
-    messageNotifications: true,
-    friendRequests: true,
-    callNotifications: true,
-    muteAll: false
   });
 
   useEffect(() => {
@@ -157,28 +149,6 @@ export function Settings({ onClose, theme, user, onCloseLockedPanel }: SettingsP
       setUsernameAvailable(false);
     }
   }, [newUsername, profile?.username, profile?.id, isOnline]);
-
-  useEffect(() => {
-    async function checkExistingPermission() {
-      const status = await PermissionManager.checkPermission('notifications');
-      setNotificationsEnabled(status === 'granted');
-    }
-    checkExistingPermission();
-  }, []);
-
-  const handleNotificationToggle = async () => {
-  if (!notificationsEnabled) {
-    // Passing user.id ensures the subscription gets saved to Supabase!
-    const granted = await PermissionManager.requestPermission('notifications', user?.id);
-    if (granted) {
-      setNotificationsEnabled(true);
-    }
-  } else {
-    // Note: Browsers don't let you programmatically "revoke" permission to 'default', 
-    // but we can tell them how to turn it off or handle local state suppression.
-    showInfo("To turn off whispers completely, you can tap the lock/info icon next to your browser URL bar at the top! 🍬");
-  }
-};
 
   async function handleUpdateProfile() {
     setLoading(true);
@@ -714,86 +684,7 @@ export function Settings({ onClose, theme, user, onCloseLockedPanel }: SettingsP
           )}
 
           {activeTab === 'notifications' && (
-            <div className="p-6 space-y-4">
-              <button
-                onClick={() => setActiveTab('main')}
-                className={ui.back}
-              >
-                <ChevronLeft className="w-4 h-4" />
-                Back
-              </button>
-
-              <div className={`p-4 rounded-2xl flex items-center justify-between shadow-sm mt-4 ${ui.card}`}>
-               <div className="flex items-center gap-3">
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg ${ui.inner}`}>
-                  🍬
-                </div>
-                <div className="flex flex-col">
-                  <span className="text-xs font-black uppercase tracking-wider text-th-link">Sweet Whispers</span>
-                  <span className="text-[10px] text-th-ink-soft font-bold">BACKGROUND NOTIFICATIONS</span>
-                </div>
-              </div>
-
-              <button
-                onClick={handleNotificationToggle}
-                role="switch"
-                aria-checked={notificationsEnabled}
-                aria-label="Background notifications"
-                className={`w-11 h-6 rounded-full transition-colors duration-200 focus:outline-none relative ${
-                  notificationsEnabled ? 'bg-th-toggle-on' : 'bg-th-toggle-off'
-                }`}
-              >
-                <span
-                  className={`absolute top-0.5 left-0.5 bg-white w-5 h-5 rounded-full shadow-md transform transition-transform duration-200 ${
-                    notificationsEnabled ? 'translate-x-5' : 'translate-x-0'
-                  }`}
-                />
-              </button>
-            </div>
-            <p className="text-[11px] text-th-ink-soft font-medium italic mt-2 px-1">
-              "Receive a sweet little notification banner whenever someone messages you, even if your browser tab is entirely closed."
-        </p>
-
-              <label className={`flex items-center justify-between p-3 rounded-xl ${ui.card}`}>
-                <span className="font-medium text-th-ink">Message Notifications</span>
-                <input
-                  type="checkbox"
-                  checked={notificationSettings.messageNotifications}
-                  onChange={(e) => setNotificationSettings({ ...notificationSettings, messageNotifications: e.target.checked })}
-                  className="w-4 h-4 accent-th-primary"
-                />
-              </label>
-
-              <label className={`flex items-center justify-between p-3 rounded-xl ${ui.card}`}>
-                <span className="font-medium text-th-ink">Friend Requests</span>
-                <input
-                  type="checkbox"
-                  checked={notificationSettings.friendRequests}
-                  onChange={(e) => setNotificationSettings({ ...notificationSettings, friendRequests: e.target.checked })}
-                  className="w-4 h-4 accent-th-primary"
-                />
-              </label>
-
-              <label className={`flex items-center justify-between p-3 rounded-xl ${ui.card}`}>
-                <span className="font-medium text-th-ink">Call Notifications</span>
-                <input
-                  type="checkbox"
-                  checked={notificationSettings.callNotifications}
-                  onChange={(e) => setNotificationSettings({ ...notificationSettings, callNotifications: e.target.checked })}
-                  className="w-4 h-4 accent-th-primary"
-                />
-              </label>
-
-              <label className={`flex items-center justify-between p-3 rounded-xl ${ui.card}`}>
-                <span className="font-medium text-th-ink">Mute All</span>
-                <input
-                  type="checkbox"
-                  checked={notificationSettings.muteAll}
-                  onChange={(e) => setNotificationSettings({ ...notificationSettings, muteAll: e.target.checked })}
-                  className="w-4 h-4 accent-th-primary"
-                />
-              </label>
-            </div>
+            <NotificationsTab theme={theme} userId={user?.id} onBack={() => setActiveTab('main')} />
           )}
 
           {activeTab === 'theme' && <ThemeTab onBack={() => setActiveTab('main')} />}
